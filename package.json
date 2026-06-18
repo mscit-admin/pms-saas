@@ -1,0 +1,28 @@
+{
+  "name": "jira-exception-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "مراقب جيرا — لوحة استثناءات تحوّل مئات التذاكر إلى ما يحتاج تدخّل المدير فقط",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:migrate": "node scripts/migrate.js",
+    "jira:sync": "node scripts/sync-once.js",
+    "jira:poll": "node scripts/poll.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.11.0",
+    "next": "14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

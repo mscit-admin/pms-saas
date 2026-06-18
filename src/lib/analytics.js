@@ -1,0 +1,208 @@
+import { query } from './db.js';
+import { ruleConfig } from './config.js';
+
+// تحليلات اللوحة الإدارية + أعباء الفريق. تعتمد على tickets و ticket_history و sla_config.
+
+// ---------------------------------------------------------------------
+// أعباء الفريق — أداة توازن ومساءلة بنّاءة، لا محاسبة فردية.
+// لكل مُسنَد إليه: المفتوحة، قيد التنفيذ، الاستثناءات، والمتأخرة.
+// ---------------------------------------------------------------------
+export async function getTeamWorkload() {
+  const rows = await query(
+    `SELECT
+        COALESCE(t.assignee_name, 'بدون مسؤول') AS assignee,
+        t.assignee_account_id AS account_id,
+        COUNT(*) AS open_count,
+        SUM(t.status_category = 'indeterminate') AS in_progress,
+        SUM(t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE) AS overdue,
+        SUM(t.status_category = 'indeterminate'
+            AND TIMESTAMPDIFF(DAY, t.last_status_change_at, UTC_TIMESTAMP()) > :stagnantDays) AS stagnant
+     FROM tickets t
+     WHERE t.status_category <> 'done'
+     GROUP BY t.assignee_name, t.assignee_account_id
+     ORDER BY open_count DESC`,
+    { stagnantDays: ruleConfig.stagnantDays }
+  );
+  return rows.map((r) => ({
+    assignee: r.assignee,
+    accountId: r.account_id,
+    openCount: Number(r.open_count),
+    inProgress: Number(r.in_progress),
+    overdue: Number(r.overdue),
+    stagnant: Number(r.stagnant),
+  }));
+}
+
+// ---------------------------------------------------------------------
+// الاتجاه — عدد كل نوع استثناء عبر آخر N يوماً (من exception_snapshots).
+// ---------------------------------------------------------------------
+export async function getTrend({ days = 30 } = {}) {
+  const rows = await query(
+    `SELECT snapshot_date, exception_type, count
+     FROM exception_snapshots
+     WHERE snapshot_date >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+     ORDER BY snapshot_date ASC`,
+    { days }
+  );
+  // نعيد التشكيل إلى سلسلة لكل تاريخ
+  const byDate = new Map();
+  for (const r of rows) {
+    const key = r.snapshot_date instanceof Date
+      ? r.snapshot_date.toISOString().slice(0, 10)
+      : String(r.snapshot_date).slice(0, 10);
+    if (!byDate.has(key)) {
+      byDate.set(key, { date: key, stagnant: 0, review: 0, overdue: 0, unassigned: 0 });
+    }
+    byDate.get(key)[r.exception_type] = Number(r.count);
+  }
+  return Array.from(byDate.values());
+}
+
+// ---------------------------------------------------------------------
+// تنبؤ SLA — لكل تذكرة مفتوحة: الموعد النهائي = الإنشاء + sla_days (حسب الأولوية).
+//   breached  : تجاوز الموعد
+//   at_risk   : باقٍ ≤ 2 يوم
+//   on_track  : غير ذلك
+// ---------------------------------------------------------------------
+export async function getSlaForecast({ atRiskDays = 2 } = {}) {
+  const rows = await query(
+    `SELECT
+        t.issue_key, t.summary, t.priority, t.assignee_name, t.status,
+        t.jira_created_at,
+        s.sla_days,
+        DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) AS sla_deadline,
+        TIMESTAMPDIFF(DAY, UTC_TIMESTAMP(),
+          DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY)) AS days_remaining
+     FROM tickets t
+     JOIN sla_config s ON s.priority = t.priority
+     WHERE t.status_category <> 'done'
+     ORDER BY days_remaining ASC`,
+  );
+  return rows.map((r) => {
+    const remaining = Number(r.days_remaining);
+    let slaStatus = 'on_track';
+    if (remaining < 0) slaStatus = 'breached';
+    else if (remaining <= atRiskDays) slaStatus = 'at_risk';
+    return {
+      key: r.issue_key,
+      summary: r.summary,
+      priority: r.priority,
+      assignee: r.assignee_name,
+      status: r.status,
+      slaDays: Number(r.sla_days),
+      deadline: r.sla_deadline,
+      daysRemaining: remaining,
+      slaStatus,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------
+// زمن الدورة — متوسط (الإنشاء → الإنجاز) للتذاكر المُنجَزة، إجمالاً وحسب الأولوية.
+// ---------------------------------------------------------------------
+export async function getCycleTime({ days = 90 } = {}) {
+  const overall = await query(
+    `SELECT
+        COUNT(*) AS resolved_count,
+        AVG(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS avg_days,
+        MIN(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS min_days,
+        MAX(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS max_days
+     FROM tickets
+     WHERE status_category = 'done' AND resolved_at IS NOT NULL
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)`,
+    { days }
+  );
+
+  const byPriority = await query(
+    `SELECT priority,
+        COUNT(*) AS resolved_count,
+        AVG(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS avg_days
+     FROM tickets
+     WHERE status_category = 'done' AND resolved_at IS NOT NULL
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+     GROUP BY priority`,
+    { days }
+  );
+
+  const o = overall[0] || {};
+  return {
+    overall: {
+      resolvedCount: Number(o.resolved_count || 0),
+      avgDays: o.avg_days != null ? Number(Number(o.avg_days).toFixed(1)) : null,
+      minDays: o.min_days != null ? Number(Number(o.min_days).toFixed(1)) : null,
+      maxDays: o.max_days != null ? Number(Number(o.max_days).toFixed(1)) : null,
+    },
+    byPriority: byPriority.map((r) => ({
+      priority: r.priority,
+      resolvedCount: Number(r.resolved_count),
+      avgDays: r.avg_days != null ? Number(Number(r.avg_days).toFixed(1)) : null,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------
+// زمن البقاء في كل مرحلة — من ticket_history باستخدام دالة النافذة LEAD.
+// مدة المرحلة = الفرق بين تغيّر الحالة والتغيّر التالي (MySQL 8+).
+// ---------------------------------------------------------------------
+export async function getStageResidence({ days = 90 } = {}) {
+  const rows = await query(
+    `SELECT to_status AS stage,
+        COUNT(*) AS transitions,
+        AVG(hours_in_stage) / 24 AS avg_days
+     FROM (
+        SELECT
+          h.to_status,
+          TIMESTAMPDIFF(
+            HOUR,
+            h.changed_at,
+            LEAD(h.changed_at) OVER (PARTITION BY h.issue_id ORDER BY h.changed_at)
+          ) AS hours_in_stage
+        FROM ticket_history h
+        WHERE h.changed_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+     ) x
+     WHERE x.hours_in_stage IS NOT NULL
+     GROUP BY to_status
+     ORDER BY avg_days DESC`,
+    { days }
+  );
+  return rows.map((r) => ({
+    stage: r.stage,
+    transitions: Number(r.transitions),
+    avgDays: r.avg_days != null ? Number(Number(r.avg_days).toFixed(1)) : null,
+  }));
+}
+
+// ---------------------------------------------------------------------
+// الملخص التنفيذي — أرقام أعلى المستوى للوحة الإدارية.
+// ---------------------------------------------------------------------
+export async function getExecutiveSummary() {
+  const totals = await query(
+    `SELECT
+        COUNT(*) AS total,
+        SUM(status_category <> 'done') AS open_count,
+        SUM(status_category = 'done') AS done_count,
+        SUM(due_date IS NOT NULL AND due_date < CURRENT_DATE AND status_category <> 'done') AS overdue,
+        SUM(assignee_account_id IS NULL AND status_category <> 'done') AS unassigned
+     FROM tickets`
+  );
+
+  const breached = await query(
+    `SELECT COUNT(*) AS breached
+     FROM tickets t JOIN sla_config s ON s.priority = t.priority
+     WHERE t.status_category <> 'done'
+       AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP()`
+  );
+
+  const cycle = await getCycleTime();
+  const t = totals[0] || {};
+  return {
+    totalTickets: Number(t.total || 0),
+    openTickets: Number(t.open_count || 0),
+    doneTickets: Number(t.done_count || 0),
+    overdueTickets: Number(t.overdue || 0),
+    unassignedTickets: Number(t.unassigned || 0),
+    slaBreached: Number(breached[0]?.breached || 0),
+    avgCycleDays: cycle.overall.avgDays,
+    resolvedLast90Days: cycle.overall.resolvedCount,
+  };
+}

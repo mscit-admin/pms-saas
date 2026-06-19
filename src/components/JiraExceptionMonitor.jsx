@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import AdminPanel from './AdminPanel';
 
 // ===================================================================
 //  مراقب جيرا — لوحة الاستثناءات (واجهة) · ثنائية اللغة AR/EN
@@ -34,6 +35,9 @@ const DICT = {
     subtitle: 'ما يحتاج تدخّل المدير فقط — تحديث تلقائي كل بضع دقائق',
     tabOperational: 'تشغيلي',
     tabManagerial: 'إداري',
+    tabAdmin: 'الإدارة',
+    account: 'حسابي',
+    logout: 'خروج',
     refresh: 'تحديث',
     lastSync: 'آخر مزامنة',
     never: 'لا يوجد',
@@ -84,6 +88,9 @@ const DICT = {
     subtitle: 'Only what needs a manager — auto-refreshed every few minutes',
     tabOperational: 'Operational',
     tabManagerial: 'Managerial',
+    tabAdmin: 'Admin',
+    account: 'Account',
+    logout: 'Log out',
     refresh: 'Refresh',
     lastSync: 'Last sync',
     never: 'never',
@@ -141,9 +148,15 @@ async function fetchJson(url) {
 // ------------------------------------------------------------------- shell
 export default function JiraExceptionMonitor() {
   const [lang, setLang] = useState('ar');
-  const [tab, setTab] = useState('operational');
+  const [tab, setTab] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
+  const [me, setMe] = useState(null);
+
+  // المستخدم الحالي وصلاحياته
+  useEffect(() => {
+    fetchJson('/api/auth/me').then((d) => setMe(d.user)).catch(() => {});
+  }, []);
 
   // استعادة اللغة المحفوظة وضبط اتجاه الصفحة
   useEffect(() => {
@@ -175,6 +188,28 @@ export default function JiraExceptionMonitor() {
       : t.never;
   const refresh = () => setReloadKey((k) => k + 1);
 
+  const perms = me?.permissions || [];
+  const can = (k) => perms.includes(k);
+  const hasAdmin = can('manage_users') || can('manage_roles') || can('manage_settings') || can('reset_2fa');
+  const tabs = [
+    can('view_operational') && 'operational',
+    can('view_managerial') && 'managerial',
+    'account', // الإدارة/الحساب (يشمل 2FA للجميع)
+  ].filter(Boolean);
+
+  // اختر أول تبويب متاح بمجرد معرفة الصلاحيات
+  useEffect(() => {
+    if (me && !tab) setTab(tabs[0]);
+  }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function logout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  }
+
+  const tabLabel = (k) =>
+    k === 'operational' ? t.tabOperational : k === 'managerial' ? t.tabManagerial : hasAdmin ? t.tabAdmin : t.account;
+
   return (
     <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null }}>
       <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
@@ -196,35 +231,30 @@ export default function JiraExceptionMonitor() {
               {t.subtitle} · {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
             </p>
           </div>
-          <nav style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <TabButton active={tab === 'operational'} onClick={() => setTab('operational')}>
-              {t.tabOperational}
-            </TabButton>
-            <TabButton active={tab === 'managerial'} onClick={() => setTab('managerial')}>
-              {t.tabManagerial}
-            </TabButton>
+          <nav style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {tabs.map((k) => (
+              <TabButton key={k} active={tab === k} onClick={() => setTab(k)}>
+                {tabLabel(k)}
+              </TabButton>
+            ))}
             <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻ {t.refresh}</button>
-            <button
-              onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
-              title={t.other}
-              style={{
-                padding: '8px 14px',
-                border: `1px solid ${C.border}`,
-                background: C.card,
-                color: C.text,
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: 14,
-                fontWeight: 600,
-              }}
-            >
+            <button onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} title={t.other} style={ghostBtn}>
               {t.other}
             </button>
+            {me && (
+              <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', fontSize: 13, color: C.muted }}>
+                <span>· {me.username}</span>
+                <button onClick={logout} style={ghostBtn}>{t.logout}</button>
+              </span>
+            )}
           </nav>
         </header>
 
         <main style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
-          {tab === 'operational' ? <OperationalTab key={`op-${reloadKey}`} /> : <ManagerialTab key={`mg-${reloadKey}`} />}
+          {tab === 'operational' && <OperationalTab key={`op-${reloadKey}`} />}
+          {tab === 'managerial' && <ManagerialTab key={`mg-${reloadKey}`} />}
+          {tab === 'account' && <AdminPanel lang={lang} perms={perms} />}
+          {!tab && <Loading />}
         </main>
       </div>
     </LangCtx.Provider>

@@ -16,8 +16,10 @@ export function handler(fn) {
     try {
       return await fn(req, ctx);
     } catch (err) {
-      console.error('[API]', err);
-      return fail(err?.message || 'خطأ غير متوقع في الخادم', 500);
+      // أخطاء المصادقة/الصلاحيات تحمل status (401/403)
+      const status = err?.status && Number.isInteger(err.status) ? err.status : 500;
+      if (status >= 500) console.error('[API]', err);
+      return fail(err?.message || 'خطأ غير متوقع في الخادم', status);
     }
   };
 }

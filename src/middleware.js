@@ -1,41 +1,55 @@
 import { NextResponse } from 'next/server';
+import { jwtVerify } from 'jose';
 
-// حماية الوصول للوحة عبر HTTP Basic Auth (اسم مستخدم + كلمة مرور من البيئة).
-// إن لم تُضبط AUTH_USER/AUTH_PASSWORD يبقى الوصول مفتوحاً (للتوافق مع النشر الحالي).
-// النقاط الآلية (/api/sync و /api/webhook) محميّة بأسرارها الخاصة فتُستثنى.
+// حارس الوصول: يتطلّب جلسة صالحة (JWT في كوكي httpOnly) لكل المسارات
+// عدا صفحة الدخول ونقاط الآلة (sync/webhook بأسرارها) وفحص الصحة.
+// التحقق هنا من صحة التوقيع فقط (edge)؛ فحص الصلاحيات يتم في الخادم.
 
 export const config = {
-  // طبّق على كل شيء عدا أصول Next الثابتة
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
 
-export function middleware(req) {
-  const user = process.env.AUTH_USER;
-  const pass = process.env.AUTH_PASSWORD;
+const SESSION_COOKIE = 'jem_session';
 
-  // الحماية معطّلة حتى تُضبط بيانات الدخول
-  if (!user || !pass) return NextResponse.next();
+function secretKey() {
+  const s = process.env.SESSION_SECRET || process.env.SYNC_SECRET || 'dev-insecure-secret-change-me';
+  return new TextEncoder().encode(s);
+}
 
+const PUBLIC = [
+  '/login',
+  '/api/auth/login',
+  '/api/sync',
+  '/api/webhook',
+  '/api/health',
+];
+
+function isPublic(pathname) {
+  return PUBLIC.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+export async function middleware(req) {
   const { pathname } = req.nextUrl;
-  if (pathname.startsWith('/api/sync') || pathname.startsWith('/api/webhook')) {
-    return NextResponse.next();
-  }
+  if (isPublic(pathname)) return NextResponse.next();
 
-  const header = req.headers.get('authorization') || '';
-  if (header.startsWith('Basic ')) {
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  let valid = false;
+  if (token) {
     try {
-      const decoded = atob(header.slice(6));
-      const i = decoded.indexOf(':');
-      const u = decoded.slice(0, i);
-      const p = decoded.slice(i + 1);
-      if (u === user && p === pass) return NextResponse.next();
+      await jwtVerify(token, secretKey());
+      valid = true;
     } catch {
-      // ترويسة غير صالحة — نطلب المصادقة أدناه
+      valid = false;
     }
   }
 
-  return new NextResponse('Authentication required', {
-    status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="Jira Monitor", charset="UTF-8"' },
-  });
+  if (valid) return NextResponse.next();
+
+  // API بدون جلسة → 401 JSON؛ الصفحات → تحويل لصفحة الدخول
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.json({ ok: false, error: 'يجب تسجيل الدخول' }, { status: 401 });
+  }
+  const loginUrl = new URL('/login', req.url);
+  loginUrl.searchParams.set('next', pathname);
+  return NextResponse.redirect(loginUrl);
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { handler, ok, fail } from '@/lib/http';
 import { requirePermission } from '@/lib/auth';
 import { isBrandType, saveAsset, readAsset, removeAsset } from '@/lib/branding';
+import { logAudit, clientIp } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 const MAX_BYTES = 6 * 1024 * 1024; // 6MB
@@ -18,7 +19,7 @@ export async function GET(req, { params }) {
 
 // POST: رفع أصل (صلاحية manage_branding).
 export const POST = handler(async (req, { params }) => {
-  await requirePermission('manage_branding');
+  const me = await requirePermission('manage_branding');
   if (!isBrandType(params.type)) return fail('نوع غير معروف', 400);
   const form = await req.formData();
   const file = form.get('file');
@@ -28,13 +29,15 @@ export const POST = handler(async (req, { params }) => {
   const buf = Buffer.from(await file.arrayBuffer());
   if (buf.length > MAX_BYTES) return fail('حجم الصورة كبير جداً (الحد 6MB)', 400);
   await saveAsset(params.type, buf, mime);
+  await logAudit({ action: 'branding_upload', actorId: me.id, actorName: me.username, targetType: 'branding', targetId: params.type, ip: clientIp(req) });
   return ok({ type: params.type, mime, size: buf.length });
 });
 
 // DELETE: إزالة أصل.
 export const DELETE = handler(async (req, { params }) => {
-  await requirePermission('manage_branding');
+  const me = await requirePermission('manage_branding');
   if (!isBrandType(params.type)) return fail('نوع غير معروف', 400);
   await removeAsset(params.type);
+  await logAudit({ action: 'branding_remove', actorId: me.id, actorName: me.username, targetType: 'branding', targetId: params.type, ip: clientIp(req) });
   return ok({ type: params.type, removed: true });
 });

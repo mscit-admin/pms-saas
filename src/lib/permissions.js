@@ -13,13 +13,14 @@ export const PERMISSIONS = [
   { key: 'manage_settings', labelAr: 'إدارة الإعدادات', labelEn: 'Manage settings' },
   { key: 'manage_branding', labelAr: 'إدارة الهوية (شعار/خلفية/أيقونة)', labelEn: 'Manage branding' },
   { key: 'manage_integration', labelAr: 'إدارة الربط بجيرا', labelEn: 'Manage Jira integration' },
+  { key: 'view_audit', labelAr: 'عرض سجلّات الدخول والتدقيق', labelEn: 'View login & audit logs' },
   { key: 'reset_2fa', labelAr: 'إعادة ضبط التحقق الثنائي', labelEn: 'Reset 2FA' },
 ];
 
 export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
 // صلاحيات إدارية حسّاسة (الوصول لمنطقة الإدارة)
-export const ADMIN_PERMISSIONS = ['manage_users', 'manage_roles', 'manage_settings', 'manage_branding', 'manage_integration', 'reset_2fa'];
+export const ADMIN_PERMISSIONS = ['manage_users', 'manage_roles', 'manage_settings', 'manage_branding', 'manage_integration', 'view_audit', 'reset_2fa'];
 
 export function hasPermission(userPerms, key) {
   return Array.isArray(userPerms) && userPerms.includes(key);

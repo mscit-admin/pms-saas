@@ -2,6 +2,7 @@ import { handler, ok } from '@/lib/http';
 import { requirePermission } from '@/lib/auth';
 import { getEditMeta, updateIssueFields } from '@/lib/jira';
 import { syncSingleIssue } from '@/lib/sync';
+import { logAudit, clientIp } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,9 +34,10 @@ export const GET = handler(async (req, { params }) => {
 
 // POST: تحديث الحقول (fields جاهزة بصيغة جيرا) ثم إعادة مزامنة التذكرة
 export const POST = handler(async (req, { params }) => {
-  await requirePermission('act_tickets');
+  const me = await requirePermission('act_tickets');
   const { fields } = await req.json().catch(() => ({}));
   await updateIssueFields(params.key, fields || {});
   await syncSingleIssue(params.key);
+  await logAudit({ action: 'ticket_fields', actorId: me.id, actorName: me.username, targetType: 'ticket', targetId: params.key, detail: Object.keys(fields || {}).join(', '), ip: clientIp(req) });
   return ok({ key: params.key, updated: true });
 });

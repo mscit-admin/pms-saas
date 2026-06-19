@@ -13,7 +13,9 @@ const C = {
 const T = {
   ar: {
     secUsers: 'المستخدمون', secRoles: 'الأدوار والصلاحيات', secSettings: 'الإعدادات', sec2fa: 'التحقق الثنائي',
-    secBranding: 'الهوية', secIntegration: 'الربط بجيرا',
+    secBranding: 'الهوية', secIntegration: 'الربط بجيرا', secLogs: 'السجلّات',
+    loginLogs: 'سجلّ الدخول', auditLogs: 'سجلّ التدقيق', time: 'الوقت', actor: 'المنفّذ', actionC: 'الإجراء', target: 'الهدف', ipC: 'IP', detailC: 'تفاصيل', noLogs: 'لا سجلّات', from2: 'من', to2: 'إلى',
+    al: { login_success: 'دخول ناجح', login_failed: 'محاولة فاشلة', logout: 'خروج', user_create: 'إنشاء مستخدم', user_update: 'تعديل مستخدم', user_delete: 'حذف مستخدم', reset_2fa: 'إعادة ضبط 2FA', role_create: 'إنشاء دور', role_update: 'تعديل دور', role_delete: 'حذف دور', settings_update: 'تعديل إعدادات', integration_update: 'تعديل الربط', branding_upload: 'رفع هوية', branding_remove: 'إزالة هوية', ticket_assign: 'إسناد تذكرة', ticket_comment: 'تعليق', ticket_transition: 'نقل حالة', ticket_fields: 'تعديل حقول', followup_update: 'متابعة' },
     logo: 'الشعار', favicon: 'أيقونة المتصفح', upload: 'رفع', remove: 'إزالة', currentImg: 'الحالي', noImg: 'لا يوجد',
     appBg: 'خلفية التطبيق', loginBg: 'خلفية شاشة الدخول', dim: 'الخفوت', show: 'إظهار الصورة', saveDisplay: 'حفظ العرض', refreshHint2: 'حدّث الصفحة لرؤية الأثر.',
     baseUrl: 'رابط جيرا', emailF: 'البريد', apiToken: 'API Token', tokenKeep: 'اتركه فارغاً للإبقاء على الحالي', tokenSet: 'محفوظ', tokenNone: 'غير محفوظ',
@@ -33,7 +35,9 @@ const T = {
   },
   en: {
     secUsers: 'Users', secRoles: 'Roles & permissions', secSettings: 'Settings', sec2fa: 'Two-factor',
-    secBranding: 'Branding', secIntegration: 'Jira connection',
+    secBranding: 'Branding', secIntegration: 'Jira connection', secLogs: 'Logs',
+    loginLogs: 'Login log', auditLogs: 'Audit log', time: 'Time', actor: 'Actor', actionC: 'Action', target: 'Target', ipC: 'IP', detailC: 'Detail', noLogs: 'No entries', from2: 'From', to2: 'To',
+    al: { login_success: 'Login OK', login_failed: 'Login failed', logout: 'Logout', user_create: 'Create user', user_update: 'Update user', user_delete: 'Delete user', reset_2fa: 'Reset 2FA', role_create: 'Create role', role_update: 'Update role', role_delete: 'Delete role', settings_update: 'Update settings', integration_update: 'Update integration', branding_upload: 'Branding upload', branding_remove: 'Branding remove', ticket_assign: 'Assign ticket', ticket_comment: 'Comment', ticket_transition: 'Transition', ticket_fields: 'Edit fields', followup_update: 'Follow-up' },
     logo: 'Logo', favicon: 'Favicon', upload: 'Upload', remove: 'Remove', currentImg: 'Current', noImg: 'none',
     appBg: 'App background', loginBg: 'Login background', dim: 'Dimming', show: 'Show image', saveDisplay: 'Save display', refreshHint2: 'Refresh the page to see the effect.',
     baseUrl: 'Jira URL', emailF: 'Email', apiToken: 'API Token', tokenKeep: 'Leave blank to keep current', tokenSet: 'saved', tokenNone: 'not set',
@@ -75,12 +79,13 @@ export default function AdminPanel({ lang = 'ar', perms = [] }) {
     can('manage_integration') && 'integration',
     can('manage_branding') && 'branding',
     can('manage_settings') && 'settings',
+    can('view_audit') && 'logs',
     '2fa',
   ].filter(Boolean);
   const [sec, setSec] = useState(sections[0]);
   const secLabel = (s) => ({
     users: t.secUsers, roles: t.secRoles, integration: t.secIntegration,
-    branding: t.secBranding, settings: t.secSettings, '2fa': t.sec2fa,
+    branding: t.secBranding, settings: t.secSettings, logs: t.secLogs, '2fa': t.sec2fa,
   }[s]);
 
   return (
@@ -95,6 +100,7 @@ export default function AdminPanel({ lang = 'ar', perms = [] }) {
       {sec === 'integration' && <IntegrationSection t={t} />}
       {sec === 'branding' && <BrandingSection t={t} />}
       {sec === 'settings' && <SettingsSection t={t} />}
+      {sec === 'logs' && <LogsSection t={t} />}
       {sec === '2fa' && <TwoFactorSection t={t} />}
     </div>
   );
@@ -541,6 +547,81 @@ function IntegrationSection({ t }) {
         {msg && <span style={{ color: C.green, fontSize: 13 }}>{msg}</span>}
         {err && <span style={{ color: C.red, fontSize: 13 }}>{err}</span>}
       </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------- Logs
+function LogsSection({ t }) {
+  const [tab, setTab] = useState('login');
+  const [data, setData] = useState(null);
+  const [page, setPage] = useState(1);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [err, setErr] = useState('');
+  const pageSize = 50;
+
+  const load = useCallback(async () => {
+    const qs = new URLSearchParams({ category: tab, page: String(page), pageSize: String(pageSize) });
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    setData(await api(`/api/audit?${qs.toString()}`));
+  }, [tab, page, from, to]);
+  useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
+  useEffect(() => { setPage(1); }, [tab, from, to]);
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
+  const fmtTime = (d) => (d ? new Date(d).toLocaleString('en-GB') : '—');
+  const cellL = { padding: '6px 9px', borderBottom: `1px solid ${C.border}`, fontSize: 12.5, textAlign: 'start', whiteSpace: 'nowrap' };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button onClick={() => setTab('login')} style={tab === 'login' ? btn(C.green) : ghost}>{t.loginLogs}</button>
+        <button onClick={() => setTab('audit')} style={tab === 'audit' ? btn(C.green) : ghost}>{t.auditLogs}</button>
+        <span style={{ color: C.muted, fontSize: 13, marginInlineStart: 12 }}>{t.from2}</span>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={inp} />
+        <span style={{ color: C.muted, fontSize: 13 }}>{t.to2}</span>
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={inp} />
+      </div>
+
+      <div style={{ ...box, overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={cellL}>{t.time}</th>
+              <th style={cellL}>{t.actor}</th>
+              <th style={cellL}>{t.actionC}</th>
+              {tab === 'audit' && <th style={cellL}>{t.target}</th>}
+              <th style={cellL}>{t.ipC}</th>
+              <th style={cellL}>{t.detailC}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.items || []).map((r) => (
+              <tr key={r.id}>
+                <td style={cellL}>{fmtTime(r.created_at)}</td>
+                <td style={cellL}>{r.actor_name || '—'}</td>
+                <td style={{ ...cellL, color: r.action === 'login_failed' ? C.red : C.text }}>{t.al[r.action] || r.action}</td>
+                {tab === 'audit' && <td style={cellL}>{[r.target_type, r.target_id].filter(Boolean).join(' · ') || '—'}</td>}
+                <td style={cellL}>{r.ip || '—'}</td>
+                <td style={{ ...cellL, whiteSpace: 'normal', color: C.muted }}>{r.detail || '—'}</td>
+              </tr>
+            ))}
+            {(!data || data.items.length === 0) && (
+              <tr><td style={cellL} colSpan={6}>{t.noLogs}</td></tr>
+            )}
+          </tbody>
+        </table>
+        {data && data.total > pageSize && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} style={ghost}>‹</button>
+            <span style={{ fontSize: 13, color: C.muted }}>{page} / {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} style={ghost}>›</button>
+          </div>
+        )}
+      </div>
+      {err && <div style={{ color: C.red, fontSize: 13 }}>{err}</div>}
     </div>
   );
 }

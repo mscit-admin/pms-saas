@@ -1,6 +1,7 @@
 import { handler, ok } from '@/lib/http';
 import { requirePermission } from '@/lib/auth';
 import { setFollowup } from '@/lib/followup';
+import { logAudit, clientIp } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,5 +17,7 @@ export const POST = handler(async (req, { params }) => {
     ownerUserId: body.ownerUserId,
     rootCause: body.rootCause,
   });
+  const detail = [body.acknowledged ? 'ack' : null, body.snoozeUntil ? `snooze ${body.snoozeUntil}` : null, body.ownerUserId ? 'owner' : null, body.rootCause || null].filter(Boolean).join(', ');
+  await logAudit({ action: 'followup_update', actorId: me.id, actorName: me.username, targetType: 'ticket', targetId: params.key, detail, ip: clientIp(req) });
   return ok({ key: params.key, updated: true });
 });

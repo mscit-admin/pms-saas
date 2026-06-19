@@ -1,6 +1,7 @@
 import { handler, ok, fail } from '@/lib/http';
 import { requireUser, requirePermission } from '@/lib/auth';
 import { getAllSettings, setSetting, applyPortRuntime } from '@/lib/settings';
+import { logAudit, clientIp } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,7 @@ export const GET = handler(async () => {
 });
 
 export const PUT = handler(async (req) => {
-  await requirePermission('manage_settings');
+  const me = await requirePermission('manage_settings');
   const body = await req.json().catch(() => ({}));
   let portApply = null;
 
@@ -42,5 +43,6 @@ export const PUT = handler(async (req) => {
     portApply = await applyPortRuntime(port);
   }
 
+  await logAudit({ action: 'settings_update', actorId: me.id, actorName: me.username, targetType: 'settings', detail: Object.keys(body).join(', '), ip: clientIp(req) });
   return ok({ settings: await getAllSettings(), portApply });
 });

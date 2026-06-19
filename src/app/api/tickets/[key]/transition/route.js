@@ -2,6 +2,7 @@ import { handler, ok, fail } from '@/lib/http';
 import { requirePermission } from '@/lib/auth';
 import { getTransitions, transitionIssue } from '@/lib/jira';
 import { syncSingleIssue } from '@/lib/sync';
+import { logAudit, clientIp } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,10 +32,11 @@ export const GET = handler(async (req, { params }) => {
 
 // POST: تنفيذ انتقال مع حقول جاهزة (fields) إن لزم
 export const POST = handler(async (req, { params }) => {
-  await requirePermission('act_tickets');
+  const me = await requirePermission('act_tickets');
   const { transitionId, fields } = await req.json().catch(() => ({}));
   if (!transitionId) return fail('معرّف الانتقال مطلوب', 400);
   await transitionIssue(params.key, transitionId, fields || undefined);
   await syncSingleIssue(params.key);
+  await logAudit({ action: 'ticket_transition', actorId: me.id, actorName: me.username, targetType: 'ticket', targetId: params.key, detail: `transition ${transitionId}`, ip: clientIp(req) });
   return ok({ key: params.key, transitioned: true });
 });

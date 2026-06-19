@@ -1,6 +1,7 @@
 import { handler, ok } from '@/lib/http';
 import { requirePermission } from '@/lib/auth';
 import { listUsers, createUser } from '@/lib/users';
+import { logAudit, clientIp } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export const GET = handler(async () => {
 });
 
 export const POST = handler(async (req) => {
-  await requirePermission('manage_users');
+  const me = await requirePermission('manage_users');
   const body = await req.json().catch(() => ({}));
   const result = await createUser({
     username: body.username,
@@ -19,5 +20,6 @@ export const POST = handler(async (req) => {
     password: body.password,
     roleIds: Array.isArray(body.roleIds) ? body.roleIds : [],
   });
+  await logAudit({ action: 'user_create', actorId: me.id, actorName: me.username, targetType: 'user', targetId: body.username, ip: clientIp(req) });
   return ok(result);
 });

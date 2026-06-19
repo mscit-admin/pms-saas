@@ -3,15 +3,17 @@ import { requirePermission } from '@/lib/auth';
 import { assignIssue } from '@/lib/jira';
 import { syncSingleIssue } from '@/lib/sync';
 import { query } from '@/lib/db';
+import { logAudit, clientIp } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
 // إسناد تذكرة لمسؤول (accountId) أو إلغاء الإسناد (accountId=null).
 export const POST = handler(async (req, { params }) => {
-  await requirePermission('act_tickets');
+  const me = await requirePermission('act_tickets');
   const { accountId } = await req.json().catch(() => ({}));
   await assignIssue(params.key, accountId || null);
   await syncSingleIssue(params.key); // حدّث قاعدتنا فوراً
+  await logAudit({ action: 'ticket_assign', actorId: me.id, actorName: me.username, targetType: 'ticket', targetId: params.key, detail: accountId ? 'assigned' : 'unassigned', ip: clientIp(req) });
   return ok({ key: params.key, assigned: accountId || null });
 });
 

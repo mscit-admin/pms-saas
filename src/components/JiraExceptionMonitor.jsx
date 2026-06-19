@@ -106,6 +106,9 @@ const DICT = {
     chartLines: 'خطوط', chartArea: 'مساحات', chartBars: 'أعمدة',
     trendEmpty: 'لا لقطات اتجاه بعد — تتراكم يومياً مع كل مزامنة.',
     trendCollecting: (n) => `الاتجاه يتراكم يومياً — يوجد ${n} يوم حتى الآن، يظهر الخط بعد يومين أو أكثر.`,
+    scorecard: 'صحة المشاريع (RAG)',
+    health: 'الصحة', onTime: 'التسليم بالموعد', colOpen: 'مفتوحة', colExc: 'استثناءات', colBreach: 'متجاوز SLA', colCycle: 'زمن الدورة',
+    healthLabel: { red: 'حرِج', amber: 'تحذير', green: 'سليم' },
     sla: 'تنبؤ SLA',
     thRemaining: 'أيام متبقية',
     noAtRisk: 'لا تذاكر معرّضة 🎉',
@@ -196,6 +199,9 @@ const DICT = {
     chartLines: 'Lines', chartArea: 'Area', chartBars: 'Bars',
     trendEmpty: 'No trend snapshots yet — they accumulate daily with each sync.',
     trendCollecting: (n) => `Trend is building daily — ${n} day(s) so far; a line appears once there are 2+ days.`,
+    scorecard: 'Project health (RAG)',
+    health: 'Health', onTime: 'On-time', colOpen: 'Open', colExc: 'Exceptions', colBreach: 'SLA breached', colCycle: 'Cycle time',
+    healthLabel: { red: 'Critical', amber: 'Warning', green: 'Healthy' },
     sla: 'SLA forecast',
     thRemaining: 'Days left',
     noAtRisk: 'No tickets at risk 🎉',
@@ -1104,6 +1110,7 @@ function ManagerialTab() {
   const [trend, setTrend] = useState(null);
   const [sla, setSla] = useState(null);
   const [cycle, setCycle] = useState(null);
+  const [scorecard, setScorecard] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [slaPage, setSlaPage] = useState(1);
@@ -1111,16 +1118,18 @@ function ManagerialTab() {
   useEffect(() => {
     (async () => {
       try {
-        const [s, tr, sl, c] = await Promise.all([
+        const [s, tr, sl, c, sc] = await Promise.all([
           fetchJson('/api/analytics/summary'),
           fetchJson('/api/analytics/trend?days=30'),
           fetchJson('/api/analytics/sla-forecast'),
           fetchJson('/api/analytics/cycle-time?days=90'),
+          fetchJson('/api/analytics/scorecard'),
         ]);
         setSummary(s);
         setTrend(tr.series);
         setSla(sl);
         setCycle(c);
+        setScorecard(sc.items);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -1148,6 +1157,10 @@ function ManagerialTab() {
         <StatCard label={t.sBreached} value={summary.slaBreached} color={C.red} />
         <StatCard label={t.sAvgCycle} value={summary.avgCycleDays} color={C.purple} />
       </div>
+
+      <Card title={t.scorecard}>
+        <Scorecard items={scorecard} />
+      </Card>
 
       <Card title={t.trend}>
         <TrendChart series={trend} />
@@ -1218,6 +1231,49 @@ function ManagerialTab() {
 function DaysCell({ value }) {
   const { fmt } = useUI();
   return <span style={{ color: value < 0 ? C.red : C.text }}>{fmt(value)}</span>;
+}
+
+// بطاقة صحة المشاريع (RAG)
+function Scorecard({ items }) {
+  const { t, fmt } = useUI();
+  const HC = { red: C.red, amber: C.amber, green: C.green };
+  if (!items) return <Loading />;
+  if (items.length === 0) return <div style={{ color: C.muted, fontSize: 13 }}>—</div>;
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+        <thead>
+          <tr>
+            <Th>{t.fProject}</Th>
+            <Th>{t.health}</Th>
+            <Th align="center">{t.colOpen}</Th>
+            <Th align="center">{t.colExc}</Th>
+            <Th align="center">{t.colBreach}</Th>
+            <Th align="center">{t.onTime}</Th>
+            <Th align="center">{t.colCycle}</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((x) => (
+            <tr key={x.project}>
+              <Td><strong>{x.project}</strong></Td>
+              <Td>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: HC[x.health], display: 'inline-block' }} />
+                  {t.healthLabel[x.health]}
+                </span>
+              </Td>
+              <Td align="center">{fmt(x.openCount)}</Td>
+              <Td align="center">{fmt(x.exceptions)}</Td>
+              <Td align="center"><span style={{ color: x.breached > 0 ? C.red : C.text }}>{fmt(x.breached)}</span></Td>
+              <Td align="center">{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</Td>
+              <Td align="center">{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)} ${t.dayUnit}`}</Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 // رسم الاتجاه (SVG، بلا مكتبات): خطوط · مساحات متراكمة · أعمدة متراكمة

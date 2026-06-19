@@ -173,6 +173,76 @@ export async function getStageResidence({ days = 90 } = {}) {
 }
 
 // ---------------------------------------------------------------------
+// بطاقة صحة المشاريع (RAG) + نسبة التسليم في الموعد — لكل مشروع.
+// ---------------------------------------------------------------------
+export async function getProjectScorecard() {
+  const openRows = await query(
+    `SELECT t.project_key AS p,
+        COUNT(*) AS open_count,
+        SUM(t.status_category = 'indeterminate'
+            AND TIMESTAMPDIFF(DAY, t.last_status_change_at, UTC_TIMESTAMP()) > :stagnantDays) AS stagnant,
+        SUM((LOWER(t.status) LIKE '%review%' OR t.status LIKE '%مراجعة%')
+            AND TIMESTAMPDIFF(DAY, t.last_status_change_at, UTC_TIMESTAMP()) > :reviewDays) AS review,
+        SUM(t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE) AS overdue,
+        SUM(t.assignee_account_id IS NULL) AS unassigned
+     FROM tickets t WHERE t.status_category <> 'done' GROUP BY t.project_key`,
+    { stagnantDays: ruleConfig.stagnantDays, reviewDays: ruleConfig.reviewDays }
+  );
+
+  const breachedRows = await query(
+    `SELECT t.project_key AS p, COUNT(*) AS breached
+     FROM tickets t JOIN sla_config s ON s.priority = t.priority
+     WHERE t.status_category <> 'done'
+       AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP()
+     GROUP BY t.project_key`
+  );
+
+  const doneRows = await query(
+    `SELECT project_key AS p,
+        COUNT(*) AS resolved_count,
+        AVG(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS avg_days,
+        SUM(due_date IS NOT NULL) AS with_due,
+        SUM(due_date IS NOT NULL AND DATE(resolved_at) <= due_date) AS on_time
+     FROM tickets WHERE status_category = 'done' AND resolved_at IS NOT NULL
+     GROUP BY project_key`
+  );
+
+  const map = new Map();
+  const get = (p) => {
+    if (!map.has(p)) map.set(p, { project: p, openCount: 0, stagnant: 0, review: 0, overdue: 0, unassigned: 0, breached: 0, resolvedCount: 0, avgDays: null, withDue: 0, onTime: 0 });
+    return map.get(p);
+  };
+  for (const r of openRows) Object.assign(get(r.p), {
+    openCount: Number(r.open_count), stagnant: Number(r.stagnant || 0), review: Number(r.review || 0),
+    overdue: Number(r.overdue || 0), unassigned: Number(r.unassigned || 0),
+  });
+  for (const r of breachedRows) get(r.p).breached = Number(r.breached || 0);
+  for (const r of doneRows) Object.assign(get(r.p), {
+    resolvedCount: Number(r.resolved_count), avgDays: r.avg_days != null ? Number(Number(r.avg_days).toFixed(1)) : null,
+    withDue: Number(r.with_due || 0), onTime: Number(r.on_time || 0),
+  });
+
+  const rank = { red: 0, amber: 1, green: 2 };
+  const out = Array.from(map.values()).map((x) => {
+    const exceptions = x.stagnant + x.review + x.overdue + x.unassigned;
+    const open = x.openCount || 1;
+    const excRatio = exceptions / open;
+    const breachRatio = x.breached / open;
+    let health = 'green';
+    if (breachRatio > 0.25 || excRatio > 0.6) health = 'red';
+    else if (breachRatio > 0.1 || excRatio > 0.3) health = 'amber';
+    const onTimeRate = x.withDue > 0 ? Math.round((x.onTime / x.withDue) * 100) : null;
+    return {
+      project: x.project, health, openCount: x.openCount, exceptions,
+      breached: x.breached, avgCycleDays: x.avgDays, resolvedCount: x.resolvedCount, onTimeRate,
+    };
+  });
+
+  out.sort((a, b) => (rank[a.health] - rank[b.health]) || (b.exceptions - a.exceptions) || (b.openCount - a.openCount));
+  return out;
+}
+
+// ---------------------------------------------------------------------
 // الملخص التنفيذي — أرقام أعلى المستوى للوحة الإدارية.
 // ---------------------------------------------------------------------
 export async function getExecutiveSummary() {

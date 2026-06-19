@@ -32,7 +32,11 @@ export async function logAudit({
 
 // قراءة السجلّات مع فلترة وترقيم
 export async function listAudit({ category, action, actorId, from, to, limit = 50, offset = 0 } = {}) {
-  const params = { limit: Number(limit), offset: Number(offset) };
+  // LIMIT/OFFSET لا تُدعَم كوسائط في الجُمل المُحضّرة — ندرجها كأعداد صحيحة مُتحقَّق منها
+  const lim = Math.max(1, Math.min(500, parseInt(limit, 10) || 50));
+  const off = Math.max(0, parseInt(offset, 10) || 0);
+
+  const params = {};
   let where = 'WHERE 1=1';
   if (category) { where += ' AND category = :category'; params.category = category; }
   if (action) { where += ' AND action = :action'; params.action = action; }
@@ -43,7 +47,7 @@ export async function listAudit({ category, action, actorId, from, to, limit = 5
   const totalRows = await query(`SELECT COUNT(*) AS c FROM audit_log ${where}`, params);
   const rows = await query(
     `SELECT id, category, action, actor_id, actor_name, target_type, target_id, detail, ip, created_at
-     FROM audit_log ${where} ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset`,
+     FROM audit_log ${where} ORDER BY created_at DESC, id DESC LIMIT ${lim} OFFSET ${off}`,
     params
   );
   return { total: Number(totalRows[0]?.c || 0), items: rows };

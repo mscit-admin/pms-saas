@@ -111,6 +111,9 @@ const DICT = {
     healthLabel: { red: 'حرِج', amber: 'تحذير', green: 'سليم' },
     flow: 'تدفّق العمل والاختناقات', wipByStage: 'العمل الجاري حسب المرحلة (العدد · متوسط العمر)', agingWip: 'أقدم العناصر العالقة',
     ageDays: 'عمر بالحالة',
+    throughput: 'الإنتاجية والتنبؤ', weeklyDone: 'منجزة أسبوعياً', avgWeekly: 'متوسط أسبوعي',
+    weeksUnit: 'أسبوع', byDate: 'بحلول', atPace: 'بالوتيرة الحالية',
+    fcOpen: 'استنزاف المفتوحة', fcOverdue: 'استنزاف المتأخرة', fcBreach: 'استنزاف متجاوزات SLA', noForecast: 'يتعذّر التنبؤ (لا إنتاجية كافية)',
     sla: 'تنبؤ SLA',
     thRemaining: 'أيام متبقية',
     noAtRisk: 'لا تذاكر معرّضة 🎉',
@@ -206,6 +209,9 @@ const DICT = {
     healthLabel: { red: 'Critical', amber: 'Warning', green: 'Healthy' },
     flow: 'Flow & bottlenecks', wipByStage: 'WIP by stage (count · avg age)', agingWip: 'Oldest stuck items',
     ageDays: 'Age in status',
+    throughput: 'Throughput & forecast', weeklyDone: 'Resolved per week', avgWeekly: 'Weekly average',
+    weeksUnit: 'weeks', byDate: 'by', atPace: 'At current pace',
+    fcOpen: 'Clear open', fcOverdue: 'Clear overdue', fcBreach: 'Clear SLA-breached', noForecast: 'Cannot forecast (not enough throughput)',
     sla: 'SLA forecast',
     thRemaining: 'Days left',
     noAtRisk: 'No tickets at risk 🎉',
@@ -1116,6 +1122,7 @@ function ManagerialTab() {
   const [cycle, setCycle] = useState(null);
   const [scorecard, setScorecard] = useState(null);
   const [flow, setFlow] = useState(null);
+  const [throughput, setThroughput] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [slaPage, setSlaPage] = useState(1);
@@ -1123,13 +1130,14 @@ function ManagerialTab() {
   useEffect(() => {
     (async () => {
       try {
-        const [s, tr, sl, c, sc, fl] = await Promise.all([
+        const [s, tr, sl, c, sc, fl, tp] = await Promise.all([
           fetchJson('/api/analytics/summary'),
           fetchJson('/api/analytics/trend?days=30'),
           fetchJson('/api/analytics/sla-forecast'),
           fetchJson('/api/analytics/cycle-time?days=90'),
           fetchJson('/api/analytics/scorecard'),
           fetchJson('/api/analytics/flow'),
+          fetchJson('/api/analytics/throughput?weeks=12'),
         ]);
         setSummary(s);
         setTrend(tr.series);
@@ -1137,6 +1145,7 @@ function ManagerialTab() {
         setCycle(c);
         setScorecard(sc.items);
         setFlow(fl);
+        setThroughput(tp);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -1171,6 +1180,10 @@ function ManagerialTab() {
 
       <Card title={t.flow}>
         <Flow flow={flow} />
+      </Card>
+
+      <Card title={t.throughput}>
+        <Throughput data={throughput} />
       </Card>
 
       <Card title={t.trend}>
@@ -1283,6 +1296,38 @@ function Scorecard({ items }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// الإنتاجية والتنبؤ: أعمدة المنجَز أسبوعياً + تقديرات استنزاف المتراكم
+function Throughput({ data }) {
+  const { t, fmt, fmtDate } = useUI();
+  if (!data) return <Loading />;
+  const maxW = Math.max(1, ...(data.series || []).map((w) => w.count));
+  const fcLine = (label, count, f, color) => (
+    <div style={{ fontSize: 13, padding: '3px 0' }}>
+      <span style={{ color: C.muted }}>{label} ({fmt(count)}): </span>
+      {f.weeks == null
+        ? <span style={{ color: C.muted }}>{t.noForecast}</span>
+        : <span style={{ color }}>{t.atPace} · {fmt(f.weeks)} {t.weeksUnit} · {t.byDate} {fmtDate(f.date)}</span>}
+    </div>
+  );
+  return (
+    <div>
+      <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>
+        {t.weeklyDone} · {t.avgWeekly}: <strong style={{ color: C.text }}>{fmt(data.avgWeekly)}</strong>
+      </div>
+      {(data.series || []).map((w) => (
+        <BarRow key={w.week} label={fmtDate(w.week)} value={w.count} max={maxW} color={C.green} />
+      ))}
+      {(!data.series || data.series.length === 0) && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+
+      <div style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+        {fcLine(t.fcOpen, data.backlog.open, data.forecast.open, C.amber)}
+        {fcLine(t.fcOverdue, data.backlog.overdue, data.forecast.overdue, C.red)}
+        {fcLine(t.fcBreach, data.backlog.breached, data.forecast.breached, C.red)}
+      </div>
     </div>
   );
 }

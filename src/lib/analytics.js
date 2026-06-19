@@ -173,6 +173,59 @@ export async function getStageResidence({ days = 90 } = {}) {
 }
 
 // ---------------------------------------------------------------------
+// الإنتاجية والتنبؤ: المنجَز أسبوعياً + تقدير متى يُستنزف المتراكم بالوتيرة الحالية.
+// ---------------------------------------------------------------------
+export async function getThroughput({ weeks = 12 } = {}) {
+  const rows = await query(
+    `SELECT DATE_SUB(DATE(resolved_at), INTERVAL WEEKDAY(resolved_at) DAY) AS wk, COUNT(*) AS cnt
+     FROM tickets
+     WHERE status_category = 'done' AND resolved_at IS NOT NULL
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :weeks WEEK)
+     GROUP BY wk ORDER BY wk ASC`,
+    { weeks }
+  );
+  const fmtWk = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
+  const series = rows.map((r) => ({ week: fmtWk(r.wk), count: Number(r.cnt) }));
+
+  // إثنين الأسبوع الحالي (لاستبعاد الأسبوع الجزئي من المتوسط)
+  const now = new Date();
+  const offset = (now.getUTCDay() + 6) % 7;
+  const monday = new Date(now);
+  monday.setUTCDate(now.getUTCDate() - offset);
+  const curWeek = monday.toISOString().slice(0, 10);
+
+  const base = series.length > 1 ? series.filter((s) => s.week !== curWeek) : series;
+  const avgWeekly = base.length ? Math.round((base.reduce((a, s) => a + s.count, 0) / base.length) * 10) / 10 : 0;
+
+  const totals = await query(
+    `SELECT SUM(status_category <> 'done') AS open_count,
+        SUM(due_date IS NOT NULL AND due_date < CURRENT_DATE AND status_category <> 'done') AS overdue
+     FROM tickets`
+  );
+  const breachedRows = await query(
+    `SELECT COUNT(*) AS breached FROM tickets t JOIN sla_config s ON s.priority = t.priority
+     WHERE t.status_category <> 'done' AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP()`
+  );
+  const open = Number(totals[0]?.open_count || 0);
+  const overdue = Number(totals[0]?.overdue || 0);
+  const breached = Number(breachedRows[0]?.breached || 0);
+
+  const fc = (count) => {
+    if (!avgWeekly || avgWeekly <= 0) return { weeks: null, date: null };
+    const w = Math.ceil(count / avgWeekly);
+    const date = new Date(Date.now() + w * 7 * 86400000).toISOString().slice(0, 10);
+    return { weeks: w, date };
+  };
+
+  return {
+    series,
+    avgWeekly,
+    backlog: { open, overdue, breached },
+    forecast: { open: fc(open), overdue: fc(overdue), breached: fc(breached) },
+  };
+}
+
+// ---------------------------------------------------------------------
 // تدفّق العمل والاختناقات: توزيع WIP الحالي على المراحل + أقدم العناصر العالقة.
 // (CFD حقيقي يحتاج لقطات يومية؛ هنا نعرض الحالة الراهنة وأين يتراكم العمل ويهرم.)
 // ---------------------------------------------------------------------

@@ -29,6 +29,9 @@ export const syncConfig = {
   secret: process.env.SYNC_SECRET || '',
 };
 
+// سر Webhook (يقع عليه جيرا عند تغيّر التذاكر). يرجع لـ SYNC_SECRET إن لم يُضبط.
+export const webhookSecret = process.env.WEBHOOK_SECRET || process.env.SYNC_SECRET || '';
+
 // قواعد الاستثناء (أيام) — نفس منطق الواجهة، قابلة للضبط
 export const ruleConfig = {
   stagnantDays: int(process.env.RULE_STAGNANT_DAYS, 3),

@@ -153,6 +153,26 @@ bash scripts/deploy.sh
 
 ---
 
+## 9) حماية الوصول + Webhooks + إعادة بناء الاتجاه
+
+**حماية اللوحة (تسجيل دخول):** اضبط في `.env.local` ثم أعد تشغيل الويب.
+```
+AUTH_USER=admin
+AUTH_PASSWORD=كلمة_مرور_قوية
+```
+بدونهما يبقى الوصول مفتوحاً. بعد ضبطهما يطلب المتصفح اسم مستخدم/كلمة مرور.
+المنفذ الآلي `/api/sync` و `/api/webhook` مُستثنيان (لهما أسرارهما).
+
+**إعادة بناء الاتجاه** (ملء الرسم فوراً من التاريخ بدل انتظار الأيام):
+```bash
+npm run jira:backfill          # آخر 30 يوماً (متأخر/راكد/مراجعة)
+```
+
+**Webhooks (تحديث فوري بدل الانتظار):** في جيرا → Settings → System → WebHooks → Create:
+- URL: `http://84.247.128.198/api/webhook?secret=قيمة_WEBHOOK_SECRET`
+- Events: Issue created / updated / deleted
+بعدها أي تغيّر في تذكرة يصل فوراً. يبقى عامل السحب يعمل كشبكة أمان.
+
 ## ملاحظات
 - المزامنة عبر **عامل السحب** (`jira-monitor-poll`) كل `SYNC_INTERVAL_MINUTES` — لا حاجة لـ cron.
   بديل: احذف خدمة poll واستخدم cron مع المسار المحمي:

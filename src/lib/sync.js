@@ -1,4 +1,4 @@
-import { iterateIssues, fetchChangelog } from './jira.js';
+import { iterateIssues, fetchChangelog, getIssue } from './jira.js';
 import { getPool, withTransaction } from './db.js';
 import { mapIssueToRow, extractStatusChanges } from './normalize.js';
 import { snapshotExceptions } from './exceptions.js';
@@ -57,6 +57,30 @@ function computeLastStatusChange(changes, createdAt) {
   return changes[changes.length - 1].changed_at || createdAt;
 }
 
+// حفظ تذكرة واحدة (upsert + تاريخها). يُعيد عدد صفوف التاريخ المُدرجة.
+async function persistIssue(issue) {
+  const syncedAt = nowUtc();
+  const row = mapIssueToRow(issue, syncedAt);
+
+  // نقطة البحث الجديدة قد لا تُرجع changelog — نجلبه من نقطته المخصّصة عند غيابه.
+  if (!issue.changelog || !Array.isArray(issue.changelog.histories)) {
+    issue.changelog = await fetchChangelog(issue.id);
+  }
+  const changes = extractStatusChanges(issue);
+  row.last_status_change_at = computeLastStatusChange(changes, row.jira_created_at);
+
+  let inserted = 0;
+  await withTransaction(async (conn) => {
+    await conn.execute(UPSERT_TICKET, row);
+    for (const ch of changes) {
+      const [r] = await conn.execute(INSERT_HISTORY, ch);
+      if (r.affectedRows > 0) inserted += 1;
+    }
+  });
+  return inserted;
+}
+
+// مزامنة كاملة عبر JQL (Polling).
 export async function runSync({ jql = jiraConfig.jql } = {}) {
   const pool = getPool();
   const startedAt = nowUtc();
@@ -73,23 +97,7 @@ export async function runSync({ jql = jiraConfig.jql } = {}) {
   try {
     for await (const page of iterateIssues(jql)) {
       for (const issue of page) {
-        const syncedAt = nowUtc();
-        const row = mapIssueToRow(issue, syncedAt);
-
-        // نقطة البحث الجديدة قد لا تُرجع changelog — نجلبه من نقطته المخصّصة عند غيابه.
-        if (!issue.changelog || !Array.isArray(issue.changelog.histories)) {
-          issue.changelog = await fetchChangelog(issue.id);
-        }
-        const changes = extractStatusChanges(issue);
-        row.last_status_change_at = computeLastStatusChange(changes, row.jira_created_at);
-
-        await withTransaction(async (conn) => {
-          await conn.execute(UPSERT_TICKET, row);
-          for (const ch of changes) {
-            const [r] = await conn.execute(INSERT_HISTORY, ch);
-            if (r.affectedRows > 0) historyInserted += 1;
-          }
-        });
+        historyInserted += await persistIssue(issue);
         issuesProcessed += 1;
       }
     }
@@ -118,4 +126,12 @@ export async function runSync({ jql = jiraConfig.jql } = {}) {
     );
     throw err;
   }
+}
+
+// مزامنة تذكرة واحدة (تُستدعى من Webhook) — تجلب التذكرة الطازجة وتحفظها.
+export async function syncSingleIssue(idOrKey) {
+  const issue = await getIssue(idOrKey);
+  const historyInserted = await persistIssue(issue);
+  await snapshotExceptions();
+  return { ok: true, issueKey: issue.key, historyInserted };
 }

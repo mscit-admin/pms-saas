@@ -95,6 +95,12 @@ export async function* iterateIssues(jql = jiraConfig.jql, pageSize = jiraConfig
   }
 }
 
+// جلب تذكرة واحدة بحقولها وتاريخها — يُستخدم في معالج Webhook.
+export async function getIssue(idOrKey) {
+  const path = `/rest/api/3/issue/${encodeURIComponent(idOrKey)}?fields=${FIELDS.join(',')}&expand=changelog`;
+  return jiraRequest('GET', path);
+}
+
 // اختبار سريع للاتصال — يُستخدم في /api/health
 export async function ping() {
   assertJiraConfigured();

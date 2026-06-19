@@ -34,6 +34,9 @@ const DICT = {
     subtitle: 'ما يحتاج تدخّل المدير فقط — تحديث تلقائي كل بضع دقائق',
     tabOperational: 'تشغيلي',
     tabManagerial: 'إداري',
+    refresh: 'تحديث',
+    lastSync: 'آخر مزامنة',
+    never: 'لا يوجد',
     cOverdue: 'متأخر عن الاستحقاق',
     cStagnant: 'راكد > 3 أيام',
     cReview: 'مراجعة متأخرة',
@@ -81,6 +84,9 @@ const DICT = {
     subtitle: 'Only what needs a manager — auto-refreshed every few minutes',
     tabOperational: 'Operational',
     tabManagerial: 'Managerial',
+    refresh: 'Refresh',
+    lastSync: 'Last sync',
+    never: 'never',
     cOverdue: 'Overdue',
     cStagnant: 'Stagnant > 3 days',
     cReview: 'Late review',
@@ -136,6 +142,8 @@ async function fetchJson(url) {
 export default function JiraExceptionMonitor() {
   const [lang, setLang] = useState('ar');
   const [tab, setTab] = useState('operational');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [meta, setMeta] = useState(null);
 
   // استعادة اللغة المحفوظة وضبط اتجاه الصفحة
   useEffect(() => {
@@ -150,13 +158,25 @@ export default function JiraExceptionMonitor() {
     localStorage.setItem('lang', lang);
   }, [lang]);
 
+  // بيانات تعريفية (رابط جيرا + آخر مزامنة) — تُحدَّث مع كل تحديث
+  useEffect(() => {
+    fetchJson('/api/meta').then(setMeta).catch(() => {});
+  }, [reloadKey]);
+
   const t = DICT[lang];
   const fmt = (n) => (n == null ? '—' : new Intl.NumberFormat('en-US').format(n));
   const fmtDate = (d) =>
     d ? new Date(d).toLocaleDateString(t.locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) : '—';
+  const fmtDateTime = (d) =>
+    d
+      ? new Date(d).toLocaleString(t.locale, {
+          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+        })
+      : t.never;
+  const refresh = () => setReloadKey((k) => k + 1);
 
   return (
-    <LangCtx.Provider value={{ lang, t, fmt, fmtDate }}>
+    <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null }}>
       <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
         <header
           style={{
@@ -172,7 +192,9 @@ export default function JiraExceptionMonitor() {
         >
           <div>
             <h1 style={{ margin: 0, fontSize: 20 }}>{t.title}</h1>
-            <p style={{ margin: '2px 0 0', color: C.muted, fontSize: 13 }}>{t.subtitle}</p>
+            <p style={{ margin: '2px 0 0', color: C.muted, fontSize: 13 }}>
+              {t.subtitle} · {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
+            </p>
           </div>
           <nav style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <TabButton active={tab === 'operational'} onClick={() => setTab('operational')}>
@@ -181,6 +203,7 @@ export default function JiraExceptionMonitor() {
             <TabButton active={tab === 'managerial'} onClick={() => setTab('managerial')}>
               {t.tabManagerial}
             </TabButton>
+            <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻ {t.refresh}</button>
             <button
               onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
               title={t.other}
@@ -201,7 +224,7 @@ export default function JiraExceptionMonitor() {
         </header>
 
         <main style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
-          {tab === 'operational' ? <OperationalTab /> : <ManagerialTab />}
+          {tab === 'operational' ? <OperationalTab key={`op-${reloadKey}`} /> : <ManagerialTab key={`mg-${reloadKey}`} />}
         </main>
       </div>
     </LangCtx.Provider>
@@ -297,6 +320,22 @@ function Td({ children, align }) {
     <td style={{ textAlign: align || (t.dir === 'rtl' ? 'right' : 'left'), padding: '8px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
       {children}
     </td>
+  );
+}
+
+// مفتاح التذكرة كرابط يفتح التذكرة في جيرا (إن توفّر الرابط الأساسي)
+function KeyLink({ k }) {
+  const { jiraBaseUrl } = useUI();
+  if (!jiraBaseUrl) return <strong>{k}</strong>;
+  return (
+    <a
+      href={`${jiraBaseUrl}/browse/${k}`}
+      target="_blank"
+      rel="noreferrer"
+      style={{ color: C.blue, textDecoration: 'none', fontWeight: 700 }}
+    >
+      {k}
+    </a>
   );
 }
 
@@ -407,7 +446,7 @@ function OperationalTab() {
             <tbody>
               {(data?.items || []).slice(0, 200).map((it) => (
                 <tr key={it.id}>
-                  <Td><strong>{it.key}</strong></Td>
+                  <Td><KeyLink k={it.key} /></Td>
                   <Td>{it.summary}</Td>
                   <Td>{it.status}</Td>
                   <Td>{it.priority}</Td>
@@ -517,7 +556,7 @@ function ManagerialTab() {
               <tbody>
                 {atRisk.map((x) => (
                   <tr key={x.key}>
-                    <Td><strong>{x.key}</strong></Td>
+                    <Td><KeyLink k={x.key} /></Td>
                     <Td>{x.priority}</Td>
                     <Td align="center"><DaysCell value={x.daysRemaining} /></Td>
                     <Td><Chip color={SLA_COLORS[x.slaStatus]}>{t.slaState[x.slaStatus]}</Chip></Td>

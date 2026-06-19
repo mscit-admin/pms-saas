@@ -17,7 +17,7 @@ const T = {
     twofa: '2FA', actions: 'إجراءات', create: 'إنشاء', save: 'حفظ', del: 'حذف', edit: 'تعديل',
     resetonts2fa: 'إعادة ضبط 2FA', password: 'كلمة المرور', newUser: 'مستخدم جديد', newRole: 'دور جديد',
     roleName: 'اسم الدور', description: 'الوصف', permissions: 'الصلاحيات', system: 'نظام',
-    port: 'رقم المنفذ', portHint: 'يتطلب إعادة تشغيل الخدمة لتطبيقه فعلياً.', saved: 'تم الحفظ',
+    port: 'رقم المنفذ', portHint: 'سيُعاد تشغيل الخدمة تلقائياً ويُحدَّث nginx لتطبيق المنفذ. حدّث الصفحة بعد لحظات.', saved: 'تم الحفظ — جارٍ إعادة التشغيل', portManual: 'حُفظ المنفذ. إعادة التشغيل التلقائي غير مُفعّلة — أعد تشغيل الخدمة يدوياً.',
     enabled: 'مفعّل', disabled: 'غير مفعّل', enable2fa: 'تفعيل التحقق الثنائي',
     scan: 'امسح الرمز بتطبيق المصادقة ثم أدخل الرمز:', confirm: 'تأكيد', code: 'الرمز',
     twofaOn: 'التحقق الثنائي مفعّل لحسابك. لتعطيله يلزم مدير.', selectRoles: 'اختر الأدوار',
@@ -29,7 +29,7 @@ const T = {
     twofa: '2FA', actions: 'Actions', create: 'Create', save: 'Save', del: 'Delete', edit: 'Edit',
     resetonts2fa: 'Reset 2FA', password: 'Password', newUser: 'New user', newRole: 'New role',
     roleName: 'Role name', description: 'Description', permissions: 'Permissions', system: 'system',
-    port: 'Port number', portHint: 'Requires a service restart to actually take effect.', saved: 'Saved',
+    port: 'Port number', portHint: 'The service auto-restarts and nginx is updated to apply the port. Refresh the page in a moment.', saved: 'Saved — restarting', portManual: 'Port saved. Auto-restart not enabled — restart the service manually.',
     enabled: 'Enabled', disabled: 'Disabled', enable2fa: 'Enable two-factor',
     scan: 'Scan the QR in your authenticator app, then enter the code:', confirm: 'Confirm', code: 'Code',
     twofaOn: 'Two-factor is enabled. Only an admin can disable it.', selectRoles: 'Select roles',
@@ -290,8 +290,8 @@ function SettingsSection({ t }) {
   async function save() {
     setMsg(''); setErr('');
     try {
-      await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_port: port }) });
-      setMsg(t.saved);
+      const d = await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_port: port }) });
+      setMsg(d?.portApply?.restart ? t.saved : t.portManual);
     } catch (e) { setErr(e.message); }
   }
 

@@ -8,6 +8,8 @@ User=www-data
 WorkingDirectory=/GHProjects/jira-monitor
 Environment=NODE_ENV=production
 Environment=PORT=4445
+# يَكتب التطبيق المنفذ الجديد هنا عند تغييره من الواجهة (يتجاوز PORT أعلاه)
+EnvironmentFile=-/GHProjects/jira-monitor/port.env
 ExecStart=/usr/bin/npm run start
 Restart=on-failure
 RestartSec=5

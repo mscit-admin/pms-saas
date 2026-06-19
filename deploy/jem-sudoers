@@ -1,0 +1,6 @@
+# يسمح لمستخدم الخدمة (www-data) بتشغيل سكربت تطبيق المنفذ فقط، بلا كلمة مرور.
+# التثبيت:
+#   sudo cp deploy/jem-sudoers /etc/sudoers.d/jem-apply-port
+#   sudo chmod 440 /etc/sudoers.d/jem-apply-port
+#   sudo visudo -cf /etc/sudoers.d/jem-apply-port   # تحقّق من الصياغة
+www-data ALL=(root) NOPASSWD: /usr/local/bin/jem-apply-port

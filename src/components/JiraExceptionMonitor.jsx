@@ -60,6 +60,8 @@ const DICT = {
     act: '⋯',
     comment: 'تعليق',
     assign: 'إسناد',
+    editFields: 'تعديل الحقول',
+    commaSep: 'افصل بفواصل',
     transition: 'نقل الحالة',
     send: 'إرسال',
     apply: 'تطبيق',
@@ -131,6 +133,8 @@ const DICT = {
     act: '⋯',
     comment: 'Comment',
     assign: 'Assign',
+    editFields: 'Edit fields',
+    commaSep: 'comma-separated',
     transition: 'Transition',
     send: 'Send',
     apply: 'Apply',
@@ -528,6 +532,8 @@ function TicketActions({ ticket, onClose, onDone }) {
   const [transitions, setTransitions] = useState([]);
   const [transitionId, setTransitionId] = useState('');
   const [fieldValues, setFieldValues] = useState({});
+  const [editFields, setEditFields] = useState([]);
+  const [editValues, setEditValues] = useState({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -536,7 +542,27 @@ function TicketActions({ ticket, onClose, onDone }) {
     if (!ticket) return;
     fetchJson(`/api/tickets/${ticket.key}/assign`).then((d) => setAssignees(d.assignees)).catch(() => {});
     fetchJson(`/api/tickets/${ticket.key}/transition`).then((d) => setTransitions(d.transitions)).catch(() => {});
+    fetchJson(`/api/tickets/${ticket.key}/fields`).then((d) => setEditFields(d.fields)).catch(() => {});
   }, [ticket]);
+
+  // بناء حمولة الحقول بصيغة جيرا
+  const buildEditPayload = () => {
+    const out = {};
+    for (const f of editFields) {
+      const v = editValues[f.id];
+      if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) continue;
+      if (f.type === 'array') {
+        out[f.id] = f.allowedValues.length > 0
+          ? (Array.isArray(v) ? v : [v]).map((id) => ({ id }))
+          : String(v).split(',').map((s) => s.trim()).filter(Boolean);
+      } else if (f.allowedValues.length > 0) {
+        out[f.id] = { id: v };
+      } else {
+        out[f.id] = v;
+      }
+    }
+    return out;
+  };
 
   if (!ticket) return null;
 
@@ -570,6 +596,37 @@ function TicketActions({ ticket, onClose, onDone }) {
           </select>
           <button disabled={busy || !accountId} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/assign`, { accountId: accountId === '__unassign__' ? null : accountId }))} style={ghostBtn}>{t.apply}</button>
         </div>
+
+        {/* تعديل الحقول (لتلبية شروط الانتقالات مثل labels) */}
+        {editFields.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 13, color: C.muted, display: 'block', marginBottom: 4 }}>{t.editFields}</label>
+            {editFields.map((f) => (
+              <div key={f.id} style={{ marginBottom: 6 }}>
+                <label style={{ fontSize: 12, color: C.muted }}>{f.name}{f.required ? ' *' : ''}</label>
+                {f.type === 'array' && f.allowedValues.length > 0 ? (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {f.allowedValues.map((v) => {
+                      const arr = editValues[f.id] || [];
+                      const on = arr.includes(v.id);
+                      return (
+                        <button key={v.id} onClick={() => setEditValues({ ...editValues, [f.id]: on ? arr.filter((x) => x !== v.id) : [...arr, v.id] })} style={on ? { ...ghostBtn, background: C.blue, color: '#fff', border: 0 } : ghostBtn}>{v.label}</button>
+                      );
+                    })}
+                  </div>
+                ) : f.allowedValues.length > 0 ? (
+                  <select value={editValues[f.id] || ''} onChange={(e) => setEditValues({ ...editValues, [f.id]: e.target.value })} style={{ ...inputStyle, width: '100%', cursor: 'pointer' }}>
+                    <option value="">{t.pick}</option>
+                    {f.allowedValues.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                  </select>
+                ) : (
+                  <input value={editValues[f.id] || ''} onChange={(e) => setEditValues({ ...editValues, [f.id]: e.target.value })} placeholder={f.type === 'array' ? t.commaSep : ''} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+                )}
+              </div>
+            ))}
+            <button disabled={busy} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/fields`, { fields: buildEditPayload() }))} style={ghostBtn}>{t.apply}</button>
+          </div>
+        )}
 
         {/* نقل الحالة */}
         <label style={{ fontSize: 13, color: C.muted, display: 'block' }}>{t.transition}</label>

@@ -124,6 +124,16 @@ export async function addComment(idOrKey, text) {
   });
 }
 
+// بيانات تعديل حقول التذكرة (editmeta) — لمعرفة الحقول وقيمها المسموحة
+export async function getEditMeta(idOrKey) {
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/editmeta`);
+}
+
+// تحديث حقول التذكرة (لضبط مثل labels/priority قبل انتقال يتطلبها validator)
+export async function updateIssueFields(idOrKey, fields) {
+  return jiraRequest('PUT', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}`, { fields });
+}
+
 // الانتقالات المتاحة لتذكرة (مع حقولها لاكتشاف الإلزامي منها)
 export async function getTransitions(idOrKey) {
   return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions?expand=transitions.fields`);

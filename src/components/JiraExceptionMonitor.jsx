@@ -894,6 +894,8 @@ function ManagerialTab() {
   const [cycle, setCycle] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [slaPage, setSlaPage] = useState(1);
+  const [slaPageSize, setSlaPageSize] = useState(25);
 
   useEffect(() => {
     (async () => {
@@ -921,7 +923,10 @@ function ManagerialTab() {
 
   const maxCycle = Math.max(1, ...(cycle?.cycle?.byPriority || []).map((p) => p.avgDays || 0));
   const maxStage = Math.max(1, ...(cycle?.stages || []).map((s) => s.avgDays || 0));
-  const atRisk = (sla?.items || []).filter((x) => x.slaStatus !== 'on_track').slice(0, 30);
+  const atRisk = (sla?.items || []).filter((x) => x.slaStatus !== 'on_track');
+  const slaTotalPages = Math.max(1, Math.ceil(atRisk.length / slaPageSize));
+  const slaSafePage = Math.min(slaPage, slaTotalPages);
+  const atRiskPage = atRisk.slice((slaSafePage - 1) * slaPageSize, slaSafePage * slaPageSize);
 
   return (
     <>
@@ -955,7 +960,7 @@ function ManagerialTab() {
                 </tr>
               </thead>
               <tbody>
-                {atRisk.map((x) => (
+                {atRiskPage.map((x) => (
                   <tr key={x.key}>
                     <Td><KeyLink k={x.key} /></Td>
                     <Td>{x.priority}</Td>
@@ -966,6 +971,16 @@ function ManagerialTab() {
                 {atRisk.length === 0 && <tr><Td align="center">{t.noAtRisk}</Td></tr>}
               </tbody>
             </table>
+            {atRisk.length > 0 && (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+                <button onClick={() => setSlaPage((p) => Math.max(1, p - 1))} disabled={slaSafePage <= 1} style={ghostBtn}>‹ {t.prev}</button>
+                <span style={{ fontSize: 13, color: C.muted }}>{t.pageOf(slaSafePage, slaTotalPages)}</span>
+                <button onClick={() => setSlaPage((p) => Math.min(slaTotalPages, p + 1))} disabled={slaSafePage >= slaTotalPages} style={ghostBtn}>{t.next} ›</button>
+                <select value={slaPageSize} onChange={(e) => { setSlaPageSize(Number(e.target.value)); setSlaPage(1); }} style={{ ...inputStyle, cursor: 'pointer', marginInlineStart: 'auto' }}>
+                  {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} {t.perPage}</option>)}
+                </select>
+              </div>
+            )}
           </Card>
         </div>
 

@@ -6,6 +6,7 @@ export const PERMISSIONS = [
   { key: 'view_managerial', labelAr: 'عرض التبويب الإداري', labelEn: 'View managerial tab' },
   { key: 'manage_sla', labelAr: 'ضبط SLA', labelEn: 'Manage SLA' },
   { key: 'trigger_sync', labelAr: 'تشغيل المزامنة', labelEn: 'Trigger sync' },
+  { key: 'act_tickets', labelAr: 'إجراءات على التذاكر (إسناد/تعليق/نقل)', labelEn: 'Act on tickets (assign/comment/transition)' },
   { key: 'manage_users', labelAr: 'إدارة المستخدمين', labelEn: 'Manage users' },
   { key: 'manage_roles', labelAr: 'إدارة الأدوار والصلاحيات', labelEn: 'Manage roles & permissions' },
   { key: 'manage_settings', labelAr: 'إدارة الإعدادات', labelEn: 'Manage settings' },

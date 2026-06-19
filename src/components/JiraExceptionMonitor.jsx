@@ -55,6 +55,18 @@ const DICT = {
     fPriority: 'الأهمية',
     fStatus: 'الحالة',
     showing: (x, y) => `عرض ${x} من ${y}`,
+    exportCsv: 'تصدير CSV',
+    actions: 'إجراءات',
+    act: '⋯',
+    comment: 'تعليق',
+    assign: 'إسناد',
+    transition: 'نقل الحالة',
+    send: 'إرسال',
+    apply: 'تطبيق',
+    unassign: 'إلغاء الإسناد',
+    pick: 'اختر…',
+    actDone: 'تم بنجاح',
+    close: 'إغلاق',
     thKey: 'المفتاح',
     thSummary: 'الملخّص',
     thStatus: 'الحالة',
@@ -114,6 +126,18 @@ const DICT = {
     fPriority: 'Priority',
     fStatus: 'Status',
     showing: (x, y) => `Showing ${x} of ${y}`,
+    exportCsv: 'Export CSV',
+    actions: 'Actions',
+    act: '⋯',
+    comment: 'Comment',
+    assign: 'Assign',
+    transition: 'Transition',
+    send: 'Send',
+    apply: 'Apply',
+    unassign: 'Unassign',
+    pick: 'Select…',
+    actDone: 'Done',
+    close: 'Close',
     thKey: 'Key',
     thSummary: 'Summary',
     thStatus: 'Status',
@@ -223,7 +247,7 @@ export default function JiraExceptionMonitor() {
     k === 'operational' ? t.tabOperational : k === 'managerial' ? t.tabManagerial : hasAdmin ? t.tabAdmin : t.account;
 
   return (
-    <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null }}>
+    <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms }}>
       <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
         <header
           style={{
@@ -464,9 +488,110 @@ function MultiSelect({ label, value, options, onChange, labels = {} }) {
   );
 }
 
+// تصدير صفوف إلى CSV وتنزيلها (مع BOM لدعم العربية في Excel)
+function downloadCsv(rows, t) {
+  const headers = [t.thKey, t.thSummary, t.fProject, t.thStatus, t.thPriority, t.thAssignee, t.thDue, t.thDays, t.thReasons];
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [headers.map(esc).join(',')];
+  for (const r of rows) {
+    lines.push([
+      r.key, r.summary, r.project, r.status, r.priority, r.assignee || '',
+      r.dueDate || '', r.daysInStatus, r.reasonsAr ? r.reasonsAr.join(' | ') : r.reasons.join(' | '),
+    ].map(esc).join(','));
+  }
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `exceptions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: 'POST', cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const j = await res.json();
+  if (!j.ok) throw new Error(j.error || 'error');
+  return j.data;
+}
+
+// نافذة إجراءات على تذكرة: تعليق · إسناد · نقل الحالة (Write-back لجيرا)
+function TicketActions({ ticket, onClose, onDone }) {
+  const { t } = useUI();
+  const [commentText, setCommentText] = useState('');
+  const [assignees, setAssignees] = useState([]);
+  const [accountId, setAccountId] = useState('');
+  const [transitions, setTransitions] = useState([]);
+  const [transitionId, setTransitionId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (!ticket) return;
+    fetchJson(`/api/tickets/${ticket.key}/assign`).then((d) => setAssignees(d.assignees)).catch(() => {});
+    fetchJson(`/api/tickets/${ticket.key}/transition`).then((d) => setTransitions(d.transitions)).catch(() => {});
+  }, [ticket]);
+
+  if (!ticket) return null;
+
+  async function run(fn) {
+    setBusy(true); setErr(''); setMsg('');
+    try { await fn(); setMsg(t.actDone); onDone?.(); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 10, padding: 20, width: 420, maxWidth: '90vw', boxShadow: '0 6px 24px rgba(0,0,0,.18)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h3 style={{ margin: 0 }}>{ticket.key} — {t.actions}</h3>
+          <button onClick={onClose} style={ghostBtn}>{t.close}</button>
+        </div>
+
+        {/* تعليق */}
+        <label style={{ fontSize: 13, color: C.muted }}>{t.comment}</label>
+        <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={2} style={{ width: '100%', boxSizing: 'border-box', ...inputStyle, marginBottom: 6 }} />
+        <button disabled={busy || !commentText.trim()} onClick={() => run(async () => { await postJson(`/api/tickets/${ticket.key}/comment`, { body: commentText }); setCommentText(''); })} style={{ ...ghostBtn, marginBottom: 14 }}>{t.send}</button>
+
+        {/* إسناد */}
+        <label style={{ fontSize: 13, color: C.muted, display: 'block' }}>{t.assign}</label>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)} style={{ ...inputStyle, flex: 1, cursor: 'pointer' }}>
+            <option value="">{t.pick}</option>
+            <option value="__unassign__">— {t.unassign} —</option>
+            {assignees.map((a) => <option key={a.accountId} value={a.accountId}>{a.name}</option>)}
+          </select>
+          <button disabled={busy || !accountId} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/assign`, { accountId: accountId === '__unassign__' ? null : accountId }))} style={ghostBtn}>{t.apply}</button>
+        </div>
+
+        {/* نقل الحالة */}
+        <label style={{ fontSize: 13, color: C.muted, display: 'block' }}>{t.transition}</label>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <select value={transitionId} onChange={(e) => setTransitionId(e.target.value)} style={{ ...inputStyle, flex: 1, cursor: 'pointer' }}>
+            <option value="">{t.pick}</option>
+            {transitions.map((tr) => <option key={tr.id} value={tr.id}>{tr.name}{tr.to ? ` → ${tr.to}` : ''}</option>)}
+          </select>
+          <button disabled={busy || !transitionId} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/transition`, { transitionId }))} style={ghostBtn}>{t.apply}</button>
+        </div>
+
+        {msg && <div style={{ color: C.green, fontSize: 13, marginTop: 10 }}>{msg}</div>}
+        {err && <div style={{ color: C.red, fontSize: 13, marginTop: 10 }}>{err}</div>}
+      </div>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------- العملياتي
 function OperationalTab() {
-  const { t, fmt, fmtDate } = useUI();
+  const { t, fmt, fmtDate, perms } = useUI();
+  const canAct = (perms || []).includes('act_tickets');
+  const [actionTicket, setActionTicket] = useState(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [data, setData] = useState(null);
@@ -562,6 +687,7 @@ function OperationalTab() {
           {anyFilter ? (
             <button onClick={() => { setFAssignee([]); setFProject([]); setFPriority([]); setFStatus([]); }} style={ghostBtn}>{t.clear}</button>
           ) : null}
+          <button onClick={() => downloadCsv(filtered, t)} style={{ ...ghostBtn, marginInlineStart: 'auto' }}>⬇ {t.exportCsv}</button>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -576,6 +702,7 @@ function OperationalTab() {
                 <Th>{t.thDue}</Th>
                 <Th align="center">{t.thDays}</Th>
                 <Th>{t.thReasons}</Th>
+                {canAct && <Th align="center">{t.actions}</Th>}
               </tr>
             </thead>
             <tbody>
@@ -594,6 +721,11 @@ function OperationalTab() {
                       <Chip key={r} color={EXC_COLORS[r]}>{t.exc[r] || r}</Chip>
                     ))}
                   </Td>
+                  {canAct && (
+                    <Td align="center">
+                      <button onClick={() => setActionTicket(it)} style={ghostBtn} title={t.actions}>{t.act}</button>
+                    </Td>
+                  )}
                 </tr>
               ))}
               {filtered.length === 0 && (
@@ -603,6 +735,10 @@ function OperationalTab() {
           </table>
         </div>
       </Card>
+
+      {actionTicket && (
+        <TicketActions ticket={actionTicket} onClose={() => setActionTicket(null)} onDone={load} />
+      )}
 
       <Card title={t.workload}>
         {(workload || []).map((w) => (

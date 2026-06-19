@@ -2,6 +2,7 @@ import { iterateIssues, fetchChangelog, getIssue } from './jira.js';
 import { getPool, withTransaction } from './db.js';
 import { mapIssueToRow, extractStatusChanges } from './normalize.js';
 import { snapshotExceptions } from './exceptions.js';
+import { detectAndAlert } from './alerts.js';
 import { jiraConfig } from './config.js';
 
 // محرّك السحب: يجلب التذاكر من جيرا، يحدّث جدول tickets (upsert)،
@@ -104,6 +105,13 @@ export async function runSync({ jql = jiraConfig.jql } = {}) {
 
     // لقطة يومية لعدد الاستثناءات (لرسم الاتجاه) — تُحدَّث لتاريخ اليوم
     await snapshotExceptions();
+
+    // تنبيه بالاستثناءات الجديدة (إن كانت الإشعارات مهيّأة)
+    try {
+      await detectAndAlert();
+    } catch (e) {
+      console.error('[alerts]', e.message);
+    }
 
     await pool.execute(
       `UPDATE sync_log SET finished_at = :finished_at, status = 'success',

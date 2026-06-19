@@ -13,13 +13,15 @@
     "seed:admin": "node scripts/seed-admin.js",
     "jira:sync": "node scripts/sync-once.js",
     "jira:poll": "node scripts/poll.js",
-    "jira:backfill": "node scripts/backfill-trend.js"
+    "jira:backfill": "node scripts/backfill-trend.js",
+    "digest": "node scripts/digest.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.3",
     "mysql2": "^3.11.0",
     "next": "14.2.5",
+    "nodemailer": "^9.0.1",
     "otplib": "^13.4.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

@@ -198,6 +198,23 @@ sudo systemctl daemon-reload && sudo systemctl restart jira-monitor-web
 > إن لم تُثبّت الخطوات أعلاه، يبقى المنفذ محفوظاً في قاعدة البيانات لكن لا يُعاد التشغيل
 > تلقائياً — يظهر تنبيه في الواجهة. لتعطيل المحاولة كلياً اضبط `PORT_APPLY_CMD=` فارغاً.
 
+## 11) الإشعارات + الملخّص الدوري + إجراءات التذاكر
+
+**التنبيهات:** اضبط `ALERT_WEBHOOK_URL` (Slack/Teams) و/أو إعدادات `SMTP_*` + `ALERT_EMAIL_TO`
+في `.env.local`. بعدها يرسل عامل السحب تنبيهاً تلقائياً بأي استثناء جديد. لتعطيلها: `ALERTS_ENABLED=false`.
+
+**الملخّص الدوري بالبريد** عبر cron:
+```bash
+# كل يوم 7 صباحاً
+0 7 * * * cd /GHProjects/jira-monitor && /usr/bin/npm run digest >> /var/log/jem-digest.log 2>&1
+```
+
+**إجراءات التذاكر (Write-back):** امنح الدور صلاحية `act_tickets` من لوحة الأدوار،
+فيظهر زر إجراءات في جدول الاستثناءات (تعليق · إسناد · نقل حالة) يكتب مباشرة في جيرا.
+> أعد تشغيل `npm run seed:admin` مرة لإضافة صلاحية `act_tickets` لدور Admin.
+
+**تصدير CSV:** زر في شريط التصنيف يصدّر النتائج المفلترة (يدعم العربية في Excel).
+
 ## ملاحظات
 - المزامنة عبر **عامل السحب** (`jira-monitor-poll`) كل `SYNC_INTERVAL_MINUTES` — لا حاجة لـ cron.
   بديل: احذف خدمة poll واستخدم cron مع المسار المحمي:

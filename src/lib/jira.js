@@ -101,6 +101,38 @@ export async function getIssue(idOrKey) {
   return jiraRequest('GET', path);
 }
 
+// ---- عمليات الكتابة في جيرا (Write-back) ----
+
+// إسناد تذكرة (accountId=null لإلغاء الإسناد)
+export async function assignIssue(idOrKey, accountId) {
+  return jiraRequest('PUT', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/assignee`, {
+    accountId: accountId || null,
+  });
+}
+
+// إضافة تعليق (نلفّ النص في صيغة ADF التي تتطلبها v3)
+export async function addComment(idOrKey, text) {
+  return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/comment`, {
+    body: {
+      type: 'doc',
+      version: 1,
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: String(text) }] }],
+    },
+  });
+}
+
+// الانتقالات المتاحة لتذكرة
+export async function getTransitions(idOrKey) {
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions`);
+}
+
+// تنفيذ انتقال حالة
+export async function transitionIssue(idOrKey, transitionId) {
+  return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions`, {
+    transition: { id: String(transitionId) },
+  });
+}
+
 // اختبار سريع للاتصال — يُستخدم في /api/health
 export async function ping() {
   assertJiraConfigured();

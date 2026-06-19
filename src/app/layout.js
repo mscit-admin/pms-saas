@@ -24,16 +24,20 @@ export async function generateMetadata() {
   };
 }
 
+// متغيّرات الثيم (فاتح/داكن) + تطبيق الثيم المحفوظ قبل الرسم لتفادي الوميض
+const THEME_CSS = `
+:root{--c-bg:#f4f5f6;--c-card:#ffffff;--c-border:#e2e6e9;--c-text:#1f272e;--c-muted:#6b7785;color-scheme:light;}
+[data-theme="dark"]{--c-bg:#0f141b;--c-card:#171f29;--c-border:#2a3642;--c-text:#e6edf3;--c-muted:#94a3b3;color-scheme:dark;}
+input,select,textarea{background:var(--c-card);color:var(--c-text);}
+`;
+const THEME_INIT = `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t;}catch(e){}`;
+
 export default function RootLayout({ children }) {
   return (
     <html lang="ar" dir="rtl" className={cairo.className}>
-      <body
-        style={{
-          margin: 0,
-          background: '#f4f5f6',
-          color: '#1f272e',
-        }}
-      >
+      <body style={{ margin: 0, background: 'var(--c-bg)', color: 'var(--c-text)' }}>
+        <style dangerouslySetInnerHTML={{ __html: THEME_CSS }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         {children}
       </body>
     </html>

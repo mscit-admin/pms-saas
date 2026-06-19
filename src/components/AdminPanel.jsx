@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 // تظهر فقط لمن يملك صلاحيات إدارية. ثنائية اللغة عبر prop: lang.
 
 const C = {
-  card: '#fff', border: '#e2e6e9', text: '#1f272e', muted: '#6b7785',
+  card: 'var(--c-card)', border: 'var(--c-border)', text: 'var(--c-text)', muted: 'var(--c-muted)',
   green: '#1f7a4d', red: '#e03636', amber: '#cb8a14', blue: '#2490ef',
 };
 

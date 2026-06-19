@@ -10,11 +10,11 @@ import { useBranding, backgroundStyle } from './branding';
 // ===================================================================
 
 const C = {
-  bg: '#f4f5f6',
-  card: '#ffffff',
-  border: '#e2e6e9',
-  text: '#1f272e',
-  muted: '#6b7785',
+  bg: 'var(--c-bg)',
+  card: 'var(--c-card)',
+  border: 'var(--c-border)',
+  text: 'var(--c-text)',
+  muted: 'var(--c-muted)',
   green: '#1f7a4d',
   red: '#e03636',
   amber: '#cb8a14',
@@ -236,6 +236,7 @@ function useIsMobile(bp = 700) {
 // ------------------------------------------------------------------- shell
 export default function JiraExceptionMonitor() {
   const [lang, setLang] = useState('ar');
+  const [theme, setTheme] = useState('light');
   const [tab, setTab] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
@@ -248,6 +249,7 @@ export default function JiraExceptionMonitor() {
     fetchJson('/api/auth/me').then((d) => {
       setMe(d.user);
       if (d.user?.lang === 'ar' || d.user?.lang === 'en') setLang(d.user.lang);
+      if (d.user?.theme === 'light' || d.user?.theme === 'dark') setTheme(d.user.theme);
     }).catch(() => {});
   }, []);
 
@@ -256,11 +258,19 @@ export default function JiraExceptionMonitor() {
     setLang(l);
     fetch('/api/auth/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang: l }) }).catch(() => {});
   };
+  // تغيير الثيم: فوري + حفظ على حساب المستخدم
+  const changeTheme = (th) => {
+    setTheme(th);
+    fetch('/api/auth/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: th }) }).catch(() => {});
+  };
 
-  // استعادة اللغة المحفوظة وضبط اتجاه الصفحة
+  // استعادة التفضيلات المحفوظة محلياً
   useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('lang') : null;
-    if (saved === 'ar' || saved === 'en') setLang(saved);
+    if (typeof window === 'undefined') return;
+    const savedLang = localStorage.getItem('lang');
+    if (savedLang === 'ar' || savedLang === 'en') setLang(savedLang);
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme);
   }, []);
 
   useEffect(() => {
@@ -269,6 +279,11 @@ export default function JiraExceptionMonitor() {
     document.documentElement.dir = t.dir;
     localStorage.setItem('lang', lang);
   }, [lang]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   // بيانات تعريفية (رابط جيرا + آخر مزامنة) — تُحدَّث مع كل تحديث
   useEffect(() => {
@@ -343,6 +358,9 @@ export default function JiraExceptionMonitor() {
               </TabButton>
             ))}
             <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻ {t.refresh}</button>
+            <button onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')} title="theme" style={ghostBtn}>
+              {theme === 'dark' ? '☀︎' : '☾'}
+            </button>
             <button onClick={() => changeLang(lang === 'ar' ? 'en' : 'ar')} title={t.other} style={ghostBtn}>
               {t.other}
             </button>
@@ -845,7 +863,7 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
       {canManage && (fu.acknowledged || fu.snoozed || fu.ownerName || fu.rootCause) && (
         <div style={{ marginTop: 4 }}>
           {fu.acknowledged && <Chip color={C.green}>✓ {t.acked}</Chip>}
-          {fu.snoozed && <Chip color={C.muted}>{t.snoozed} {fmtDate(fu.snoozeUntil)}</Chip>}
+          {fu.snoozed && <Chip color="#8a96a3">{t.snoozed} {fmtDate(fu.snoozeUntil)}</Chip>}
           {fu.ownerName && <Chip color={C.blue}>{fu.ownerName}</Chip>}
           {fu.rootCause && <Chip color={C.amber}>{t.rc[fu.rootCause] || fu.rootCause}</Chip>}
         </div>
@@ -1027,7 +1045,7 @@ function OperationalTab() {
                   {canManage && (
                     <Td>
                       {it.followup?.acknowledged && <Chip color={C.green}>✓ {t.acked}</Chip>}
-                      {it.followup?.snoozed && <Chip color={C.muted}>{t.snoozed} {fmtDate(it.followup.snoozeUntil)}</Chip>}
+                      {it.followup?.snoozed && <Chip color="#8a96a3">{t.snoozed} {fmtDate(it.followup.snoozeUntil)}</Chip>}
                       {it.followup?.ownerName && <Chip color={C.blue}>{it.followup.ownerName}</Chip>}
                       {it.followup?.rootCause && <Chip color={C.amber}>{t.rc[it.followup.rootCause] || it.followup.rootCause}</Chip>}
                     </Td>
@@ -1249,8 +1267,8 @@ function TrendChart({ series }) {
         {/* الشبكة */}
         {gridlines.map((g, i) => (
           <g key={i}>
-            <line x1={padL} y1={y(g)} x2={W - 10} y2={y(g)} stroke={C.border} strokeDasharray="3 3" opacity="0.6" />
-            <text x={padL - 6} y={y(g) + 3} textAnchor="end" fontSize="10" fill={C.muted}>{fmt(g)}</text>
+            <line x1={padL} y1={y(g)} x2={W - 10} y2={y(g)} style={{ stroke: C.border }} strokeDasharray="3 3" opacity="0.6" />
+            <text x={padL - 6} y={y(g) + 3} textAnchor="end" fontSize="10" style={{ fill: C.muted }}>{fmt(g)}</text>
           </g>
         ))}
 

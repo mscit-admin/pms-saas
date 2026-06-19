@@ -1,10 +1,12 @@
-import { handler, ok, fail } from '@/lib/http';
+import { NextResponse } from 'next/server';
+import { handler } from '@/lib/http';
 import { ping } from '@/lib/jira';
 import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 // فحص صحة سريع: اتصال قاعدة البيانات + اتصال جيرا.
+// نعيد التفاصيل كاملة (db/jira + رسالة كل خطأ) لتسهيل التشخيص.
 export const GET = handler(async () => {
   const result = { db: false, jira: false };
   try {
@@ -20,5 +22,9 @@ export const GET = handler(async () => {
   } catch (e) {
     result.jiraError = e.message;
   }
-  return result.db && result.jira ? ok(result) : fail(result, 503);
+  const healthy = result.db && result.jira;
+  return NextResponse.json(
+    { ok: healthy, data: result },
+    { status: healthy ? 200 : 503 }
+  );
 });

@@ -74,6 +74,18 @@ const DICT = {
     pick: 'اختر…',
     actDone: 'تم بنجاح',
     close: 'إغلاق',
+    followup: 'المتابعة',
+    acknowledge: 'إقرار (رأيتها/أتابعها)',
+    acked: 'مُقَرّ',
+    snoozeUntil: 'تأجيل حتى',
+    owner: 'المالك',
+    rootCause: 'السبب الجذري',
+    noteL: 'ملاحظة',
+    hideSnoozed: 'إخفاء المؤجَّلة',
+    hideAcked: 'إخفاء المُقَرّة',
+    snoozed: 'مؤجَّل',
+    saveFollowup: 'حفظ المتابعة',
+    rc: { blocked: 'معطّل', waiting_client: 'بانتظار العميل', under_resourced: 'نقص موارد', dependency: 'اعتمادية', scope_change: 'تغيّر نطاق', other: 'أخرى' },
     thKey: 'المفتاح',
     thSummary: 'الملخّص',
     thStatus: 'الحالة',
@@ -151,6 +163,18 @@ const DICT = {
     pick: 'Select…',
     actDone: 'Done',
     close: 'Close',
+    followup: 'Follow-up',
+    acknowledge: 'Acknowledge (seen / on it)',
+    acked: 'Acked',
+    snoozeUntil: 'Snooze until',
+    owner: 'Owner',
+    rootCause: 'Root cause',
+    noteL: 'Note',
+    hideSnoozed: 'Hide snoozed',
+    hideAcked: 'Hide acked',
+    snoozed: 'Snoozed',
+    saveFollowup: 'Save follow-up',
+    rc: { blocked: 'Blocked', waiting_client: 'Waiting on client', under_resourced: 'Under-resourced', dependency: 'Dependency', scope_change: 'Scope change', other: 'Other' },
     thKey: 'Key',
     thSummary: 'Summary',
     thStatus: 'Status',
@@ -541,7 +565,12 @@ async function postJson(url, body) {
 
 // نافذة إجراءات على تذكرة: تعليق · إسناد · نقل الحالة (Write-back لجيرا)
 function TicketActions({ ticket, onClose, onDone }) {
-  const { t } = useUI();
+  const { t, perms } = useUI();
+  const canAct = (perms || []).includes('act_tickets');
+  const canManage = (perms || []).includes('manage_exceptions');
+  // حالة المتابعة
+  const [fu, setFu] = useState({ acknowledged: false, note: '', snoozeUntil: '', ownerUserId: '', rootCause: '' });
+  const [userOpts, setUserOpts] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [assignees, setAssignees] = useState([]);
   const [accountId, setAccountId] = useState('');
@@ -556,10 +585,23 @@ function TicketActions({ ticket, onClose, onDone }) {
 
   useEffect(() => {
     if (!ticket) return;
-    fetchJson(`/api/tickets/${ticket.key}/assign`).then((d) => setAssignees(d.assignees)).catch(() => {});
-    fetchJson(`/api/tickets/${ticket.key}/transition`).then((d) => setTransitions(d.transitions)).catch(() => {});
-    fetchJson(`/api/tickets/${ticket.key}/fields`).then((d) => setEditFields(d.fields)).catch(() => {});
-  }, [ticket]);
+    if (canManage) {
+      const f = ticket.followup || {};
+      setFu({
+        acknowledged: !!f.acknowledged,
+        note: f.note || '',
+        snoozeUntil: f.snoozeUntil ? String(f.snoozeUntil).slice(0, 10) : '',
+        ownerUserId: f.ownerId || '',
+        rootCause: f.rootCause || '',
+      });
+      fetchJson('/api/users/options').then((d) => setUserOpts(d.users)).catch(() => {});
+    }
+    if (canAct) {
+      fetchJson(`/api/tickets/${ticket.key}/assign`).then((d) => setAssignees(d.assignees)).catch(() => {});
+      fetchJson(`/api/tickets/${ticket.key}/transition`).then((d) => setTransitions(d.transitions)).catch(() => {});
+      fetchJson(`/api/tickets/${ticket.key}/fields`).then((d) => setEditFields(d.fields)).catch(() => {});
+    }
+  }, [ticket, canAct, canManage]);
 
   // بناء حمولة الحقول بصيغة جيرا
   const buildEditPayload = () => {
@@ -597,7 +639,41 @@ function TicketActions({ ticket, onClose, onDone }) {
           <button onClick={onClose} style={ghostBtn}>{t.close}</button>
         </div>
 
+        {/* المتابعة الإدارية */}
+        {canManage && (
+          <div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
+            <label style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>{t.followup}</label>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '6px 0', fontSize: 14 }}>
+              <input type="checkbox" checked={fu.acknowledged} onChange={(e) => setFu({ ...fu, acknowledged: e.target.checked })} />
+              {t.acknowledge}
+            </label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+              <label style={{ fontSize: 12, color: C.muted }}>
+                {t.snoozeUntil}
+                <input type="date" value={fu.snoozeUntil} onChange={(e) => setFu({ ...fu, snoozeUntil: e.target.value })} style={{ ...inputStyle, display: 'block', marginTop: 2 }} />
+              </label>
+              <label style={{ fontSize: 12, color: C.muted }}>
+                {t.owner}
+                <select value={fu.ownerUserId} onChange={(e) => setFu({ ...fu, ownerUserId: e.target.value })} style={{ ...inputStyle, display: 'block', marginTop: 2, cursor: 'pointer' }}>
+                  <option value="">{t.pick}</option>
+                  {userOpts.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </label>
+              <label style={{ fontSize: 12, color: C.muted }}>
+                {t.rootCause}
+                <select value={fu.rootCause} onChange={(e) => setFu({ ...fu, rootCause: e.target.value })} style={{ ...inputStyle, display: 'block', marginTop: 2, cursor: 'pointer' }}>
+                  <option value="">{t.pick}</option>
+                  {Object.keys(t.rc).map((k) => <option key={k} value={k}>{t.rc[k]}</option>)}
+                </select>
+              </label>
+            </div>
+            <input value={fu.note} onChange={(e) => setFu({ ...fu, note: e.target.value })} placeholder={t.noteL} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: 6 }} />
+            <button disabled={busy} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/followup`, { acknowledged: fu.acknowledged, note: fu.note, snoozeUntil: fu.snoozeUntil || null, ownerUserId: fu.ownerUserId || null, rootCause: fu.rootCause || null }))} style={{ background: C.green, color: '#fff', border: 0, borderRadius: 5, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>{t.saveFollowup}</button>
+          </div>
+        )}
+
         {/* تعليق */}
+        {canAct && (<>
         <label style={{ fontSize: 13, color: C.muted }}>{t.comment}</label>
         <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={2} style={{ width: '100%', boxSizing: 'border-box', ...inputStyle, marginBottom: 6 }} />
         <button disabled={busy || !commentText.trim()} onClick={() => run(async () => { await postJson(`/api/tickets/${ticket.key}/comment`, { body: commentText }); setCommentText(''); })} style={{ ...ghostBtn, marginBottom: 14 }}>{t.send}</button>
@@ -685,6 +761,7 @@ function TicketActions({ ticket, onClose, onDone }) {
             </>
           );
         })()}
+        </>)}
 
         {msg && <div style={{ color: C.green, fontSize: 13, marginTop: 10 }}>{msg}</div>}
         {err && <div style={{ color: C.red, fontSize: 13, marginTop: 10 }}>{err}</div>}
@@ -697,7 +774,11 @@ function TicketActions({ ticket, onClose, onDone }) {
 function OperationalTab() {
   const { t, fmt, fmtDate, perms, pageSize } = useUI();
   const canAct = (perms || []).includes('act_tickets');
+  const canManage = (perms || []).includes('manage_exceptions');
+  const canOpen = canAct || canManage;
   const [actionTicket, setActionTicket] = useState(null);
+  const [hideSnoozed, setHideSnoozed] = useState(true);
+  const [hideAcked, setHideAcked] = useState(false);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [data, setData] = useState(null);
@@ -755,11 +836,13 @@ function OperationalTab() {
       || (fAssignee.includes(UNASSIGNED) && !x.assignee)) &&
     (fProject.length === 0 || fProject.includes(x.project)) &&
     (fPriority.length === 0 || fPriority.includes(x.priority)) &&
-    (fStatus.length === 0 || fStatus.includes(x.status))
-  ), [items, fAssignee, fProject, fPriority, fStatus]);
+    (fStatus.length === 0 || fStatus.includes(x.status)) &&
+    (!hideSnoozed || !x.followup?.snoozed) &&
+    (!hideAcked || !x.followup?.acknowledged)
+  ), [items, fAssignee, fProject, fPriority, fStatus, hideSnoozed, hideAcked]);
 
   // أعد للصفحة الأولى عند تغيّر الفلاتر أو حجم الصفحة
-  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, pageSize, items.length]);
+  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, hideSnoozed, hideAcked, pageSize, items.length]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -803,6 +886,16 @@ function OperationalTab() {
           {anyFilter ? (
             <button onClick={() => { setFAssignee([]); setFProject([]); setFPriority([]); setFStatus([]); }} style={ghostBtn}>{t.clear}</button>
           ) : null}
+          {canManage && (
+            <>
+              <label style={{ display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 13, color: C.muted }}>
+                <input type="checkbox" checked={hideSnoozed} onChange={(e) => setHideSnoozed(e.target.checked)} /> {t.hideSnoozed}
+              </label>
+              <label style={{ display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 13, color: C.muted }}>
+                <input type="checkbox" checked={hideAcked} onChange={(e) => setHideAcked(e.target.checked)} /> {t.hideAcked}
+              </label>
+            </>
+          )}
           <button onClick={() => downloadCsv(filtered, t)} style={{ ...ghostBtn, marginInlineStart: 'auto' }}>⬇ {t.exportCsv}</button>
         </div>
         <div style={{ overflowX: 'auto' }}>
@@ -818,7 +911,8 @@ function OperationalTab() {
                 <Th>{t.thDue}</Th>
                 <Th align="center">{t.thDays}</Th>
                 <Th>{t.thReasons}</Th>
-                {canAct && <Th align="center">{t.actions}</Th>}
+                {canManage && <Th>{t.followup}</Th>}
+                {canOpen && <Th align="center">{t.actions}</Th>}
               </tr>
             </thead>
             <tbody>
@@ -837,7 +931,15 @@ function OperationalTab() {
                       <Chip key={r} color={EXC_COLORS[r]}>{t.exc[r] || r}</Chip>
                     ))}
                   </Td>
-                  {canAct && (
+                  {canManage && (
+                    <Td>
+                      {it.followup?.acknowledged && <Chip color={C.green}>✓ {t.acked}</Chip>}
+                      {it.followup?.snoozed && <Chip color={C.muted}>{t.snoozed} {fmtDate(it.followup.snoozeUntil)}</Chip>}
+                      {it.followup?.ownerName && <Chip color={C.blue}>{it.followup.ownerName}</Chip>}
+                      {it.followup?.rootCause && <Chip color={C.amber}>{t.rc[it.followup.rootCause] || it.followup.rootCause}</Chip>}
+                    </Td>
+                  )}
+                  {canOpen && (
                     <Td align="center">
                       <button onClick={() => setActionTicket(it)} style={ghostBtn} title={t.actions}>{t.act}</button>
                     </Td>

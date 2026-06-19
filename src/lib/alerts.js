@@ -14,9 +14,10 @@ export async function detectAndAlert() {
 
   const exceptions = await getExceptions();
 
-  // المجموعة الحالية من الأزواج (مفتاح + نوع)
+  // المجموعة الحالية من الأزواج (مفتاح + نوع) — نتجاهل المُقَرّة أو المؤجَّلة
   const current = [];
   for (const ex of exceptions) {
+    if (ex.followup?.acknowledged || ex.followup?.snoozed) continue;
     for (const reason of ex.reasons) current.push({ key: ex.key, type: reason, ex });
   }
 

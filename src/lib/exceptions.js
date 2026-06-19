@@ -51,8 +51,13 @@ export async function getExceptions({ from = null, to = null } = {}) {
         t.id, t.issue_key, t.project_key, t.summary, t.status, t.status_category,
         t.priority, t.assignee_name, t.assignee_account_id, t.due_date,
         t.jira_created_at, t.last_status_change_at,
+        es.acknowledged, es.snooze_until, es.owner_user_id, es.root_cause, es.note,
+        u.full_name AS owner_name, u.username AS owner_username,
+        (es.snooze_until IS NOT NULL AND es.snooze_until >= CURRENT_DATE) AS is_snoozed,
         ${flagsSelect()}
      FROM tickets t
+     LEFT JOIN exception_status es ON es.issue_key = t.issue_key
+     LEFT JOIN users u ON u.id = es.owner_user_id
      WHERE t.status_category <> 'done' ${dateFilter}
      HAVING is_stagnant OR is_review OR is_overdue OR is_unassigned
      ORDER BY is_overdue DESC, days_in_status DESC`,
@@ -79,6 +84,15 @@ export async function getExceptions({ from = null, to = null } = {}) {
       daysInStatus: r.days_in_status,
       reasons,
       reasonsAr: reasons.map((x) => EXCEPTION_LABELS_AR[x]),
+      followup: {
+        acknowledged: !!r.acknowledged,
+        snoozeUntil: r.snooze_until,
+        snoozed: !!r.is_snoozed,
+        ownerId: r.owner_user_id,
+        ownerName: r.owner_name || r.owner_username || null,
+        rootCause: r.root_cause,
+        note: r.note,
+      },
     };
   });
 }

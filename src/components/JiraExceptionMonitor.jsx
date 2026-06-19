@@ -57,6 +57,10 @@ const DICT = {
     fStatus: 'الحالة',
     showing: (x, y) => `عرض ${x} من ${y}`,
     exportCsv: 'تصدير CSV',
+    perPage: 'لكل صفحة',
+    pageOf: (x, y) => `صفحة ${x} من ${y}`,
+    prev: 'السابق',
+    next: 'التالي',
     actions: 'إجراءات',
     act: '⋯',
     comment: 'تعليق',
@@ -130,6 +134,10 @@ const DICT = {
     fStatus: 'Status',
     showing: (x, y) => `Showing ${x} of ${y}`,
     exportCsv: 'Export CSV',
+    perPage: 'per page',
+    pageOf: (x, y) => `Page ${x} of ${y}`,
+    prev: 'Prev',
+    next: 'Next',
     actions: 'Actions',
     act: '⋯',
     comment: 'Comment',
@@ -703,6 +711,10 @@ function OperationalTab() {
   const [fPriority, setFPriority] = useState([]);
   const [fStatus, setFStatus] = useState([]);
 
+  // ترقيم الصفحات
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -746,6 +758,13 @@ function OperationalTab() {
     (fPriority.length === 0 || fPriority.includes(x.priority)) &&
     (fStatus.length === 0 || fStatus.includes(x.status))
   ), [items, fAssignee, fProject, fPriority, fStatus]);
+
+  // أعد للصفحة الأولى عند تغيّر الفلاتر أو حجم الصفحة
+  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, pageSize, items.length]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   if (loading && !data) return <Loading />;
   if (error) return <ErrorBox message={error} />;
@@ -804,7 +823,7 @@ function OperationalTab() {
               </tr>
             </thead>
             <tbody>
-              {filtered.slice(0, 200).map((it) => (
+              {pageItems.map((it) => (
                 <tr key={it.id}>
                   <Td><KeyLink k={it.key} /></Td>
                   <Td>{it.summary}</Td>
@@ -832,6 +851,18 @@ function OperationalTab() {
             </tbody>
           </table>
         </div>
+
+        {/* ترقيم الصفحات */}
+        {filtered.length > 0 && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} style={ghostBtn}>‹ {t.prev}</button>
+            <span style={{ fontSize: 13, color: C.muted }}>{t.pageOf(safePage, totalPages)}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} style={ghostBtn}>{t.next} ›</button>
+            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={{ ...inputStyle, cursor: 'pointer', marginInlineStart: 'auto' }}>
+              {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} {t.perPage}</option>)}
+            </select>
+          </div>
+        )}
       </Card>
 
       {actionTicket && (

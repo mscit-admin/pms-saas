@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AdminPanel from './AdminPanel';
 
 // ===================================================================
@@ -49,6 +49,12 @@ const DICT = {
     from: 'من',
     to: 'إلى',
     clear: 'مسح',
+    all: 'الكل',
+    fAssignee: 'المسؤول',
+    fProject: 'المشروع',
+    fPriority: 'الأهمية',
+    fStatus: 'الحالة',
+    showing: (x, y) => `عرض ${x} من ${y}`,
     thKey: 'المفتاح',
     thSummary: 'الملخّص',
     thStatus: 'الحالة',
@@ -102,6 +108,12 @@ const DICT = {
     from: 'From',
     to: 'To',
     clear: 'Clear',
+    all: 'All',
+    fAssignee: 'Assignee',
+    fProject: 'Project',
+    fPriority: 'Priority',
+    fStatus: 'Status',
+    showing: (x, y) => `Showing ${x} of ${y}`,
     thKey: 'Key',
     thSummary: 'Summary',
     thStatus: 'Status',
@@ -398,6 +410,22 @@ function BarRow({ label, value, max, color, suffix }) {
   );
 }
 
+// قائمة تصنيف منسدلة
+function FilterSelect({ label, value, options, onChange }) {
+  const { t } = useUI();
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13 }}>
+      <span style={{ color: C.muted }}>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+        <option value="">{t.all}</option>
+        {options.map((o) => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 // ------------------------------------------------------------------- العملياتي
 function OperationalTab() {
   const { t, fmt, fmtDate } = useUI();
@@ -407,6 +435,12 @@ function OperationalTab() {
   const [workload, setWorkload] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // تصنيف النتائج: مسؤول · مشروع · أولوية · حالة
+  const [fAssignee, setFAssignee] = useState('');
+  const [fProject, setFProject] = useState('');
+  const [fPriority, setFPriority] = useState('');
+  const [fStatus, setFStatus] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -430,11 +464,28 @@ function OperationalTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  const items = data?.items || [];
+  const uniq = (sel) => Array.from(new Set(items.map(sel).filter(Boolean))).sort();
+  const opts = useMemo(() => ({
+    assignees: uniq((x) => x.assignee),
+    projects: uniq((x) => x.project),
+    priorities: uniq((x) => x.priority),
+    statuses: uniq((x) => x.status),
+  }), [items]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filtered = useMemo(() => items.filter((x) =>
+    (!fAssignee || x.assignee === fAssignee) &&
+    (!fProject || x.project === fProject) &&
+    (!fPriority || x.priority === fPriority) &&
+    (!fStatus || x.status === fStatus)
+  ), [items, fAssignee, fProject, fPriority, fStatus]);
+
   if (loading && !data) return <Loading />;
   if (error) return <ErrorBox message={error} />;
 
   const counts = data?.counts || {};
   const maxLoad = Math.max(1, ...(workload || []).map((w) => w.openCount));
+  const anyFilter = fAssignee || fProject || fPriority || fStatus;
 
   return (
     <>
@@ -446,7 +497,7 @@ function OperationalTab() {
       </div>
 
       <Card
-        title={`${t.exceptions} (${fmt(data?.total)})`}
+        title={`${t.exceptions} · ${t.showing(fmt(filtered.length), fmt(items.length))}`}
         extra={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
             <span style={{ color: C.muted }}>{t.from}</span>
@@ -459,12 +510,22 @@ function OperationalTab() {
           </div>
         }
       >
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+          <FilterSelect label={t.fAssignee} value={fAssignee} options={opts.assignees} onChange={setFAssignee} />
+          <FilterSelect label={t.fProject} value={fProject} options={opts.projects} onChange={setFProject} />
+          <FilterSelect label={t.fPriority} value={fPriority} options={opts.priorities} onChange={setFPriority} />
+          <FilterSelect label={t.fStatus} value={fStatus} options={opts.statuses} onChange={setFStatus} />
+          {anyFilter && (
+            <button onClick={() => { setFAssignee(''); setFProject(''); setFPriority(''); setFStatus(''); }} style={ghostBtn}>{t.clear}</button>
+          )}
+        </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 <Th>{t.thKey}</Th>
                 <Th>{t.thSummary}</Th>
+                <Th>{t.fProject}</Th>
                 <Th>{t.thStatus}</Th>
                 <Th>{t.thPriority}</Th>
                 <Th>{t.thAssignee}</Th>
@@ -474,10 +535,11 @@ function OperationalTab() {
               </tr>
             </thead>
             <tbody>
-              {(data?.items || []).slice(0, 200).map((it) => (
+              {filtered.slice(0, 200).map((it) => (
                 <tr key={it.id}>
                   <Td><KeyLink k={it.key} /></Td>
                   <Td>{it.summary}</Td>
+                  <Td>{it.project}</Td>
                   <Td>{it.status}</Td>
                   <Td>{it.priority}</Td>
                   <Td>{it.assignee || <span style={{ color: C.red }}>—</span>}</Td>
@@ -490,7 +552,7 @@ function OperationalTab() {
                   </Td>
                 </tr>
               ))}
-              {(!data?.items || data.items.length === 0) && (
+              {filtered.length === 0 && (
                 <tr><Td align="center">{t.noExceptions}</Td></tr>
               )}
             </tbody>

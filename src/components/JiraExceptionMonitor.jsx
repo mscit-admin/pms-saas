@@ -60,6 +60,7 @@ const DICT = {
     sAvgCycle: 'متوسط زمن الدورة (يوم)',
     trend: 'اتجاه الاستثناءات — آخر 30 يوماً',
     trendEmpty: 'لا لقطات اتجاه بعد — تتراكم يومياً مع كل مزامنة.',
+    trendCollecting: (n) => `الاتجاه يتراكم يومياً — يوجد ${n} يوم حتى الآن، يظهر الخط بعد يومين أو أكثر.`,
     sla: 'تنبؤ SLA',
     thRemaining: 'أيام متبقية',
     noAtRisk: 'لا تذاكر معرّضة 🎉',
@@ -106,6 +107,7 @@ const DICT = {
     sAvgCycle: 'Avg cycle time (days)',
     trend: 'Exceptions trend — last 30 days',
     trendEmpty: 'No trend snapshots yet — they accumulate daily with each sync.',
+    trendCollecting: (n) => `Trend is building daily — ${n} day(s) so far; a line appears once there are 2+ days.`,
     sla: 'SLA forecast',
     thRemaining: 'Days left',
     noAtRisk: 'No tickets at risk 🎉',
@@ -570,6 +572,11 @@ function TrendChart({ series }) {
 
   return (
     <div style={{ overflowX: 'auto' }}>
+      {series.length < 2 && (
+        <div style={{ color: C.amber, fontSize: 13, textAlign: 'center', marginBottom: 6 }}>
+          {t.trendCollecting(series.length)}
+        </div>
+      )}
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 600, height: H }}>
         <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke={C.border} />
         {keys.map((k) => {

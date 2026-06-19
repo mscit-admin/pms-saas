@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AdminPanel from './AdminPanel';
+import { useBranding, backgroundStyle } from './branding';
 
 // ===================================================================
 //  مراقب جيرا — لوحة الاستثناءات (واجهة) · ثنائية اللغة AR/EN
@@ -192,6 +193,7 @@ export default function JiraExceptionMonitor() {
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
   const [me, setMe] = useState(null);
+  const { logo, background } = useBranding();
 
   // المستخدم الحالي وصلاحياته
   useEffect(() => {
@@ -252,7 +254,7 @@ export default function JiraExceptionMonitor() {
 
   return (
     <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms }}>
-      <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
+      <div style={{ minHeight: '100vh', background: C.bg, color: C.text, ...backgroundStyle(background) }}>
         <header
           style={{
             background: C.card,
@@ -265,11 +267,17 @@ export default function JiraExceptionMonitor() {
             flexWrap: 'wrap',
           }}
         >
-          <div>
-            <h1 style={{ margin: 0, fontSize: 20 }}>{t.title}</h1>
-            <p style={{ margin: '2px 0 0', color: C.muted, fontSize: 13 }}>
-              {t.subtitle} · {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {logo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logo} alt="logo" style={{ height: 40, maxWidth: 160, objectFit: 'contain' }} />
+            )}
+            <div>
+              <h1 style={{ margin: 0, fontSize: 20 }}>{t.title}</h1>
+              <p style={{ margin: '2px 0 0', color: C.muted, fontSize: 13 }}>
+                {t.subtitle} · {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
+              </p>
+            </div>
           </div>
           <nav style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             {tabs.map((k) => (

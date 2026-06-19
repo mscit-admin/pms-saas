@@ -3,7 +3,6 @@ import { getPool, withTransaction } from './db.js';
 import { mapIssueToRow, extractStatusChanges } from './normalize.js';
 import { snapshotExceptions } from './exceptions.js';
 import { detectAndAlert } from './alerts.js';
-import { jiraConfig } from './config.js';
 
 // محرّك السحب: يجلب التذاكر من جيرا، يحدّث جدول tickets (upsert)،
 // ويُدرج تغيّرات الحالة الجديدة في ticket_history (idempotent عبر change_id).
@@ -81,8 +80,8 @@ async function persistIssue(issue) {
   return inserted;
 }
 
-// مزامنة كاملة عبر JQL (Polling).
-export async function runSync({ jql = jiraConfig.jql } = {}) {
+// مزامنة كاملة عبر JQL (Polling). عند عدم تمرير jql يُقرأ من الإعدادات.
+export async function runSync({ jql } = {}) {
   const pool = getPool();
   const startedAt = nowUtc();
 

@@ -8,7 +8,8 @@ dotenv.config();
 const { getExecutiveSummary, getSlaForecast } = await import('../src/lib/analytics.js');
 const { getExceptionCounts, getExceptions } = await import('../src/lib/exceptions.js');
 const { notify, notifyConfigured } = await import('../src/lib/notify.js');
-const { jiraConfig } = await import('../src/lib/config.js');
+const { getJiraSettings } = await import('../src/lib/jira-settings.js');
+const jiraSettings = await getJiraSettings();
 
 if (!notifyConfigured()) {
   console.error('✗ لا توجد قناة إشعار مهيّأة (SMTP أو ALERT_WEBHOOK_URL)');
@@ -25,7 +26,7 @@ const [summary, counts, sla, exceptions] = await Promise.all([
 const breached = sla.items.filter((x) => x.slaStatus === 'breached').slice(0, 10);
 const topOverdue = exceptions.filter((e) => e.reasons.includes('overdue')).slice(0, 10);
 
-const link = (k) => (jiraConfig.baseUrl ? `${jiraConfig.baseUrl}/browse/${k}` : k);
+const link = (k) => (jiraSettings.baseUrl ? `${jiraSettings.baseUrl}/browse/${k}` : k);
 
 const subject = `ملخّص مراقب جيرا — ${new Date().toLocaleDateString('ar-EG-u-nu-latn')}`;
 

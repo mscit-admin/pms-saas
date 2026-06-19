@@ -22,6 +22,7 @@ const PUBLIC = [
   '/api/sync',
   '/api/webhook',
   '/api/health',
+  '/api/branding', // الأصول العامة (شعار/خلفية/أيقونة) — الكتابة محميّة في المعالج
 ];
 
 function isPublic(pathname) {

@@ -13,6 +13,10 @@ const C = {
 const T = {
   ar: {
     secUsers: 'المستخدمون', secRoles: 'الأدوار والصلاحيات', secSettings: 'الإعدادات', sec2fa: 'التحقق الثنائي',
+    secBranding: 'الهوية', secIntegration: 'الربط بجيرا',
+    logo: 'الشعار', background: 'الخلفية', favicon: 'أيقونة المتصفح', upload: 'رفع', remove: 'إزالة', currentImg: 'الحالي', noImg: 'لا يوجد',
+    baseUrl: 'رابط جيرا', emailF: 'البريد', apiToken: 'API Token', tokenKeep: 'اتركه فارغاً للإبقاء على الحالي', tokenSet: 'محفوظ', tokenNone: 'غير محفوظ',
+    jql: 'JQL', searchPath: 'مسار البحث', pageSize: 'حجم الصفحة', test: 'اختبار الاتصال', testing: 'جارٍ الاختبار…', connectedAs: 'متصل باسم', saveSettings: 'حفظ',
     username: 'اسم المستخدم', fullName: 'الاسم', email: 'البريد', roles: 'الأدوار', active: 'نشط',
     twofa: '2FA', actions: 'إجراءات', create: 'إنشاء', save: 'حفظ', del: 'حذف', edit: 'تعديل',
     resetonts2fa: 'إعادة ضبط 2FA', password: 'كلمة المرور', newUser: 'مستخدم جديد', newRole: 'دور جديد',
@@ -25,6 +29,10 @@ const T = {
   },
   en: {
     secUsers: 'Users', secRoles: 'Roles & permissions', secSettings: 'Settings', sec2fa: 'Two-factor',
+    secBranding: 'Branding', secIntegration: 'Jira connection',
+    logo: 'Logo', background: 'Background', favicon: 'Favicon', upload: 'Upload', remove: 'Remove', currentImg: 'Current', noImg: 'none',
+    baseUrl: 'Jira URL', emailF: 'Email', apiToken: 'API Token', tokenKeep: 'Leave blank to keep current', tokenSet: 'saved', tokenNone: 'not set',
+    jql: 'JQL', searchPath: 'Search path', pageSize: 'Page size', test: 'Test connection', testing: 'Testing…', connectedAs: 'Connected as', saveSettings: 'Save',
     username: 'Username', fullName: 'Name', email: 'Email', roles: 'Roles', active: 'Active',
     twofa: '2FA', actions: 'Actions', create: 'Create', save: 'Save', del: 'Delete', edit: 'Edit',
     resetonts2fa: 'Reset 2FA', password: 'Password', newUser: 'New user', newRole: 'New role',
@@ -56,22 +64,28 @@ export default function AdminPanel({ lang = 'ar', perms = [] }) {
   const sections = [
     can('manage_users') && 'users',
     can('manage_roles') && 'roles',
+    can('manage_integration') && 'integration',
+    can('manage_branding') && 'branding',
     can('manage_settings') && 'settings',
     '2fa',
   ].filter(Boolean);
   const [sec, setSec] = useState(sections[0]);
+  const secLabel = (s) => ({
+    users: t.secUsers, roles: t.secRoles, integration: t.secIntegration,
+    branding: t.secBranding, settings: t.secSettings, '2fa': t.sec2fa,
+  }[s]);
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {sections.map((s) => (
-          <button key={s} onClick={() => setSec(s)} style={sec === s ? btn(C.green) : ghost}>
-            {s === 'users' ? t.secUsers : s === 'roles' ? t.secRoles : s === 'settings' ? t.secSettings : t.sec2fa}
-          </button>
+          <button key={s} onClick={() => setSec(s)} style={sec === s ? btn(C.green) : ghost}>{secLabel(s)}</button>
         ))}
       </div>
       {sec === 'users' && <UsersSection t={t} />}
       {sec === 'roles' && <RolesSection t={t} />}
+      {sec === 'integration' && <IntegrationSection t={t} />}
+      {sec === 'branding' && <BrandingSection t={t} />}
       {sec === 'settings' && <SettingsSection t={t} />}
       {sec === '2fa' && <TwoFactorSection t={t} />}
     </div>
@@ -306,6 +320,133 @@ function SettingsSection({ t }) {
         {err && <span style={{ color: C.red, fontSize: 13 }}>{err}</span>}
       </div>
       <p style={{ color: C.muted, fontSize: 12, marginBottom: 0 }}>{t.portHint}</p>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------- Branding
+function BrandingSection({ t }) {
+  const [manifest, setManifest] = useState(null);
+  const [err, setErr] = useState('');
+
+  const load = useCallback(async () => {
+    const r = await fetch('/api/branding/manifest', { cache: 'no-store' });
+    const j = await r.json();
+    setManifest(j.data || {});
+  }, []);
+  useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
+
+  async function upload(type, file) {
+    setErr('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/branding/asset/${type}`, { method: 'POST', body: fd });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error);
+      await load();
+    } catch (e) { setErr(e.message); }
+  }
+  async function remove(type) {
+    setErr('');
+    try { await api(`/api/branding/asset/${type}`, { method: 'DELETE' }); await load(); }
+    catch (e) { setErr(e.message); }
+  }
+
+  const ts = manifest?.ts || '0';
+  const row = (type, label) => (
+    <div style={{ ...box, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ width: 110, fontWeight: 600 }}>{label}</div>
+      <div style={{ width: 120, height: 60, border: `1px dashed ${C.border}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: '#fafbfc' }}>
+        {manifest?.[type]
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={`/api/branding/asset/${type}?v=${ts}`} alt={type} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+          : <span style={{ color: C.muted, fontSize: 12 }}>{t.noImg}</span>}
+      </div>
+      <label style={{ ...btn(C.green), display: 'inline-block' }}>
+        {t.upload}
+        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => e.target.files[0] && upload(type, e.target.files[0])} />
+      </label>
+      {manifest?.[type] && <button onClick={() => remove(type)} style={btn(C.red)}>{t.remove}</button>}
+    </div>
+  );
+
+  return (
+    <div>
+      {row('logo', t.logo)}
+      {row('background', t.background)}
+      {row('favicon', t.favicon)}
+      {err && <div style={{ color: C.red, fontSize: 13 }}>{err}</div>}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------- Jira connection
+function IntegrationSection({ t }) {
+  const [f, setF] = useState(null);
+  const [token, setToken] = useState('');
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+  const [testing, setTesting] = useState(false);
+
+  const load = useCallback(async () => {
+    const d = await api('/api/integration/jira');
+    setF(d);
+  }, []);
+  useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
+
+  if (!f) return <div style={{ color: C.muted, padding: 10 }}>…</div>;
+
+  const upd = (k, v) => setF({ ...f, [k]: v });
+  const payload = () => ({
+    baseUrl: f.baseUrl, email: f.email, jql: f.jql, searchPath: f.searchPath,
+    pageSize: f.pageSize, apiToken: token,
+  });
+
+  async function test() {
+    setTesting(true); setMsg(''); setErr('');
+    try {
+      const d = await api('/api/integration/jira/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload()) });
+      setMsg(`${t.connectedAs}: ${d.user || '—'}`);
+    } catch (e) { setErr(e.message); } finally { setTesting(false); }
+  }
+  async function save() {
+    setMsg(''); setErr('');
+    try {
+      await api('/api/integration/jira', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload()) });
+      setToken('');
+      await load();
+      setMsg(t.saved);
+    } catch (e) { setErr(e.message); }
+  }
+
+  const field = (label, k, type = 'text') => (
+    <div style={{ marginBottom: 10 }}>
+      <label style={{ display: 'block', fontSize: 13, color: C.muted, marginBottom: 3 }}>{label}</label>
+      <input type={type} value={f[k] ?? ''} onChange={(e) => upd(k, e.target.value)} style={{ ...inp, width: '100%', boxSizing: 'border-box' }} />
+    </div>
+  );
+
+  return (
+    <div style={box}>
+      <h3 style={{ marginTop: 0 }}>{t.secIntegration}</h3>
+      {field(t.baseUrl, 'baseUrl')}
+      {field(t.emailF, 'email')}
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ display: 'block', fontSize: 13, color: C.muted, marginBottom: 3 }}>
+          {t.apiToken} <span style={{ color: f.hasToken ? C.green : C.amber }}>({f.hasToken ? t.tokenSet : t.tokenNone})</span>
+        </label>
+        <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={t.tokenKeep} style={{ ...inp, width: '100%', boxSizing: 'border-box' }} />
+      </div>
+      {field(t.jql, 'jql')}
+      {field(t.searchPath, 'searchPath')}
+      {field(t.pageSize, 'pageSize', 'number')}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
+        <button onClick={save} style={btn(C.green)}>{t.saveSettings}</button>
+        <button onClick={test} disabled={testing} style={ghost}>{testing ? t.testing : t.test}</button>
+        {msg && <span style={{ color: C.green, fontSize: 13 }}>{msg}</span>}
+        {err && <span style={{ color: C.red, fontSize: 13 }}>{err}</span>}
+      </div>
     </div>
   );
 }

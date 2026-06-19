@@ -1,14 +1,14 @@
-import { jiraConfig, assertJiraConfigured } from './config.js';
+import { getJiraSettings, assertJira } from './jira-settings.js';
 
-// عميل Jira Cloud — Basic Auth (email + API Token) عبر متغيرات البيئة فقط.
-// لا يُستدعى من المتصفح إطلاقاً (CORS + الأسرار) — الخلفية حصراً.
+// عميل Jira Cloud — Basic Auth (email + API Token). الإعدادات من قاعدة البيانات
+// (قابلة للتعديل من الواجهة) مع متغيرات البيئة كبديل. لا يُستدعى من المتصفح.
 //
 // نستخدم نقطة /rest/api/3/search/jql الجديدة (القديمة /search أُزيلت — 410 Gone).
 // الترقيم بالرمز nextPageToken بدل startAt. والـ changelog يُجلب من نقطته المخصّصة
 // عند الحاجة لأن نقطة البحث الجديدة قد لا تُرجعه.
 
-function authHeader() {
-  const raw = `${jiraConfig.email}:${jiraConfig.apiToken}`;
+function authHeader(settings) {
+  const raw = `${settings.email}:${settings.apiToken}`;
   const encoded = Buffer.from(raw, 'utf8').toString('base64');
   return `Basic ${encoded}`;
 }
@@ -29,12 +29,13 @@ const FIELDS = [
 ];
 
 async function jiraRequest(method, path, body) {
-  assertJiraConfigured();
-  const url = `${jiraConfig.baseUrl}${path}`;
+  const settings = await getJiraSettings();
+  assertJira(settings);
+  const url = `${settings.baseUrl}${path}`;
   const res = await fetch(url, {
     method,
     headers: {
-      Authorization: authHeader(),
+      Authorization: authHeader(settings),
       Accept: 'application/json',
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
@@ -53,6 +54,7 @@ async function jiraRequest(method, path, body) {
 
 // صفحة واحدة من نقطة البحث الجديدة. expand=changelog كمحاولة أولى (مدعومة أحياناً).
 async function searchPage(jql, nextPageToken, maxResults) {
+  const settings = await getJiraSettings();
   const body = {
     jql,
     maxResults,
@@ -60,7 +62,7 @@ async function searchPage(jql, nextPageToken, maxResults) {
     expand: 'changelog',
   };
   if (nextPageToken) body.nextPageToken = nextPageToken;
-  return jiraRequest('POST', jiraConfig.searchPath, body);
+  return jiraRequest('POST', settings.searchPath, body);
 }
 
 // يجلب سجلّ تغييرات تذكرة من النقطة المخصّصة (مرقّمة) — احتياط حين لا يرجعها البحث.
@@ -85,7 +87,13 @@ export async function fetchChangelog(issueIdOrKey) {
 }
 
 // سحب كل التذاكر المطابقة لـ JQL عبر الترقيم بالرمز (nextPageToken).
-export async function* iterateIssues(jql = jiraConfig.jql, pageSize = jiraConfig.pageSize) {
+// عند عدم تمرير jql/pageSize نقرأهما من الإعدادات (قاعدة البيانات/البيئة).
+export async function* iterateIssues(jql, pageSize) {
+  if (jql === undefined || pageSize === undefined) {
+    const s = await getJiraSettings();
+    if (jql === undefined) jql = s.jql;
+    if (pageSize === undefined) pageSize = s.pageSize;
+  }
   let nextPageToken;
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -146,11 +154,13 @@ export async function transitionIssue(idOrKey, transitionId, fields) {
   return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions`, body);
 }
 
-// اختبار سريع للاتصال — يُستخدم في /api/health
-export async function ping() {
-  assertJiraConfigured();
-  const res = await fetch(`${jiraConfig.baseUrl}/rest/api/3/myself`, {
-    headers: { Authorization: authHeader(), Accept: 'application/json' },
+// اختبار سريع للاتصال — يُستخدم في /api/health وزر اختبار الربط.
+// يقبل إعدادات اختيارية لاختبار اتصال قبل حفظه.
+export async function ping(override) {
+  const settings = override || (await getJiraSettings());
+  assertJira(settings);
+  const res = await fetch(`${settings.baseUrl}/rest/api/3/myself`, {
+    headers: { Authorization: authHeader(settings), Accept: 'application/json' },
   });
   if (!res.ok) throw new Error(`تعذّر الاتصال بجيرا: ${res.status} ${res.statusText}`);
   return res.json();

@@ -1,7 +1,7 @@
 import { query } from './db.js';
 import { getExceptions, EXCEPTION_LABELS_AR } from './exceptions.js';
 import { notify, notifyConfigured } from './notify.js';
-import { jiraConfig } from './config.js';
+import { getJiraSettings } from './jira-settings.js';
 
 // كشف الاستثناءات الجديدة منذ آخر مزامنة وإرسال تنبيه بها.
 // نتتبّع (issue_key, exception_type) في alerted_exceptions كي لا نكرّر التنبيه،
@@ -52,10 +52,11 @@ export async function detectAndAlert() {
     byKey.get(c.key).types.push(EXCEPTION_LABELS_AR[c.type] || c.type);
   }
 
+  const { baseUrl } = await getJiraSettings();
   const lines = [];
   const htmlRows = [];
   for (const [key, v] of byKey) {
-    const url = jiraConfig.baseUrl ? `${jiraConfig.baseUrl}/browse/${key}` : key;
+    const url = baseUrl ? `${baseUrl}/browse/${key}` : key;
     const reasons = v.types.join('، ');
     lines.push(`• ${key} — ${v.ex.summary} [${reasons}] (${v.ex.assignee || 'بدون مسؤول'})`);
     htmlRows.push(

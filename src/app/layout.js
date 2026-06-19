@@ -1,4 +1,5 @@
 import { Cairo } from 'next/font/google';
+import { brandManifest } from '@/lib/branding';
 
 // خط Cairo — عربي/لاتيني، مستضاف ذاتياً عبر next/font (لا طلب خارجي من المتصفح).
 const cairo = Cairo({
@@ -7,11 +8,19 @@ const cairo = Cairo({
   display: 'swap',
 });
 
-// التخطيط الجذري — عربي RTL، نمط البيت (Frappe/ERPNext).
-export const metadata = {
-  title: 'مراقب جيرا — لوحة الاستثناءات',
-  description: 'تحويل مئات تذاكر جيرا إلى ما يحتاج تدخّل المدير فقط',
-};
+// التخطيط الجذري — عربي RTL. الأيقونة المخصّصة تُطبَّق إن رُفعت.
+export async function generateMetadata() {
+  let icons;
+  try {
+    const m = await brandManifest();
+    if (m.favicon) icons = { icon: `/api/branding/asset/favicon?v=${m.ts}` };
+  } catch { /* قاعدة البيانات غير جاهزة بعد */ }
+  return {
+    title: 'مراقب جيرا — لوحة الاستثناءات',
+    description: 'تحويل مئات تذاكر جيرا إلى ما يحتاج تدخّل المدير فقط',
+    icons,
+  };
+}
 
 export default function RootLayout({ children }) {
   return (

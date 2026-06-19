@@ -4,6 +4,6 @@ import { clearSessionCookie } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 
 export const POST = handler(async () => {
-  clearSessionCookie();
+  await clearSessionCookie();
   return ok({ ok: true });
 });

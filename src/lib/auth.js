@@ -1,13 +1,20 @@
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
 import { query } from './db.js';
 
 // المصادقة: تجزئة كلمات المرور (bcrypt) + جلسة JWT في كوكي httpOnly.
 // JWT تُتحقَّق في الخادم (Node) وفي middleware (edge) عبر jose — متوافق مع الاثنين.
+//
+// ملاحظة: next/headers يُستورد ديناميكياً داخل دوال الكوكي فقط، كي تبقى
+// المساعدات (hashPassword/JWT) صالحة للاستدعاء من سكربتات Node خارج Next.
 
 export const SESSION_COOKIE = 'jem_session';
 const SESSION_HOURS = 12;
+
+async function cookieStore() {
+  const { cookies } = await import('next/headers');
+  return cookies();
+}
 
 function secretKey() {
   const s = process.env.SESSION_SECRET || process.env.SYNC_SECRET || 'dev-insecure-secret-change-me';
@@ -43,7 +50,8 @@ export async function verifySession(token) {
 // ---- كوكي الجلسة (في مسارات الخادم) ----
 export async function setSessionCookie(payload) {
   const token = await signSession(payload);
-  cookies().set(SESSION_COOKIE, token, {
+  const store = await cookieStore();
+  store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
     // عبر HTTP العادي لا يُرسَل الكوكي الآمن — نفعّله فقط عند توفّر HTTPS (COOKIE_SECURE=true)
@@ -52,13 +60,15 @@ export async function setSessionCookie(payload) {
     maxAge: SESSION_HOURS * 3600,
   });
 }
-export function clearSessionCookie() {
-  cookies().set(SESSION_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 });
+export async function clearSessionCookie() {
+  const store = await cookieStore();
+  store.set(SESSION_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 });
 }
 
 // ---- المستخدم الحالي + صلاحياته (من قاعدة البيانات، طازجة) ----
 export async function getCurrentUser() {
-  const token = cookies().get(SESSION_COOKIE)?.value;
+  const store = await cookieStore();
+  const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const payload = await verifySession(token);
   if (!payload?.sub) return null;

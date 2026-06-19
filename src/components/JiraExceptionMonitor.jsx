@@ -1,11 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 // ===================================================================
-//  مراقب جيرا — لوحة الاستثناءات (واجهة)
-//  عربي RTL · نمط البيت (Frappe/ERPNext) · تبويبان: تشغيلي + إداري
-//  تتغذّى بالكامل من مسارات /api (لا اتصال بجيرا من المتصفح).
+//  مراقب جيرا — لوحة الاستثناءات (واجهة) · ثنائية اللغة AR/EN
+//  نمط البيت (Frappe/ERPNext). تتغذّى بالكامل من مسارات /api.
 // ===================================================================
 
 const C = {
@@ -21,68 +20,189 @@ const C = {
   purple: '#7c4dff',
 };
 
-// لون/تسمية كل نوع استثناء
-const EXC = {
-  overdue: { ar: 'متأخر', color: C.red },
-  stagnant: { ar: 'راكد', color: C.amber },
-  review: { ar: 'مراجعة', color: C.blue },
-  unassigned: { ar: 'بدون مسؤول', color: C.purple },
+// ألوان أنواع الاستثناءات وحالات SLA (مستقلة عن اللغة)
+const EXC_COLORS = { overdue: C.red, stagnant: C.amber, review: C.blue, unassigned: C.purple };
+const SLA_COLORS = { breached: C.red, at_risk: C.amber, on_track: C.green };
+
+// ------------------------------------------------------------------- i18n
+const DICT = {
+  ar: {
+    dir: 'rtl',
+    locale: 'ar-EG-u-nu-latn',
+    other: 'English',
+    title: 'مراقب جيرا — لوحة الاستثناءات',
+    subtitle: 'ما يحتاج تدخّل المدير فقط — تحديث تلقائي كل بضع دقائق',
+    tabOperational: 'تشغيلي',
+    tabManagerial: 'إداري',
+    cOverdue: 'متأخر عن الاستحقاق',
+    cStagnant: 'راكد > 3 أيام',
+    cReview: 'مراجعة متأخرة',
+    cUnassigned: 'بدون مسؤول',
+    exceptions: 'الاستثناءات',
+    from: 'من',
+    to: 'إلى',
+    clear: 'مسح',
+    thKey: 'المفتاح',
+    thSummary: 'الملخّص',
+    thStatus: 'الحالة',
+    thPriority: 'الأولوية',
+    thAssignee: 'المسؤول',
+    thDue: 'الاستحقاق',
+    thDays: 'أيام بالحالة',
+    thReasons: 'الأسباب',
+    noExceptions: 'لا استثناءات 🎉',
+    workload: 'أعباء الفريق — أداة توازن، لا محاسبة فردية',
+    overdueSuffix: (n) => ` (${n} متأخر)`,
+    sTotal: 'إجمالي التذاكر',
+    sOpen: 'مفتوحة',
+    sDone: 'منجزة',
+    sBreached: 'متجاوزة SLA',
+    sAvgCycle: 'متوسط زمن الدورة (يوم)',
+    trend: 'اتجاه الاستثناءات — آخر 30 يوماً',
+    trendEmpty: 'لا لقطات اتجاه بعد — تتراكم يومياً مع كل مزامنة.',
+    sla: 'تنبؤ SLA',
+    thRemaining: 'أيام متبقية',
+    noAtRisk: 'لا تذاكر معرّضة 🎉',
+    cycleByPriority: 'زمن الدورة حسب الأولوية (يوم)',
+    stageResidence: 'زمن البقاء في كل مرحلة (يوم)',
+    noStages: 'لا بيانات مراحل كافية بعد.',
+    dayUnit: ' يوم',
+    loading: '… جارٍ التحميل',
+    loadError: 'تعذّر التحميل: ',
+    exc: { overdue: 'متأخر', stagnant: 'راكد', review: 'مراجعة', unassigned: 'بدون مسؤول' },
+    slaState: { breached: 'متجاوز', at_risk: 'معرّض للخطر', on_track: 'ضمن المهلة' },
+  },
+  en: {
+    dir: 'ltr',
+    locale: 'en-GB',
+    other: 'العربية',
+    title: 'Jira Monitor — Exceptions Board',
+    subtitle: 'Only what needs a manager — auto-refreshed every few minutes',
+    tabOperational: 'Operational',
+    tabManagerial: 'Managerial',
+    cOverdue: 'Overdue',
+    cStagnant: 'Stagnant > 3 days',
+    cReview: 'Late review',
+    cUnassigned: 'Unassigned',
+    exceptions: 'Exceptions',
+    from: 'From',
+    to: 'To',
+    clear: 'Clear',
+    thKey: 'Key',
+    thSummary: 'Summary',
+    thStatus: 'Status',
+    thPriority: 'Priority',
+    thAssignee: 'Assignee',
+    thDue: 'Due',
+    thDays: 'Days in status',
+    thReasons: 'Reasons',
+    noExceptions: 'No exceptions 🎉',
+    workload: 'Team workload — a balancing tool, not individual blame',
+    overdueSuffix: (n) => ` (${n} overdue)`,
+    sTotal: 'Total tickets',
+    sOpen: 'Open',
+    sDone: 'Done',
+    sBreached: 'SLA breached',
+    sAvgCycle: 'Avg cycle time (days)',
+    trend: 'Exceptions trend — last 30 days',
+    trendEmpty: 'No trend snapshots yet — they accumulate daily with each sync.',
+    sla: 'SLA forecast',
+    thRemaining: 'Days left',
+    noAtRisk: 'No tickets at risk 🎉',
+    cycleByPriority: 'Cycle time by priority (days)',
+    stageResidence: 'Time spent in each stage (days)',
+    noStages: 'Not enough stage data yet.',
+    dayUnit: ' d',
+    loading: '… Loading',
+    loadError: 'Failed to load: ',
+    exc: { overdue: 'Overdue', stagnant: 'Stagnant', review: 'Review', unassigned: 'Unassigned' },
+    slaState: { breached: 'Breached', at_risk: 'At risk', on_track: 'On track' },
+  },
 };
 
-const SLA = {
-  breached: { ar: 'متجاوز', color: C.red },
-  at_risk: { ar: 'معرّض للخطر', color: C.amber },
-  on_track: { ar: 'ضمن المهلة', color: C.green },
-};
+const LangCtx = createContext(null);
+const useUI = () => useContext(LangCtx);
 
 async function fetchJson(url) {
   const res = await fetch(url, { cache: 'no-store' });
   const body = await res.json();
-  if (!body.ok) throw new Error(body.error || 'خطأ في الخادم');
+  if (!body.ok) throw new Error(body.error || 'server error');
   return body.data;
 }
 
-// أرقام لاتينية (إنجليزية) مع واجهة عربية — numberingSystem: latn
-const fmt = (n) => (n == null ? '—' : new Intl.NumberFormat('ar-EG-u-nu-latn').format(n));
-const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '—';
-
 // ------------------------------------------------------------------- shell
 export default function JiraExceptionMonitor() {
+  const [lang, setLang] = useState('ar');
   const [tab, setTab] = useState('operational');
 
-  return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
-      <header
-        style={{
-          background: C.card,
-          borderBottom: `1px solid ${C.border}`,
-          padding: '16px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20 }}>مراقب جيرا — لوحة الاستثناءات</h1>
-          <p style={{ margin: '2px 0 0', color: C.muted, fontSize: 13 }}>
-            ما يحتاج تدخّل المدير فقط — تحديث تلقائي كل بضع دقائق
-          </p>
-        </div>
-        <nav style={{ display: 'flex', gap: 8 }}>
-          <TabButton active={tab === 'operational'} onClick={() => setTab('operational')}>
-            تشغيلي
-          </TabButton>
-          <TabButton active={tab === 'managerial'} onClick={() => setTab('managerial')}>
-            إداري
-          </TabButton>
-        </nav>
-      </header>
+  // استعادة اللغة المحفوظة وضبط اتجاه الصفحة
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('lang') : null;
+    if (saved === 'ar' || saved === 'en') setLang(saved);
+  }, []);
 
-      <main style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
-        {tab === 'operational' ? <OperationalTab /> : <ManagerialTab />}
-      </main>
-    </div>
+  useEffect(() => {
+    const t = DICT[lang];
+    document.documentElement.lang = lang;
+    document.documentElement.dir = t.dir;
+    localStorage.setItem('lang', lang);
+  }, [lang]);
+
+  const t = DICT[lang];
+  const fmt = (n) => (n == null ? '—' : new Intl.NumberFormat('en-US').format(n));
+  const fmtDate = (d) =>
+    d ? new Date(d).toLocaleDateString(t.locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) : '—';
+
+  return (
+    <LangCtx.Provider value={{ lang, t, fmt, fmtDate }}>
+      <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
+        <header
+          style={{
+            background: C.card,
+            borderBottom: `1px solid ${C.border}`,
+            padding: '16px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div>
+            <h1 style={{ margin: 0, fontSize: 20 }}>{t.title}</h1>
+            <p style={{ margin: '2px 0 0', color: C.muted, fontSize: 13 }}>{t.subtitle}</p>
+          </div>
+          <nav style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <TabButton active={tab === 'operational'} onClick={() => setTab('operational')}>
+              {t.tabOperational}
+            </TabButton>
+            <TabButton active={tab === 'managerial'} onClick={() => setTab('managerial')}>
+              {t.tabManagerial}
+            </TabButton>
+            <button
+              onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+              title={t.other}
+              style={{
+                padding: '8px 14px',
+                border: `1px solid ${C.border}`,
+                background: C.card,
+                color: C.text,
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              {t.other}
+            </button>
+          </nav>
+        </header>
+
+        <main style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+          {tab === 'operational' ? <OperationalTab /> : <ManagerialTab />}
+        </main>
+      </div>
+    </LangCtx.Provider>
   );
 }
 
@@ -109,24 +229,9 @@ function TabButton({ active, onClick, children }) {
 // ------------------------------------------------------------------- shared UI
 function Card({ title, children, extra }) {
   return (
-    <section
-      style={{
-        background: C.card,
-        border: `1px solid ${C.border}`,
-        borderRadius: 8,
-        padding: 16,
-        marginBottom: 16,
-      }}
-    >
+    <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 16 }}>
       {title && (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 12,
-          }}
-        >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
           <h2 style={{ margin: 0, fontSize: 16 }}>{title}</h2>
           {extra}
         </div>
@@ -137,6 +242,7 @@ function Card({ title, children, extra }) {
 }
 
 function StatCard({ label, value, color }) {
+  const { fmt } = useUI();
   return (
     <div
       style={{
@@ -174,56 +280,48 @@ function Chip({ color, children }) {
   );
 }
 
-function Th({ children, align = 'right' }) {
+function Th({ children, align }) {
+  const { t } = useUI();
   return (
-    <th
-      style={{
-        textAlign: align,
-        padding: '8px 10px',
-        borderBottom: `2px solid ${C.border}`,
-        color: C.muted,
-        fontSize: 13,
-        fontWeight: 600,
-      }}
-    >
+    <th style={{ textAlign: align || (t.dir === 'rtl' ? 'right' : 'left'), padding: '8px 10px', borderBottom: `2px solid ${C.border}`, color: C.muted, fontSize: 13, fontWeight: 600 }}>
       {children}
     </th>
   );
 }
 
-function Td({ children, align = 'right' }) {
+function Td({ children, align }) {
+  const { t } = useUI();
   return (
-    <td style={{ textAlign: align, padding: '8px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
+    <td style={{ textAlign: align || (t.dir === 'rtl' ? 'right' : 'left'), padding: '8px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
       {children}
     </td>
   );
 }
 
 function Loading() {
-  return <div style={{ color: C.muted, padding: 20, textAlign: 'center' }}>… جارٍ التحميل</div>;
+  const { t } = useUI();
+  return <div style={{ color: C.muted, padding: 20, textAlign: 'center' }}>{t.loading}</div>;
 }
 function ErrorBox({ message }) {
+  const { t } = useUI();
   return (
     <div style={{ color: C.red, padding: 14, background: `${C.red}10`, borderRadius: 6, fontSize: 13 }}>
-      تعذّر التحميل: {message}
+      {t.loadError}{message}
     </div>
   );
 }
 
-// شريط أفقي بسيط (للأعباء / الأولويات / المراحل)
 function BarRow({ label, value, max, color, suffix }) {
+  const { fmt } = useUI();
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
-      <div style={{ width: 160, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {label}
-      </div>
-      <div style={{ flex: 1, background: C.bg, borderRadius: 4, height: 18, position: 'relative' }}>
+      <div style={{ width: 160, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
+      <div style={{ flex: 1, background: C.bg, borderRadius: 4, height: 18 }}>
         <div style={{ width: `${pct}%`, background: color, height: '100%', borderRadius: 4 }} />
       </div>
-      <div style={{ width: 70, fontSize: 13, color: C.muted }}>
-        {fmt(value)}
-        {suffix || ''}
+      <div style={{ width: 80, fontSize: 13, color: C.muted }}>
+        {fmt(value)}{suffix || ''}
       </div>
     </div>
   );
@@ -231,6 +329,7 @@ function BarRow({ label, value, max, color, suffix }) {
 
 // ------------------------------------------------------------------- العملياتي
 function OperationalTab() {
+  const { t, fmt, fmtDate } = useUI();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [data, setData] = useState(null);
@@ -258,9 +357,7 @@ function OperationalTab() {
     }
   }, [from, to]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   if (loading && !data) return <Loading />;
   if (error) return <ErrorBox message={error} />;
@@ -271,24 +368,22 @@ function OperationalTab() {
   return (
     <>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <StatCard label="متأخر عن الاستحقاق" value={counts.overdue} color={C.red} />
-        <StatCard label="راكد > 3 أيام" value={counts.stagnant} color={C.amber} />
-        <StatCard label="مراجعة متأخرة" value={counts.review} color={C.blue} />
-        <StatCard label="بدون مسؤول" value={counts.unassigned} color={C.purple} />
+        <StatCard label={t.cOverdue} value={counts.overdue} color={C.red} />
+        <StatCard label={t.cStagnant} value={counts.stagnant} color={C.amber} />
+        <StatCard label={t.cReview} value={counts.review} color={C.blue} />
+        <StatCard label={t.cUnassigned} value={counts.unassigned} color={C.purple} />
       </div>
 
       <Card
-        title={`الاستثناءات (${fmt(data?.total)})`}
+        title={`${t.exceptions} (${fmt(data?.total)})`}
         extra={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
-            <span style={{ color: C.muted }}>من</span>
+            <span style={{ color: C.muted }}>{t.from}</span>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={inputStyle} />
-            <span style={{ color: C.muted }}>إلى</span>
+            <span style={{ color: C.muted }}>{t.to}</span>
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={inputStyle} />
             {(from || to) && (
-              <button onClick={() => { setFrom(''); setTo(''); }} style={ghostBtn}>
-                مسح
-              </button>
+              <button onClick={() => { setFrom(''); setTo(''); }} style={ghostBtn}>{t.clear}</button>
             )}
           </div>
         }
@@ -297,14 +392,14 @@ function OperationalTab() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <Th>المفتاح</Th>
-                <Th>الملخّص</Th>
-                <Th>الحالة</Th>
-                <Th>الأولوية</Th>
-                <Th>المسؤول</Th>
-                <Th>الاستحقاق</Th>
-                <Th align="center">أيام بالحالة</Th>
-                <Th>الأسباب</Th>
+                <Th>{t.thKey}</Th>
+                <Th>{t.thSummary}</Th>
+                <Th>{t.thStatus}</Th>
+                <Th>{t.thPriority}</Th>
+                <Th>{t.thAssignee}</Th>
+                <Th>{t.thDue}</Th>
+                <Th align="center">{t.thDays}</Th>
+                <Th>{t.thReasons}</Th>
               </tr>
             </thead>
             <tbody>
@@ -319,20 +414,20 @@ function OperationalTab() {
                   <Td align="center">{fmt(it.daysInStatus)}</Td>
                   <Td>
                     {it.reasons.map((r) => (
-                      <Chip key={r} color={EXC[r]?.color}>{EXC[r]?.ar || r}</Chip>
+                      <Chip key={r} color={EXC_COLORS[r]}>{t.exc[r] || r}</Chip>
                     ))}
                   </Td>
                 </tr>
               ))}
               {(!data?.items || data.items.length === 0) && (
-                <tr><Td align="center">لا استثناءات 🎉</Td></tr>
+                <tr><Td align="center">{t.noExceptions}</Td></tr>
               )}
             </tbody>
           </table>
         </div>
       </Card>
 
-      <Card title="أعباء الفريق — أداة توازن، لا محاسبة فردية">
+      <Card title={t.workload}>
         {(workload || []).map((w) => (
           <BarRow
             key={w.accountId || w.assignee}
@@ -340,7 +435,7 @@ function OperationalTab() {
             value={w.openCount}
             max={maxLoad}
             color={w.overdue > 0 ? C.amber : C.green}
-            suffix={w.overdue > 0 ? ` (${fmt(w.overdue)} متأخر)` : ''}
+            suffix={w.overdue > 0 ? t.overdueSuffix(fmt(w.overdue)) : ''}
           />
         ))}
       </Card>
@@ -350,6 +445,7 @@ function OperationalTab() {
 
 // ------------------------------------------------------------------- الإداري
 function ManagerialTab() {
+  const { t } = useUI();
   const [summary, setSummary] = useState(null);
   const [trend, setTrend] = useState(null);
   const [sla, setSla] = useState(null);
@@ -360,14 +456,14 @@ function ManagerialTab() {
   useEffect(() => {
     (async () => {
       try {
-        const [s, t, sl, c] = await Promise.all([
+        const [s, tr, sl, c] = await Promise.all([
           fetchJson('/api/analytics/summary'),
           fetchJson('/api/analytics/trend?days=30'),
           fetchJson('/api/analytics/sla-forecast'),
           fetchJson('/api/analytics/cycle-time?days=90'),
         ]);
         setSummary(s);
-        setTrend(t.series);
+        setTrend(tr.series);
         setSla(sl);
         setCycle(c);
       } catch (e) {
@@ -388,32 +484,32 @@ function ManagerialTab() {
   return (
     <>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <StatCard label="إجمالي التذاكر" value={summary.totalTickets} color={C.blue} />
-        <StatCard label="مفتوحة" value={summary.openTickets} color={C.amber} />
-        <StatCard label="منجزة" value={summary.doneTickets} color={C.green} />
-        <StatCard label="متجاوزة SLA" value={summary.slaBreached} color={C.red} />
-        <StatCard label="متوسط زمن الدورة (يوم)" value={summary.avgCycleDays} color={C.purple} />
+        <StatCard label={t.sTotal} value={summary.totalTickets} color={C.blue} />
+        <StatCard label={t.sOpen} value={summary.openTickets} color={C.amber} />
+        <StatCard label={t.sDone} value={summary.doneTickets} color={C.green} />
+        <StatCard label={t.sBreached} value={summary.slaBreached} color={C.red} />
+        <StatCard label={t.sAvgCycle} value={summary.avgCycleDays} color={C.purple} />
       </div>
 
-      <Card title="اتجاه الاستثناءات — آخر 30 يوماً">
+      <Card title={t.trend}>
         <TrendChart series={trend} />
       </Card>
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 340px' }}>
-          <Card title="تنبؤ SLA">
+          <Card title={t.sla}>
             <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-              <StatCard label="متجاوز" value={sla.summary.breached} color={C.red} />
-              <StatCard label="معرّض للخطر" value={sla.summary.at_risk} color={C.amber} />
-              <StatCard label="ضمن المهلة" value={sla.summary.on_track} color={C.green} />
+              <StatCard label={t.slaState.breached} value={sla.summary.breached} color={C.red} />
+              <StatCard label={t.slaState.at_risk} value={sla.summary.at_risk} color={C.amber} />
+              <StatCard label={t.slaState.on_track} value={sla.summary.on_track} color={C.green} />
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <Th>المفتاح</Th>
-                  <Th>الأولوية</Th>
-                  <Th align="center">أيام متبقية</Th>
-                  <Th>الحالة</Th>
+                  <Th>{t.thKey}</Th>
+                  <Th>{t.thPriority}</Th>
+                  <Th align="center">{t.thRemaining}</Th>
+                  <Th>{t.thStatus}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -421,29 +517,29 @@ function ManagerialTab() {
                   <tr key={x.key}>
                     <Td><strong>{x.key}</strong></Td>
                     <Td>{x.priority}</Td>
-                    <Td align="center">{fmt(x.daysRemaining)}</Td>
-                    <Td><Chip color={SLA[x.slaStatus]?.color}>{SLA[x.slaStatus]?.ar}</Chip></Td>
+                    <Td align="center"><DaysCell value={x.daysRemaining} /></Td>
+                    <Td><Chip color={SLA_COLORS[x.slaStatus]}>{t.slaState[x.slaStatus]}</Chip></Td>
                   </tr>
                 ))}
-                {atRisk.length === 0 && <tr><Td align="center">لا تذاكر معرّضة 🎉</Td></tr>}
+                {atRisk.length === 0 && <tr><Td align="center">{t.noAtRisk}</Td></tr>}
               </tbody>
             </table>
           </Card>
         </div>
 
         <div style={{ flex: '1 1 340px' }}>
-          <Card title="زمن الدورة حسب الأولوية (يوم)">
+          <Card title={t.cycleByPriority}>
             {(cycle?.cycle?.byPriority || []).map((p) => (
-              <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix=" يوم" />
+              <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix={t.dayUnit} />
             ))}
           </Card>
 
-          <Card title="زمن البقاء في كل مرحلة (يوم)">
+          <Card title={t.stageResidence}>
             {(cycle?.stages || []).slice(0, 8).map((s) => (
-              <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix=" يوم" />
+              <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix={t.dayUnit} />
             ))}
             {(!cycle?.stages || cycle.stages.length === 0) && (
-              <div style={{ color: C.muted, fontSize: 13 }}>لا بيانات مراحل كافية بعد.</div>
+              <div style={{ color: C.muted, fontSize: 13 }}>{t.noStages}</div>
             )}
           </Card>
         </div>
@@ -452,10 +548,16 @@ function ManagerialTab() {
   );
 }
 
-// رسم خطّي بسيط لاتجاه الاستثناءات (SVG، بلا مكتبات خارجية)
+function DaysCell({ value }) {
+  const { fmt } = useUI();
+  return <span style={{ color: value < 0 ? C.red : C.text }}>{fmt(value)}</span>;
+}
+
+// رسم خطّي بسيط للاتجاه (SVG، بلا مكتبات خارجية)
 function TrendChart({ series }) {
+  const { t } = useUI();
   if (!series || series.length === 0) {
-    return <div style={{ color: C.muted, fontSize: 13 }}>لا لقطات اتجاه بعد — تتراكم يومياً مع كل مزامنة.</div>;
+    return <div style={{ color: C.muted, fontSize: 13 }}>{t.trendEmpty}</div>;
   }
   const W = 1000;
   const H = 220;
@@ -474,19 +576,19 @@ function TrendChart({ series }) {
           const pts = series.map((d, i) => `${x(i)},${y(d[k] || 0)}`).join(' ');
           return (
             <g key={k}>
-              <polyline points={pts} fill="none" stroke={EXC[k].color} strokeWidth="2" />
+              <polyline points={pts} fill="none" stroke={EXC_COLORS[k]} strokeWidth="2" />
               {series.map((d, i) => (
-                <circle key={i} cx={x(i)} cy={y(d[k] || 0)} r="2.5" fill={EXC[k].color} />
+                <circle key={i} cx={x(i)} cy={y(d[k] || 0)} r="2.5" fill={EXC_COLORS[k]} />
               ))}
             </g>
           );
         })}
       </svg>
-      <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
         {keys.map((k) => (
           <span key={k} style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 12, height: 3, background: EXC[k].color, display: 'inline-block' }} />
-            {EXC[k].ar}
+            <span style={{ width: 12, height: 3, background: EXC_COLORS[k], display: 'inline-block' }} />
+            {t.exc[k]}
           </span>
         ))}
       </div>
@@ -494,18 +596,5 @@ function TrendChart({ series }) {
   );
 }
 
-const inputStyle = {
-  border: `1px solid ${C.border}`,
-  borderRadius: 5,
-  padding: '5px 8px',
-  fontSize: 13,
-  fontFamily: 'inherit',
-};
-const ghostBtn = {
-  border: `1px solid ${C.border}`,
-  background: C.card,
-  borderRadius: 5,
-  padding: '5px 10px',
-  fontSize: 13,
-  cursor: 'pointer',
-};
+const inputStyle = { border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', fontSize: 13, fontFamily: 'inherit' };
+const ghostBtn = { border: `1px solid ${C.border}`, background: C.card, borderRadius: 5, padding: '5px 10px', fontSize: 13, cursor: 'pointer' };

@@ -243,10 +243,19 @@ export default function JiraExceptionMonitor() {
   const { logo, appBackground, appName, appSubtitle, appBgDim, appBgShow, pageSize } = useBranding();
   const isMobile = useIsMobile();
 
-  // المستخدم الحالي وصلاحياته
+  // المستخدم الحالي وصلاحياته + لغته المحفوظة على حسابه
   useEffect(() => {
-    fetchJson('/api/auth/me').then((d) => setMe(d.user)).catch(() => {});
+    fetchJson('/api/auth/me').then((d) => {
+      setMe(d.user);
+      if (d.user?.lang === 'ar' || d.user?.lang === 'en') setLang(d.user.lang);
+    }).catch(() => {});
   }, []);
+
+  // تغيير اللغة: فوري + حفظ على حساب المستخدم
+  const changeLang = (l) => {
+    setLang(l);
+    fetch('/api/auth/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang: l }) }).catch(() => {});
+  };
 
   // استعادة اللغة المحفوظة وضبط اتجاه الصفحة
   useEffect(() => {
@@ -334,7 +343,7 @@ export default function JiraExceptionMonitor() {
               </TabButton>
             ))}
             <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻ {t.refresh}</button>
-            <button onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} title={t.other} style={ghostBtn}>
+            <button onClick={() => changeLang(lang === 'ar' ? 'en' : 'ar')} title={t.other} style={ghostBtn}>
               {t.other}
             </button>
             {me && (

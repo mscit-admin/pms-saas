@@ -173,6 +173,47 @@ export async function getStageResidence({ days = 90 } = {}) {
 }
 
 // ---------------------------------------------------------------------
+// تدفّق العمل والاختناقات: توزيع WIP الحالي على المراحل + أقدم العناصر العالقة.
+// (CFD حقيقي يحتاج لقطات يومية؛ هنا نعرض الحالة الراهنة وأين يتراكم العمل ويهرم.)
+// ---------------------------------------------------------------------
+export async function getFlow({ agingLimit = 50 } = {}) {
+  const wip = await query(
+    `SELECT t.status AS stage, t.status_category AS category,
+        COUNT(*) AS count,
+        AVG(TIMESTAMPDIFF(HOUR, t.last_status_change_at, UTC_TIMESTAMP())) / 24 AS avg_age
+     FROM tickets t WHERE t.status_category <> 'done'
+     GROUP BY t.status, t.status_category
+     ORDER BY count DESC`
+  );
+
+  const aging = await query(
+    `SELECT t.issue_key, t.summary, t.project_key, t.status, t.priority, t.assignee_name,
+        TIMESTAMPDIFF(DAY, t.last_status_change_at, UTC_TIMESTAMP()) AS days_in_status
+     FROM tickets t WHERE t.status_category <> 'done'
+     ORDER BY t.last_status_change_at ASC
+     LIMIT ${Math.max(1, Math.min(200, parseInt(agingLimit, 10) || 50))}`
+  );
+
+  return {
+    wip: wip.map((r) => ({
+      stage: r.stage,
+      category: r.category,
+      count: Number(r.count),
+      avgAge: r.avg_age != null ? Number(Number(r.avg_age).toFixed(1)) : null,
+    })),
+    aging: aging.map((r) => ({
+      key: r.issue_key,
+      summary: r.summary,
+      project: r.project_key,
+      status: r.status,
+      priority: r.priority,
+      assignee: r.assignee_name,
+      daysInStatus: Number(r.days_in_status),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------
 // بطاقة صحة المشاريع (RAG) + نسبة التسليم في الموعد — لكل مشروع.
 // ---------------------------------------------------------------------
 export async function getProjectScorecard() {

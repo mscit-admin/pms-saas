@@ -109,6 +109,8 @@ const DICT = {
     scorecard: 'صحة المشاريع (RAG)',
     health: 'الصحة', onTime: 'التسليم بالموعد', colOpen: 'مفتوحة', colExc: 'استثناءات', colBreach: 'متجاوز SLA', colCycle: 'زمن الدورة',
     healthLabel: { red: 'حرِج', amber: 'تحذير', green: 'سليم' },
+    flow: 'تدفّق العمل والاختناقات', wipByStage: 'العمل الجاري حسب المرحلة (العدد · متوسط العمر)', agingWip: 'أقدم العناصر العالقة',
+    ageDays: 'عمر بالحالة',
     sla: 'تنبؤ SLA',
     thRemaining: 'أيام متبقية',
     noAtRisk: 'لا تذاكر معرّضة 🎉',
@@ -202,6 +204,8 @@ const DICT = {
     scorecard: 'Project health (RAG)',
     health: 'Health', onTime: 'On-time', colOpen: 'Open', colExc: 'Exceptions', colBreach: 'SLA breached', colCycle: 'Cycle time',
     healthLabel: { red: 'Critical', amber: 'Warning', green: 'Healthy' },
+    flow: 'Flow & bottlenecks', wipByStage: 'WIP by stage (count · avg age)', agingWip: 'Oldest stuck items',
+    ageDays: 'Age in status',
     sla: 'SLA forecast',
     thRemaining: 'Days left',
     noAtRisk: 'No tickets at risk 🎉',
@@ -1111,6 +1115,7 @@ function ManagerialTab() {
   const [sla, setSla] = useState(null);
   const [cycle, setCycle] = useState(null);
   const [scorecard, setScorecard] = useState(null);
+  const [flow, setFlow] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [slaPage, setSlaPage] = useState(1);
@@ -1118,18 +1123,20 @@ function ManagerialTab() {
   useEffect(() => {
     (async () => {
       try {
-        const [s, tr, sl, c, sc] = await Promise.all([
+        const [s, tr, sl, c, sc, fl] = await Promise.all([
           fetchJson('/api/analytics/summary'),
           fetchJson('/api/analytics/trend?days=30'),
           fetchJson('/api/analytics/sla-forecast'),
           fetchJson('/api/analytics/cycle-time?days=90'),
           fetchJson('/api/analytics/scorecard'),
+          fetchJson('/api/analytics/flow'),
         ]);
         setSummary(s);
         setTrend(tr.series);
         setSla(sl);
         setCycle(c);
         setScorecard(sc.items);
+        setFlow(fl);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -1160,6 +1167,10 @@ function ManagerialTab() {
 
       <Card title={t.scorecard}>
         <Scorecard items={scorecard} />
+      </Card>
+
+      <Card title={t.flow}>
+        <Flow flow={flow} />
       </Card>
 
       <Card title={t.trend}>
@@ -1272,6 +1283,56 @@ function Scorecard({ items }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// تدفّق العمل: WIP حسب المرحلة (أعمدة) + جدول أقدم العالقين
+function Flow({ flow }) {
+  const { t, fmt, fmtDate } = useUI();
+  if (!flow) return <Loading />;
+  const ageColor = (d) => (d > 14 ? C.red : d > 7 ? C.amber : C.green);
+  const maxWip = Math.max(1, ...(flow.wip || []).map((w) => w.count));
+  return (
+    <div>
+      <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>{t.wipByStage}</div>
+      {(flow.wip || []).map((w) => (
+        <BarRow
+          key={w.stage}
+          label={w.stage}
+          value={w.count}
+          max={maxWip}
+          color={ageColor(w.avgAge || 0)}
+          suffix={w.avgAge != null ? ` · ${fmt(w.avgAge)}${t.dayUnit}` : ''}
+        />
+      ))}
+
+      <div style={{ fontSize: 13, color: C.muted, margin: '14px 0 6px' }}>{t.agingWip}</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+          <thead>
+            <tr>
+              <Th>{t.thKey}</Th>
+              <Th>{t.fProject}</Th>
+              <Th>{t.thStatus}</Th>
+              <Th>{t.thAssignee}</Th>
+              <Th align="center">{t.ageDays}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {(flow.aging || []).slice(0, 20).map((x) => (
+              <tr key={x.key}>
+                <Td><KeyLink k={x.key} /></Td>
+                <Td>{x.project}</Td>
+                <Td>{x.status}</Td>
+                <Td>{x.assignee || '—'}</Td>
+                <Td align="center"><span style={{ color: ageColor(x.daysInStatus), fontWeight: 600 }}>{fmt(x.daysInStatus)}</span></Td>
+              </tr>
+            ))}
+            {(!flow.aging || flow.aging.length === 0) && <tr><Td align="center">—</Td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

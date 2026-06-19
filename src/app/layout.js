@@ -1,3 +1,12 @@
+import { Cairo } from 'next/font/google';
+
+// خط Cairo — عربي/لاتيني، مستضاف ذاتياً عبر next/font (لا طلب خارجي من المتصفح).
+const cairo = Cairo({
+  subsets: ['arabic', 'latin'],
+  weight: ['400', '600', '700'],
+  display: 'swap',
+});
+
 // التخطيط الجذري — عربي RTL، نمط البيت (Frappe/ERPNext).
 export const metadata = {
   title: 'مراقب جيرا — لوحة الاستثناءات',
@@ -6,12 +15,10 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="ar" dir="rtl">
+    <html lang="ar" dir="rtl" className={cairo.className}>
       <body
         style={{
           margin: 0,
-          fontFamily:
-            "'Segoe UI', 'Tahoma', 'Noto Sans Arabic', system-ui, sans-serif",
           background: '#f4f5f6',
           color: '#1f272e',
         }}

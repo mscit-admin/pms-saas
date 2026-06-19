@@ -85,7 +85,7 @@ export default function LoginPage() {
   }
 
   const positioned = pos ? { position: 'absolute', left: pos.x, top: pos.y, margin: 0 } : {};
-  const corner = { position: 'absolute', top: 16, zIndex: 5, background: 'var(--c-card)', color: 'var(--c-text)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '6px 12px', fontSize: 14, fontWeight: 600, cursor: 'pointer' };
+  const pill = { background: 'transparent', color: 'var(--c-muted)', border: '1px solid var(--c-border)', borderRadius: 6, padding: '4px 10px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' };
 
   return (
     <div
@@ -95,14 +95,6 @@ export default function LoginPage() {
         background: 'var(--c-bg)', color: 'var(--c-text)', ...backgroundStyle(loginBgShow ? loginBackground : null, loginBgDim),
       }}
     >
-      {/* الثيم (يسار) + اللغة (يمين) */}
-      <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="theme" style={{ ...corner, insetInlineStart: 16 }}>
-        {theme === 'dark' ? '☀︎' : '☾'}
-      </button>
-      <button onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} title={t.other} style={{ ...corner, insetInlineEnd: 16 }}>
-        {t.other}
-      </button>
-
       <form
         onSubmit={submit}
         style={{ background: 'var(--c-card)', color: 'var(--c-text)', border: '1px solid var(--c-border)', borderRadius: 10, width: 340, boxShadow: '0 4px 20px rgba(0,0,0,.18)', ...positioned }}
@@ -124,6 +116,16 @@ export default function LoginPage() {
         </div>
 
         <div style={{ padding: 22 }}>
+          {/* مبدّلات الثيم (يسار) واللغة (يمين) داخل المربع */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+            <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} style={pill}>
+              {theme === 'dark' ? '☀︎' : '☾'}
+            </button>
+            <button type="button" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} style={pill}>
+              {t.other}
+            </button>
+          </div>
+
           <p style={{ color: 'var(--c-muted)', fontSize: 13, marginTop: 0 }}>{t.sub}</p>
 
           <label style={lbl}>{t.user}</label>

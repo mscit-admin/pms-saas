@@ -42,8 +42,10 @@ async function fetchJson(url) {
   return body.data;
 }
 
-const fmt = (n) => (n == null ? '—' : new Intl.NumberFormat('ar-EG').format(n));
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('ar-EG') : '—');
+// أرقام لاتينية (إنجليزية) مع واجهة عربية — numberingSystem: latn
+const fmt = (n) => (n == null ? '—' : new Intl.NumberFormat('ar-EG-u-nu-latn').format(n));
+const fmtDate = (d) =>
+  d ? new Date(d).toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '—';
 
 // ------------------------------------------------------------------- shell
 export default function JiraExceptionMonitor() {

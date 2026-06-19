@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AdminPanel from './AdminPanel';
 
 // ===================================================================
@@ -410,19 +410,53 @@ function BarRow({ label, value, max, color, suffix }) {
   );
 }
 
-// قائمة تصنيف منسدلة
-function FilterSelect({ label, value, options, onChange }) {
+// قائمة تصنيف متعددة الاختيار (checkboxes داخل منسدلة)
+function MultiSelect({ label, value, options, onChange }) {
   const { t } = useUI();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const toggle = (o) => onChange(value.includes(o) ? value.filter((x) => x !== o) : [...value, o]);
+  const summary = value.length === 0 ? t.all : value.length === 1 ? value[0] : `${value.length}`;
+
   return (
-    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13 }}>
-      <span style={{ color: C.muted }}>{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-        <option value="">{t.all}</option>
-        {options.map((o) => (
-          <option key={o} value={o}>{o}</option>
-        ))}
-      </select>
-    </label>
+    <div ref={ref} style={{ position: 'relative', fontSize: 13 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ ...inputStyle, cursor: 'pointer', display: 'inline-flex', gap: 6, alignItems: 'center', maxWidth: 220 }}
+      >
+        <span style={{ color: C.muted }}>{label}:</span>
+        <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary}</strong>
+        <span style={{ color: C.muted }}>▾</span>
+      </button>
+      {open && (
+        <div
+          style={{
+            position: 'absolute', zIndex: 30, top: '100%', insetInlineStart: 0, marginTop: 4,
+            background: C.card, border: `1px solid ${C.border}`, borderRadius: 6,
+            boxShadow: '0 4px 14px rgba(0,0,0,.08)', padding: 6, minWidth: 190, maxHeight: 280, overflowY: 'auto',
+          }}
+        >
+          {value.length > 0 && (
+            <button onClick={() => onChange([])} style={{ ...ghostBtn, width: '100%', marginBottom: 4 }}>{t.clear}</button>
+          )}
+          {options.length === 0 && <div style={{ color: C.muted, padding: 6 }}>—</div>}
+          {options.map((o) => (
+            <label key={o} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 6px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={value.includes(o)} onChange={() => toggle(o)} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -436,11 +470,11 @@ function OperationalTab() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // تصنيف النتائج: مسؤول · مشروع · أولوية · حالة
-  const [fAssignee, setFAssignee] = useState('');
-  const [fProject, setFProject] = useState('');
-  const [fPriority, setFPriority] = useState('');
-  const [fStatus, setFStatus] = useState('');
+  // تصنيف النتائج (متعدد الاختيار): مسؤول · مشروع · أولوية · حالة
+  const [fAssignee, setFAssignee] = useState([]);
+  const [fProject, setFProject] = useState([]);
+  const [fPriority, setFPriority] = useState([]);
+  const [fStatus, setFStatus] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -474,10 +508,10 @@ function OperationalTab() {
   }), [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => items.filter((x) =>
-    (!fAssignee || x.assignee === fAssignee) &&
-    (!fProject || x.project === fProject) &&
-    (!fPriority || x.priority === fPriority) &&
-    (!fStatus || x.status === fStatus)
+    (fAssignee.length === 0 || fAssignee.includes(x.assignee)) &&
+    (fProject.length === 0 || fProject.includes(x.project)) &&
+    (fPriority.length === 0 || fPriority.includes(x.priority)) &&
+    (fStatus.length === 0 || fStatus.includes(x.status))
   ), [items, fAssignee, fProject, fPriority, fStatus]);
 
   if (loading && !data) return <Loading />;
@@ -485,7 +519,7 @@ function OperationalTab() {
 
   const counts = data?.counts || {};
   const maxLoad = Math.max(1, ...(workload || []).map((w) => w.openCount));
-  const anyFilter = fAssignee || fProject || fPriority || fStatus;
+  const anyFilter = fAssignee.length || fProject.length || fPriority.length || fStatus.length;
 
   return (
     <>
@@ -511,13 +545,13 @@ function OperationalTab() {
         }
       >
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
-          <FilterSelect label={t.fAssignee} value={fAssignee} options={opts.assignees} onChange={setFAssignee} />
-          <FilterSelect label={t.fProject} value={fProject} options={opts.projects} onChange={setFProject} />
-          <FilterSelect label={t.fPriority} value={fPriority} options={opts.priorities} onChange={setFPriority} />
-          <FilterSelect label={t.fStatus} value={fStatus} options={opts.statuses} onChange={setFStatus} />
-          {anyFilter && (
-            <button onClick={() => { setFAssignee(''); setFProject(''); setFPriority(''); setFStatus(''); }} style={ghostBtn}>{t.clear}</button>
-          )}
+          <MultiSelect label={t.fAssignee} value={fAssignee} options={opts.assignees} onChange={setFAssignee} />
+          <MultiSelect label={t.fProject} value={fProject} options={opts.projects} onChange={setFProject} />
+          <MultiSelect label={t.fPriority} value={fPriority} options={opts.priorities} onChange={setFPriority} />
+          <MultiSelect label={t.fStatus} value={fStatus} options={opts.statuses} onChange={setFStatus} />
+          {anyFilter ? (
+            <button onClick={() => { setFAssignee([]); setFProject([]); setFPriority([]); setFStatus([]); }} style={ghostBtn}>{t.clear}</button>
+          ) : null}
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>

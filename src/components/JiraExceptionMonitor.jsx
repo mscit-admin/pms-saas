@@ -527,6 +527,7 @@ function TicketActions({ ticket, onClose, onDone }) {
   const [accountId, setAccountId] = useState('');
   const [transitions, setTransitions] = useState([]);
   const [transitionId, setTransitionId] = useState('');
+  const [fieldValues, setFieldValues] = useState({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -572,13 +573,45 @@ function TicketActions({ ticket, onClose, onDone }) {
 
         {/* نقل الحالة */}
         <label style={{ fontSize: 13, color: C.muted, display: 'block' }}>{t.transition}</label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <select value={transitionId} onChange={(e) => setTransitionId(e.target.value)} style={{ ...inputStyle, flex: 1, cursor: 'pointer' }}>
-            <option value="">{t.pick}</option>
-            {transitions.map((tr) => <option key={tr.id} value={tr.id}>{tr.name}{tr.to ? ` → ${tr.to}` : ''}</option>)}
-          </select>
-          <button disabled={busy || !transitionId} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/transition`, { transitionId }))} style={ghostBtn}>{t.apply}</button>
-        </div>
+        {(() => {
+          const sel = transitions.find((tr) => tr.id === transitionId);
+          const reqFields = sel?.fields || [];
+          const missing = reqFields.some((f) => !fieldValues[f.id]);
+          // قيمة جاهزة لجيرا: حقول القوائم ترسَل { id }، والنصية كنص
+          const buildFields = () => {
+            const out = {};
+            for (const f of reqFields) {
+              const v = fieldValues[f.id];
+              if (!v) continue;
+              out[f.id] = f.allowedValues.length > 0 ? { id: v } : v;
+            }
+            return out;
+          };
+          return (
+            <>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <select value={transitionId} onChange={(e) => { setTransitionId(e.target.value); setFieldValues({}); }} style={{ ...inputStyle, flex: 1, cursor: 'pointer' }}>
+                  <option value="">{t.pick}</option>
+                  {transitions.map((tr) => <option key={tr.id} value={tr.id}>{tr.name}{tr.to ? ` → ${tr.to}` : ''}</option>)}
+                </select>
+                <button disabled={busy || !transitionId || missing} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/transition`, { transitionId, fields: buildFields() }))} style={ghostBtn}>{t.apply}</button>
+              </div>
+              {reqFields.map((f) => (
+                <div key={f.id} style={{ marginTop: 6 }}>
+                  <label style={{ fontSize: 12, color: C.muted }}>{f.name} *</label>
+                  {f.allowedValues.length > 0 ? (
+                    <select value={fieldValues[f.id] || ''} onChange={(e) => setFieldValues({ ...fieldValues, [f.id]: e.target.value })} style={{ ...inputStyle, width: '100%', cursor: 'pointer' }}>
+                      <option value="">{t.pick}</option>
+                      {f.allowedValues.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                    </select>
+                  ) : (
+                    <input value={fieldValues[f.id] || ''} onChange={(e) => setFieldValues({ ...fieldValues, [f.id]: e.target.value })} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+                  )}
+                </div>
+              ))}
+            </>
+          );
+        })()}
 
         {msg && <div style={{ color: C.green, fontSize: 13, marginTop: 10 }}>{msg}</div>}
         {err && <div style={{ color: C.red, fontSize: 13, marginTop: 10 }}>{err}</div>}

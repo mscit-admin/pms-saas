@@ -124,16 +124,16 @@ export async function addComment(idOrKey, text) {
   });
 }
 
-// الانتقالات المتاحة لتذكرة
+// الانتقالات المتاحة لتذكرة (مع حقولها لاكتشاف الإلزامي منها)
 export async function getTransitions(idOrKey) {
-  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions`);
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions?expand=transitions.fields`);
 }
 
-// تنفيذ انتقال حالة
-export async function transitionIssue(idOrKey, transitionId) {
-  return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions`, {
-    transition: { id: String(transitionId) },
-  });
+// تنفيذ انتقال حالة (مع حقول الشاشة الإلزامية إن وُجدت)
+export async function transitionIssue(idOrKey, transitionId, fields) {
+  const body = { transition: { id: String(transitionId) } };
+  if (fields && Object.keys(fields).length > 0) body.fields = fields;
+  return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions`, body);
 }
 
 // اختبار سريع للاتصال — يُستخدم في /api/health

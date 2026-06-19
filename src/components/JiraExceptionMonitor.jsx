@@ -410,8 +410,11 @@ function BarRow({ label, value, max, color, suffix }) {
   );
 }
 
+// قيمة خاصة تمثّل "بدون مسؤول" في فلتر المسؤول
+const UNASSIGNED = ' unassigned';
+
 // قائمة تصنيف متعددة الاختيار (checkboxes داخل منسدلة)
-function MultiSelect({ label, value, options, onChange }) {
+function MultiSelect({ label, value, options, onChange, labels = {} }) {
   const { t } = useUI();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -422,8 +425,9 @@ function MultiSelect({ label, value, options, onChange }) {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
+  const labelFor = (o) => labels[o] || o;
   const toggle = (o) => onChange(value.includes(o) ? value.filter((x) => x !== o) : [...value, o]);
-  const summary = value.length === 0 ? t.all : value.length === 1 ? value[0] : `${value.length}`;
+  const summary = value.length === 0 ? t.all : value.length === 1 ? labelFor(value[0]) : `${value.length}`;
 
   return (
     <div ref={ref} style={{ position: 'relative', fontSize: 13 }}>
@@ -451,7 +455,7 @@ function MultiSelect({ label, value, options, onChange }) {
           {options.map((o) => (
             <label key={o} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '5px 6px', cursor: 'pointer' }}>
               <input type="checkbox" checked={value.includes(o)} onChange={() => toggle(o)} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: o === UNASSIGNED ? C.purple : undefined }}>{labelFor(o)}</span>
             </label>
           ))}
         </div>
@@ -500,15 +504,21 @@ function OperationalTab() {
 
   const items = data?.items || [];
   const uniq = (sel) => Array.from(new Set(items.map(sel).filter(Boolean))).sort();
-  const opts = useMemo(() => ({
-    assignees: uniq((x) => x.assignee),
-    projects: uniq((x) => x.project),
-    priorities: uniq((x) => x.priority),
-    statuses: uniq((x) => x.status),
-  }), [items]); // eslint-disable-line react-hooks/exhaustive-deps
+  const opts = useMemo(() => {
+    const hasUnassigned = items.some((x) => !x.assignee);
+    return {
+      // نضيف خيار "بدون مسؤول" في مقدمة قائمة المسؤولين عند وجود تذاكر بلا مُسنَد
+      assignees: [...(hasUnassigned ? [UNASSIGNED] : []), ...uniq((x) => x.assignee)],
+      projects: uniq((x) => x.project),
+      priorities: uniq((x) => x.priority),
+      statuses: uniq((x) => x.status),
+    };
+  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => items.filter((x) =>
-    (fAssignee.length === 0 || fAssignee.includes(x.assignee)) &&
+    (fAssignee.length === 0
+      || fAssignee.includes(x.assignee)
+      || (fAssignee.includes(UNASSIGNED) && !x.assignee)) &&
     (fProject.length === 0 || fProject.includes(x.project)) &&
     (fPriority.length === 0 || fPriority.includes(x.priority)) &&
     (fStatus.length === 0 || fStatus.includes(x.status))
@@ -545,7 +555,7 @@ function OperationalTab() {
         }
       >
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
-          <MultiSelect label={t.fAssignee} value={fAssignee} options={opts.assignees} onChange={setFAssignee} />
+          <MultiSelect label={t.fAssignee} value={fAssignee} options={opts.assignees} onChange={setFAssignee} labels={{ [UNASSIGNED]: t.cUnassigned }} />
           <MultiSelect label={t.fProject} value={fProject} options={opts.projects} onChange={setFProject} />
           <MultiSelect label={t.fPriority} value={fPriority} options={opts.priorities} onChange={setFPriority} />
           <MultiSelect label={t.fStatus} value={fStatus} options={opts.statuses} onChange={setFStatus} />

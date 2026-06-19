@@ -19,6 +19,12 @@ export const PUT = handler(async (req) => {
   if (body.app_name !== undefined) await setSetting('app_name', String(body.app_name).slice(0, 120));
   if (body.app_subtitle !== undefined) await setSetting('app_subtitle', String(body.app_subtitle).slice(0, 200));
 
+  // عدد الصفوف في الصفحة (للجداول)
+  if (body.page_size !== undefined) {
+    const n = Math.max(5, Math.min(500, parseInt(body.page_size, 10) || 25));
+    await setSetting('page_size', n);
+  }
+
   // خفوت الخلفيتين (0..100) + إظهار/إخفاء كل خلفية
   const clampDim = (v) => Math.max(0, Math.min(100, parseInt(v, 10) || 0));
   if (body.app_bg_dim !== undefined) await setSetting('app_bg_dim', clampDim(body.app_bg_dim));

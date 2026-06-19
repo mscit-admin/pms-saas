@@ -201,7 +201,7 @@ export default function JiraExceptionMonitor() {
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
   const [me, setMe] = useState(null);
-  const { logo, appBackground, appName, appSubtitle, appBgDim, appBgShow } = useBranding();
+  const { logo, appBackground, appName, appSubtitle, appBgDim, appBgShow, pageSize } = useBranding();
 
   // المستخدم الحالي وصلاحياته
   useEffect(() => {
@@ -261,7 +261,7 @@ export default function JiraExceptionMonitor() {
     k === 'operational' ? t.tabOperational : k === 'managerial' ? t.tabManagerial : hasAdmin ? t.tabAdmin : t.account;
 
   return (
-    <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms }}>
+    <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms, pageSize }}>
       <div style={{ minHeight: '100vh', background: C.bg, color: C.text, ...backgroundStyle(appBgShow ? appBackground : null, appBgDim) }}>
         <header
           style={{
@@ -695,7 +695,7 @@ function TicketActions({ ticket, onClose, onDone }) {
 
 // ------------------------------------------------------------------- العملياتي
 function OperationalTab() {
-  const { t, fmt, fmtDate, perms } = useUI();
+  const { t, fmt, fmtDate, perms, pageSize } = useUI();
   const canAct = (perms || []).includes('act_tickets');
   const [actionTicket, setActionTicket] = useState(null);
   const [from, setFrom] = useState('');
@@ -711,9 +711,8 @@ function OperationalTab() {
   const [fPriority, setFPriority] = useState([]);
   const [fStatus, setFStatus] = useState([]);
 
-  // ترقيم الصفحات
+  // ترقيم الصفحات (حجم الصفحة من إعدادات الإدارة)
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -858,9 +857,6 @@ function OperationalTab() {
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} style={ghostBtn}>‹ {t.prev}</button>
             <span style={{ fontSize: 13, color: C.muted }}>{t.pageOf(safePage, totalPages)}</span>
             <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} style={ghostBtn}>{t.next} ›</button>
-            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={{ ...inputStyle, cursor: 'pointer', marginInlineStart: 'auto' }}>
-              {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} {t.perPage}</option>)}
-            </select>
           </div>
         )}
       </Card>
@@ -887,7 +883,7 @@ function OperationalTab() {
 
 // ------------------------------------------------------------------- الإداري
 function ManagerialTab() {
-  const { t } = useUI();
+  const { t, pageSize } = useUI();
   const [summary, setSummary] = useState(null);
   const [trend, setTrend] = useState(null);
   const [sla, setSla] = useState(null);
@@ -895,7 +891,6 @@ function ManagerialTab() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [slaPage, setSlaPage] = useState(1);
-  const [slaPageSize, setSlaPageSize] = useState(25);
 
   useEffect(() => {
     (async () => {
@@ -924,9 +919,9 @@ function ManagerialTab() {
   const maxCycle = Math.max(1, ...(cycle?.cycle?.byPriority || []).map((p) => p.avgDays || 0));
   const maxStage = Math.max(1, ...(cycle?.stages || []).map((s) => s.avgDays || 0));
   const atRisk = (sla?.items || []).filter((x) => x.slaStatus !== 'on_track');
-  const slaTotalPages = Math.max(1, Math.ceil(atRisk.length / slaPageSize));
+  const slaTotalPages = Math.max(1, Math.ceil(atRisk.length / pageSize));
   const slaSafePage = Math.min(slaPage, slaTotalPages);
-  const atRiskPage = atRisk.slice((slaSafePage - 1) * slaPageSize, slaSafePage * slaPageSize);
+  const atRiskPage = atRisk.slice((slaSafePage - 1) * pageSize, slaSafePage * pageSize);
 
   return (
     <>
@@ -976,9 +971,6 @@ function ManagerialTab() {
                 <button onClick={() => setSlaPage((p) => Math.max(1, p - 1))} disabled={slaSafePage <= 1} style={ghostBtn}>‹ {t.prev}</button>
                 <span style={{ fontSize: 13, color: C.muted }}>{t.pageOf(slaSafePage, slaTotalPages)}</span>
                 <button onClick={() => setSlaPage((p) => Math.min(slaTotalPages, p + 1))} disabled={slaSafePage >= slaTotalPages} style={ghostBtn}>{t.next} ›</button>
-                <select value={slaPageSize} onChange={(e) => { setSlaPageSize(Number(e.target.value)); setSlaPage(1); }} style={{ ...inputStyle, cursor: 'pointer', marginInlineStart: 'auto' }}>
-                  {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n} {t.perPage}</option>)}
-                </select>
               </div>
             )}
           </Card>

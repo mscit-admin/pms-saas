@@ -103,6 +103,7 @@ const DICT = {
     sBreached: 'متجاوزة SLA',
     sAvgCycle: 'متوسط زمن الدورة (يوم)',
     trend: 'اتجاه الاستثناءات — آخر 30 يوماً',
+    chartLines: 'خطوط', chartArea: 'مساحات', chartBars: 'أعمدة',
     trendEmpty: 'لا لقطات اتجاه بعد — تتراكم يومياً مع كل مزامنة.',
     trendCollecting: (n) => `الاتجاه يتراكم يومياً — يوجد ${n} يوم حتى الآن، يظهر الخط بعد يومين أو أكثر.`,
     sla: 'تنبؤ SLA',
@@ -192,6 +193,7 @@ const DICT = {
     sBreached: 'SLA breached',
     sAvgCycle: 'Avg cycle time (days)',
     trend: 'Exceptions trend — last 30 days',
+    chartLines: 'Lines', chartArea: 'Area', chartBars: 'Bars',
     trendEmpty: 'No trend snapshots yet — they accumulate daily with each sync.',
     trendCollecting: (n) => `Trend is building daily — ${n} day(s) so far; a line appears once there are 2+ days.`,
     sla: 'SLA forecast',
@@ -1128,37 +1130,82 @@ function DaysCell({ value }) {
   return <span style={{ color: value < 0 ? C.red : C.text }}>{fmt(value)}</span>;
 }
 
-// رسم خطّي بسيط للاتجاه (SVG، بلا مكتبات خارجية)
+// رسم الاتجاه (SVG، بلا مكتبات): خطوط · مساحات متراكمة · أعمدة متراكمة
 function TrendChart({ series }) {
-  const { t } = useUI();
+  const { t, fmt } = useUI();
+  const [type, setType] = useState('area');
   if (!series || series.length === 0) {
     return <div style={{ color: C.muted, fontSize: 13 }}>{t.trendEmpty}</div>;
   }
   const W = 1000;
-  const H = 220;
-  const pad = 30;
+  const H = 240;
+  const padL = 38;
+  const padB = 26;
+  const padT = 12;
   const keys = ['overdue', 'stagnant', 'review', 'unassigned'];
-  const maxVal = Math.max(1, ...series.flatMap((d) => keys.map((k) => d[k] || 0)));
   const n = series.length;
-  const x = (i) => pad + (n === 1 ? (W - 2 * pad) / 2 : (i * (W - 2 * pad)) / (n - 1));
-  const y = (v) => H - pad - (v / maxVal) * (H - 2 * pad);
+  const totals = series.map((d) => keys.reduce((s, k) => s + (d[k] || 0), 0));
+  const stacked = type !== 'lines';
+  const maxVal = stacked
+    ? Math.max(1, ...totals)
+    : Math.max(1, ...series.flatMap((d) => keys.map((k) => d[k] || 0)));
+
+  const x = (i) => padL + (n === 1 ? (W - padL - 10) / 2 : (i * (W - padL - 10)) / (n - 1));
+  const y = (v) => padT + (1 - v / maxVal) * (H - padT - padB);
+
+  // خطوط الشبكة الأفقية + قيمها
+  const ticks = 4;
+  const gridlines = Array.from({ length: ticks + 1 }, (_, i) => Math.round((maxVal / ticks) * i));
+
+  // قيم متراكمة لكل يوم (للمساحات/الأعمدة)
+  const stacks = series.map((d) => {
+    let base = 0;
+    return keys.map((k) => { const v = d[k] || 0; const seg = { k, base, top: base + v }; base += v; return seg; });
+  });
 
   return (
     <div style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginBottom: 6 }}>
+        {[['area', t.chartArea], ['bars', t.chartBars], ['lines', t.chartLines]].map(([k, label]) => (
+          <button key={k} onClick={() => setType(k)} style={{ ...ghostBtn, ...(type === k ? { background: C.green, color: '#fff', border: 0 } : {}) }}>{label}</button>
+        ))}
+      </div>
       {series.length < 2 && (
         <div style={{ color: C.amber, fontSize: 13, textAlign: 'center', marginBottom: 6 }}>
           {t.trendCollecting(series.length)}
         </div>
       )}
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 600, height: H }}>
-        <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke={C.border} />
-        {keys.map((k) => {
-          const pts = series.map((d, i) => `${x(i)},${y(d[k] || 0)}`).join(' ');
+        {/* الشبكة */}
+        {gridlines.map((g, i) => (
+          <g key={i}>
+            <line x1={padL} y1={y(g)} x2={W - 10} y2={y(g)} stroke={C.border} strokeDasharray="3 3" opacity="0.6" />
+            <text x={padL - 6} y={y(g) + 3} textAnchor="end" fontSize="10" fill={C.muted}>{fmt(g)}</text>
+          </g>
+        ))}
+
+        {type === 'lines' && keys.map((k) => (
+          <g key={k}>
+            <polyline points={series.map((d, i) => `${x(i)},${y(d[k] || 0)}`).join(' ')} fill="none" stroke={EXC_COLORS[k]} strokeWidth="2" />
+            {series.map((d, i) => <circle key={i} cx={x(i)} cy={y(d[k] || 0)} r="2.2" fill={EXC_COLORS[k]} />)}
+          </g>
+        ))}
+
+        {type === 'area' && keys.map((k, ki) => {
+          const tops = stacks.map((segs) => segs[ki]);
+          const pts = [
+            ...tops.map((p, i) => `${x(i)},${y(p.top)}`),
+            ...tops.map((p, i) => `${x(i)},${y(p.base)}`).reverse(),
+          ].join(' ');
+          return <polygon key={k} points={pts} fill={EXC_COLORS[k]} opacity="0.82" />;
+        })}
+
+        {type === 'bars' && stacks.map((segs, i) => {
+          const bw = Math.max(2, ((W - padL - 10) / n) * 0.7);
           return (
-            <g key={k}>
-              <polyline points={pts} fill="none" stroke={EXC_COLORS[k]} strokeWidth="2" />
-              {series.map((d, i) => (
-                <circle key={i} cx={x(i)} cy={y(d[k] || 0)} r="2.5" fill={EXC_COLORS[k]} />
+            <g key={i}>
+              {segs.map((s) => (
+                <rect key={s.k} x={x(i) - bw / 2} y={y(s.top)} width={bw} height={Math.max(0, y(s.base) - y(s.top))} fill={EXC_COLORS[s.k]} />
               ))}
             </g>
           );
@@ -1167,7 +1214,7 @@ function TrendChart({ series }) {
       <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
         {keys.map((k) => (
           <span key={k} style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 12, height: 3, background: EXC_COLORS[k], display: 'inline-block' }} />
+            <span style={{ width: 12, height: 10, background: EXC_COLORS[k], display: 'inline-block', borderRadius: 2 }} />
             {t.exc[k]}
           </span>
         ))}

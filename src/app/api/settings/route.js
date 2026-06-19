@@ -19,11 +19,12 @@ export const PUT = handler(async (req) => {
   if (body.app_name !== undefined) await setSetting('app_name', String(body.app_name).slice(0, 120));
   if (body.app_subtitle !== undefined) await setSetting('app_subtitle', String(body.app_subtitle).slice(0, 200));
 
-  // خفوت الخلفية (0..100): كلما زاد قلّت حدّة الصورة
-  if (body.app_bg_dim !== undefined) {
-    const d = Math.max(0, Math.min(100, parseInt(body.app_bg_dim, 10) || 0));
-    await setSetting('app_bg_dim', d);
-  }
+  // خفوت الخلفيتين (0..100) + إظهار/إخفاء كل خلفية
+  const clampDim = (v) => Math.max(0, Math.min(100, parseInt(v, 10) || 0));
+  if (body.app_bg_dim !== undefined) await setSetting('app_bg_dim', clampDim(body.app_bg_dim));
+  if (body.login_bg_dim !== undefined) await setSetting('login_bg_dim', clampDim(body.login_bg_dim));
+  if (body.app_bg_show !== undefined) await setSetting('app_bg_show', body.app_bg_show ? 1 : 0);
+  if (body.login_bg_show !== undefined) await setSetting('login_bg_show', body.login_bg_show ? 1 : 0);
 
   // رقم المنفذ — يُطبَّق فعلياً بإعادة تشغيل الخدمة وتحديث nginx
   if (body.app_port !== undefined) {

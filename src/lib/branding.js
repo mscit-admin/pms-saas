@@ -5,7 +5,7 @@ import { getSetting, setSetting, getAllSettings } from './settings.js';
 // تخزين أصول الهوية (شعار/خلفية/أيقونة) كملفات في uploads/، مع تسجيل النوع
 // في app_settings (brand_<type> = mime). الملفات تبقى خارج git.
 
-export const BRAND_TYPES = ['logo', 'background', 'favicon'];
+export const BRAND_TYPES = ['logo', 'background', 'login_background', 'favicon'];
 const DIR = path.join(process.cwd(), 'uploads');
 
 export function isBrandType(t) {
@@ -38,13 +38,19 @@ export async function removeAsset(type) {
 
 export async function brandManifest() {
   const s = await getAllSettings();
+  const int = (v, d) => (Number.isFinite(parseInt(v, 10)) ? parseInt(v, 10) : d);
+  const bool = (v, d) => (v == null ? d : v === '1' || v === 1 || v === 'true');
   return {
     logo: Boolean(s.brand_logo),
-    background: Boolean(s.brand_background),
+    background: Boolean(s.brand_background),            // خلفية التطبيق
+    loginBackground: Boolean(s.brand_login_background), // خلفية شاشة الدخول
     favicon: Boolean(s.brand_favicon),
     appName: s.app_name || '',
     appSubtitle: s.app_subtitle || '',
-    bgDim: Number.isFinite(parseInt(s.app_bg_dim, 10)) ? parseInt(s.app_bg_dim, 10) : 85,
+    appBgDim: int(s.app_bg_dim, 85),
+    loginBgDim: int(s.login_bg_dim, 85),
+    appBgShow: bool(s.app_bg_show, true),
+    loginBgShow: bool(s.login_bg_show, true),
     ts: s.brand_ts || '0',
   };
 }

@@ -14,7 +14,8 @@ const T = {
   ar: {
     secUsers: 'المستخدمون', secRoles: 'الأدوار والصلاحيات', secSettings: 'الإعدادات', sec2fa: 'التحقق الثنائي',
     secBranding: 'الهوية', secIntegration: 'الربط بجيرا',
-    logo: 'الشعار', background: 'الخلفية', favicon: 'أيقونة المتصفح', upload: 'رفع', remove: 'إزالة', currentImg: 'الحالي', noImg: 'لا يوجد',
+    logo: 'الشعار', favicon: 'أيقونة المتصفح', upload: 'رفع', remove: 'إزالة', currentImg: 'الحالي', noImg: 'لا يوجد',
+    appBg: 'خلفية التطبيق', loginBg: 'خلفية شاشة الدخول', dim: 'الخفوت', show: 'إظهار الصورة', saveDisplay: 'حفظ العرض', refreshHint2: 'حدّث الصفحة لرؤية الأثر.',
     baseUrl: 'رابط جيرا', emailF: 'البريد', apiToken: 'API Token', tokenKeep: 'اتركه فارغاً للإبقاء على الحالي', tokenSet: 'محفوظ', tokenNone: 'غير محفوظ',
     jql: 'JQL', searchPath: 'مسار البحث', pageSize: 'حجم الصفحة', test: 'اختبار الاتصال', testing: 'جارٍ الاختبار…', connectedAs: 'متصل باسم', saveSettings: 'حفظ',
     username: 'اسم المستخدم', fullName: 'الاسم', email: 'البريد', roles: 'الأدوار', active: 'نشط',
@@ -32,7 +33,8 @@ const T = {
   en: {
     secUsers: 'Users', secRoles: 'Roles & permissions', secSettings: 'Settings', sec2fa: 'Two-factor',
     secBranding: 'Branding', secIntegration: 'Jira connection',
-    logo: 'Logo', background: 'Background', favicon: 'Favicon', upload: 'Upload', remove: 'Remove', currentImg: 'Current', noImg: 'none',
+    logo: 'Logo', favicon: 'Favicon', upload: 'Upload', remove: 'Remove', currentImg: 'Current', noImg: 'none',
+    appBg: 'App background', loginBg: 'Login background', dim: 'Dimming', show: 'Show image', saveDisplay: 'Save display', refreshHint2: 'Refresh the page to see the effect.',
     baseUrl: 'Jira URL', emailF: 'Email', apiToken: 'API Token', tokenKeep: 'Leave blank to keep current', tokenSet: 'saved', tokenNone: 'not set',
     jql: 'JQL', searchPath: 'Search path', pageSize: 'Page size', test: 'Test connection', testing: 'Testing…', connectedAs: 'Connected as', saveSettings: 'Save',
     username: 'Username', fullName: 'Name', email: 'Email', roles: 'Roles', active: 'Active',
@@ -300,7 +302,6 @@ function SettingsSection({ t }) {
   const [port, setPort] = useState('');
   const [appName, setAppName] = useState('');
   const [appSubtitle, setAppSubtitle] = useState('');
-  const [bgDim, setBgDim] = useState(85);
   const [msg, setMsg] = useState('');
   const [nameMsg, setNameMsg] = useState('');
   const [err, setErr] = useState('');
@@ -310,15 +311,14 @@ function SettingsSection({ t }) {
       setPort(d.settings.app_port || '');
       setAppName(d.settings.app_name || '');
       setAppSubtitle(d.settings.app_subtitle || '');
-      setBgDim(d.settings.app_bg_dim != null ? Number(d.settings.app_bg_dim) : 85);
     }).catch((e) => setErr(e.message));
   }, []);
 
   async function saveName() {
     setNameMsg(''); setErr('');
     try {
-      await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_name: appName, app_subtitle: appSubtitle, app_bg_dim: bgDim }) });
-      setNameMsg(`${t.savedShort} — ${t.refreshHint}`);
+      await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_name: appName, app_subtitle: appSubtitle }) });
+      setNameMsg(t.savedShort);
     } catch (e) { setErr(e.message); }
   }
   async function savePort() {
@@ -337,11 +337,6 @@ function SettingsSection({ t }) {
         <input value={appName} onChange={(e) => setAppName(e.target.value)} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
         <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{t.appSubtitle}</label>
         <input value={appSubtitle} onChange={(e) => setAppSubtitle(e.target.value)} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
-
-        <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{t.bgDim}: {bgDim}%</label>
-        <input type="range" min="0" max="100" value={bgDim} onChange={(e) => setBgDim(Number(e.target.value))} style={{ width: '100%', marginBottom: 4 }} />
-        <p style={{ color: C.muted, fontSize: 12, margin: '0 0 8px' }}>{t.bgDimHint}</p>
-
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={saveName} style={btn(C.green)}>{t.save}</button>
           {nameMsg && <span style={{ color: C.green, fontSize: 13 }}>{nameMsg}</span>}
@@ -365,12 +360,17 @@ function SettingsSection({ t }) {
 // ----------------------------------------------------------- Branding
 function BrandingSection({ t }) {
   const [manifest, setManifest] = useState(null);
+  const [settings, setSettings] = useState({});
   const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
 
   const load = useCallback(async () => {
-    const r = await fetch('/api/branding/manifest', { cache: 'no-store' });
-    const j = await r.json();
-    setManifest(j.data || {});
+    const [mr, s] = await Promise.all([
+      fetch('/api/branding/manifest', { cache: 'no-store' }).then((r) => r.json()),
+      api('/api/settings'),
+    ]);
+    setManifest(mr.data || {});
+    setSettings(s.settings || {});
   }, []);
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
 
@@ -390,32 +390,82 @@ function BrandingSection({ t }) {
     try { await api(`/api/branding/asset/${type}`, { method: 'DELETE' }); await load(); }
     catch (e) { setErr(e.message); }
   }
+  async function saveDisplay(patch) {
+    setMsg(''); setErr('');
+    try {
+      await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+      setSettings({ ...settings, ...patch });
+      setMsg(`${t.savedShort} — ${t.refreshHint2}`);
+    } catch (e) { setErr(e.message); }
+  }
 
   const ts = manifest?.ts || '0';
-  const row = (type, label) => (
+  const has = (presentKey) => manifest && manifest[presentKey];
+
+  // صف صورة بسيط (شعار/أيقونة)
+  const simpleRow = (type, label) => (
     <div style={{ ...box, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-      <div style={{ width: 110, fontWeight: 600 }}>{label}</div>
-      <div style={{ width: 120, height: 60, border: `1px dashed ${C.border}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: '#fafbfc' }}>
-        {manifest?.[type]
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={`/api/branding/asset/${type}?v=${ts}`} alt={type} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-          : <span style={{ color: C.muted, fontSize: 12 }}>{t.noImg}</span>}
-      </div>
-      <label style={{ ...btn(C.green), display: 'inline-block' }}>
-        {t.upload}
-        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => e.target.files[0] && upload(type, e.target.files[0])} />
-      </label>
-      {manifest?.[type] && <button onClick={() => remove(type)} style={btn(C.red)}>{t.remove}</button>}
+      <div style={{ width: 130, fontWeight: 600 }}>{label}</div>
+      <Preview type={type} present={has(type)} ts={ts} t={t} />
+      <UploadBtn type={type} onUpload={upload} t={t} />
+      {has(type) && <button onClick={() => remove(type)} style={btn(C.red)}>{t.remove}</button>}
     </div>
   );
 
+  // صف خلفية: صورة + إظهار/إخفاء + خفوت
+  const bgRow = (assetType, presentKey, label, dimKey, showKey) => {
+    const dim = settings[dimKey] != null ? Number(settings[dimKey]) : 85;
+    const show = settings[showKey] != null ? String(settings[showKey]) === '1' : true;
+    return (
+      <div style={box} key={assetType}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+          <div style={{ width: 130, fontWeight: 600 }}>{label}</div>
+          <Preview type={assetType} present={has(presentKey)} ts={ts} t={t} />
+          <UploadBtn type={assetType} onUpload={upload} t={t} />
+          {has(presentKey) && <button onClick={() => remove(assetType)} style={btn(C.red)}>{t.remove}</button>}
+        </div>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, marginInlineEnd: 16 }}>
+          <input type="checkbox" checked={show} onChange={(e) => setSettings({ ...settings, [showKey]: e.target.checked ? '1' : '0' })} />
+          {t.show}
+        </label>
+        <div style={{ marginTop: 8 }}>
+          <label style={{ fontSize: 13 }}>{t.dim}: {dim}%</label>
+          <input type="range" min="0" max="100" value={dim} onChange={(e) => setSettings({ ...settings, [dimKey]: Number(e.target.value) })} style={{ width: '100%' }} />
+        </div>
+        <button onClick={() => saveDisplay({ [dimKey]: dim, [showKey]: show })} style={btn(C.green)}>{t.saveDisplay}</button>
+      </div>
+    );
+  };
+
   return (
     <div>
-      {row('logo', t.logo)}
-      {row('background', t.background)}
-      {row('favicon', t.favicon)}
+      {simpleRow('logo', t.logo)}
+      {simpleRow('favicon', t.favicon)}
+      {bgRow('background', 'background', t.appBg, 'app_bg_dim', 'app_bg_show')}
+      {bgRow('login_background', 'loginBackground', t.loginBg, 'login_bg_dim', 'login_bg_show')}
+      {msg && <div style={{ color: C.green, fontSize: 13 }}>{msg}</div>}
       {err && <div style={{ color: C.red, fontSize: 13 }}>{err}</div>}
     </div>
+  );
+}
+
+function Preview({ type, present, ts, t }) {
+  return (
+    <div style={{ width: 120, height: 60, border: `1px dashed ${C.border}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: '#fafbfc' }}>
+      {present
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={`/api/branding/asset/${type}?v=${ts}`} alt={type} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+        : <span style={{ color: C.muted, fontSize: 12 }}>{t.noImg}</span>}
+    </div>
+  );
+}
+
+function UploadBtn({ type, onUpload, t }) {
+  return (
+    <label style={{ ...btn(C.green), display: 'inline-block' }}>
+      {t.upload}
+      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => e.target.files[0] && onUpload(type, e.target.files[0])} />
+    </label>
   );
 }
 

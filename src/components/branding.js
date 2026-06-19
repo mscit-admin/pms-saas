@@ -13,11 +13,17 @@ export function useBranding() {
       .catch(() => {});
   }, []);
 
-  const url = (type) => (b && b[type] ? `/api/branding/asset/${type}?v=${b.ts}` : null);
+  const asset = (type, present) => (present ? `/api/branding/asset/${type}?v=${b.ts}` : null);
   return {
-    manifest: b, url, logo: url('logo'), background: url('background'),
+    manifest: b,
+    logo: b ? asset('logo', b.logo) : null,
+    appBackground: b ? asset('background', b.background) : null,
+    loginBackground: b ? asset('login_background', b.loginBackground) : null,
     appName: b?.appName || '', appSubtitle: b?.appSubtitle || '',
-    bgDim: b?.bgDim ?? 85,
+    appBgDim: b?.appBgDim ?? 85,
+    loginBgDim: b?.loginBgDim ?? 85,
+    appBgShow: b?.appBgShow ?? true,
+    loginBgShow: b?.loginBgShow ?? true,
   };
 }
 

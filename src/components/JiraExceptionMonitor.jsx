@@ -582,9 +582,20 @@ function TicketActions({ ticket, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [tab, setTab] = useState(null);
+
+  const actTabs = [
+    canManage && 'followup',
+    canAct && 'comment',
+    canAct && 'assign',
+    canAct && 'fields',
+    canAct && 'transition',
+  ].filter(Boolean);
+  const tabLabel = { followup: t.followup, comment: t.comment, assign: t.assign, fields: t.editFields, transition: t.transition };
 
   useEffect(() => {
     if (!ticket) return;
+    setTab((prev) => prev || (canManage ? 'followup' : canAct ? 'comment' : null));
     if (canManage) {
       const f = ticket.followup || {};
       setFu({
@@ -633,16 +644,25 @@ function TicketActions({ ticket, onClose, onDone }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 10, padding: 20, width: 420, maxWidth: '90vw', boxShadow: '0 6px 24px rgba(0,0,0,.18)' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 10, padding: 20, width: 340, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 6px 24px rgba(0,0,0,.18)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>{ticket.key} — {t.actions}</h3>
+          <h3 style={{ margin: 0, fontSize: 17 }}>{ticket.key}</h3>
           <button onClick={onClose} style={ghostBtn}>{t.close}</button>
         </div>
 
+        {/* تبويبات الإجراءات */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
+          {actTabs.map((k) => (
+            <button key={k} onClick={() => { setTab(k); setMsg(''); setErr(''); }}
+              style={{ ...ghostBtn, ...(tab === k ? { background: C.green, color: '#fff', border: 0 } : {}) }}>
+              {tabLabel[k]}
+            </button>
+          ))}
+        </div>
+
         {/* المتابعة الإدارية */}
-        {canManage && (
-          <div style={{ marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
-            <label style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>{t.followup}</label>
+        {tab === 'followup' && (
+          <div style={{ marginBottom: 8 }}>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '6px 0', fontSize: 14 }}>
               <input type="checkbox" checked={fu.acknowledged} onChange={(e) => setFu({ ...fu, acknowledged: e.target.checked })} />
               {t.acknowledge}
@@ -673,14 +693,16 @@ function TicketActions({ ticket, onClose, onDone }) {
         )}
 
         {/* تعليق */}
-        {canAct && (<>
+        {tab === 'comment' && (<>
         <label style={{ fontSize: 13, color: C.muted }}>{t.comment}</label>
-        <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={2} style={{ width: '100%', boxSizing: 'border-box', ...inputStyle, marginBottom: 6 }} />
-        <button disabled={busy || !commentText.trim()} onClick={() => run(async () => { await postJson(`/api/tickets/${ticket.key}/comment`, { body: commentText }); setCommentText(''); })} style={{ ...ghostBtn, marginBottom: 14 }}>{t.send}</button>
+        <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={3} style={{ width: '100%', boxSizing: 'border-box', ...inputStyle, marginBottom: 6 }} />
+        <button disabled={busy || !commentText.trim()} onClick={() => run(async () => { await postJson(`/api/tickets/${ticket.key}/comment`, { body: commentText }); setCommentText(''); })} style={ghostBtn}>{t.send}</button>
+        </>)}
 
         {/* إسناد */}
+        {tab === 'assign' && (<>
         <label style={{ fontSize: 13, color: C.muted, display: 'block' }}>{t.assign}</label>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           <select value={accountId} onChange={(e) => setAccountId(e.target.value)} style={{ ...inputStyle, flex: 1, cursor: 'pointer' }}>
             <option value="">{t.pick}</option>
             <option value="__unassign__">— {t.unassign} —</option>
@@ -688,11 +710,12 @@ function TicketActions({ ticket, onClose, onDone }) {
           </select>
           <button disabled={busy || !accountId} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/assign`, { accountId: accountId === '__unassign__' ? null : accountId }))} style={ghostBtn}>{t.apply}</button>
         </div>
+        </>)}
 
         {/* تعديل الحقول (لتلبية شروط الانتقالات مثل labels) */}
-        {editFields.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 13, color: C.muted, display: 'block', marginBottom: 4 }}>{t.editFields}</label>
+        {tab === 'fields' && (
+          <div>
+            {editFields.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
             {editFields.map((f) => (
               <div key={f.id} style={{ marginBottom: 6 }}>
                 <label style={{ fontSize: 12, color: C.muted }}>{f.name}{f.required ? ' *' : ''}</label>
@@ -721,6 +744,7 @@ function TicketActions({ ticket, onClose, onDone }) {
         )}
 
         {/* نقل الحالة */}
+        {tab === 'transition' && (<>
         <label style={{ fontSize: 13, color: C.muted, display: 'block' }}>{t.transition}</label>
         {(() => {
           const sel = transitions.find((tr) => tr.id === transitionId);

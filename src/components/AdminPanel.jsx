@@ -22,6 +22,7 @@ const T = {
     resetonts2fa: 'إعادة ضبط 2FA', password: 'كلمة المرور', newUser: 'مستخدم جديد', newRole: 'دور جديد',
     roleName: 'اسم الدور', description: 'الوصف', permissions: 'الصلاحيات', system: 'نظام',
     port: 'رقم المنفذ', portHint: 'سيُعاد تشغيل الخدمة تلقائياً ويُحدَّث nginx لتطبيق المنفذ. حدّث الصفحة بعد لحظات.', saved: 'تم الحفظ — جارٍ إعادة التشغيل', portManual: 'حُفظ المنفذ. إعادة التشغيل التلقائي غير مُفعّلة — أعد تشغيل الخدمة يدوياً.',
+    appName: 'اسم التطبيق', appSubtitle: 'العنوان الفرعي', savedShort: 'تم الحفظ',
     enabled: 'مفعّل', disabled: 'غير مفعّل', enable2fa: 'تفعيل التحقق الثنائي',
     scan: 'امسح الرمز بتطبيق المصادقة ثم أدخل الرمز:', confirm: 'تأكيد', code: 'الرمز',
     twofaOn: 'التحقق الثنائي مفعّل لحسابك. لتعطيله يلزم مدير.', selectRoles: 'اختر الأدوار',
@@ -38,6 +39,7 @@ const T = {
     resetonts2fa: 'Reset 2FA', password: 'Password', newUser: 'New user', newRole: 'New role',
     roleName: 'Role name', description: 'Description', permissions: 'Permissions', system: 'system',
     port: 'Port number', portHint: 'The service auto-restarts and nginx is updated to apply the port. Refresh the page in a moment.', saved: 'Saved — restarting', portManual: 'Port saved. Auto-restart not enabled — restart the service manually.',
+    appName: 'App name', appSubtitle: 'Subtitle', savedShort: 'Saved',
     enabled: 'Enabled', disabled: 'Disabled', enable2fa: 'Enable two-factor',
     scan: 'Scan the QR in your authenticator app, then enter the code:', confirm: 'Confirm', code: 'Code',
     twofaOn: 'Two-factor is enabled. Only an admin can disable it.', selectRoles: 'Select roles',
@@ -294,14 +296,28 @@ function RolesSection({ t }) {
 // ----------------------------------------------------------- Settings (port)
 function SettingsSection({ t }) {
   const [port, setPort] = useState('');
+  const [appName, setAppName] = useState('');
+  const [appSubtitle, setAppSubtitle] = useState('');
   const [msg, setMsg] = useState('');
+  const [nameMsg, setNameMsg] = useState('');
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    api('/api/settings').then((d) => setPort(d.settings.app_port || '')).catch((e) => setErr(e.message));
+    api('/api/settings').then((d) => {
+      setPort(d.settings.app_port || '');
+      setAppName(d.settings.app_name || '');
+      setAppSubtitle(d.settings.app_subtitle || '');
+    }).catch((e) => setErr(e.message));
   }, []);
 
-  async function save() {
+  async function saveName() {
+    setNameMsg(''); setErr('');
+    try {
+      await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_name: appName, app_subtitle: appSubtitle }) });
+      setNameMsg(t.savedShort);
+    } catch (e) { setErr(e.message); }
+  }
+  async function savePort() {
     setMsg(''); setErr('');
     try {
       const d = await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_port: port }) });
@@ -310,17 +326,30 @@ function SettingsSection({ t }) {
   }
 
   return (
-    <div style={box}>
-      <h3 style={{ marginTop: 0 }}>{t.secSettings}</h3>
-      <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{t.port}</label>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" style={{ ...inp, width: 120 }} />
-        <button onClick={save} style={btn(C.green)}>{t.save}</button>
-        {msg && <span style={{ color: C.green, fontSize: 13 }}>{msg}</span>}
-        {err && <span style={{ color: C.red, fontSize: 13 }}>{err}</span>}
+    <>
+      <div style={box}>
+        <h3 style={{ marginTop: 0 }}>{t.appName}</h3>
+        <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{t.appName}</label>
+        <input value={appName} onChange={(e) => setAppName(e.target.value)} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
+        <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{t.appSubtitle}</label>
+        <input value={appSubtitle} onChange={(e) => setAppSubtitle(e.target.value)} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={saveName} style={btn(C.green)}>{t.save}</button>
+          {nameMsg && <span style={{ color: C.green, fontSize: 13 }}>{nameMsg}</span>}
+        </div>
       </div>
-      <p style={{ color: C.muted, fontSize: 12, marginBottom: 0 }}>{t.portHint}</p>
-    </div>
+
+      <div style={box}>
+        <h3 style={{ marginTop: 0 }}>{t.port}</h3>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" style={{ ...inp, width: 120 }} />
+          <button onClick={savePort} style={btn(C.green)}>{t.save}</button>
+          {msg && <span style={{ color: C.green, fontSize: 13 }}>{msg}</span>}
+        </div>
+        <p style={{ color: C.muted, fontSize: 12, marginBottom: 0 }}>{t.portHint}</p>
+      </div>
+      {err && <div style={{ color: C.red, fontSize: 13 }}>{err}</div>}
+    </>
   );
 }
 

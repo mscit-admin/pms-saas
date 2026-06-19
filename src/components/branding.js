@@ -14,7 +14,10 @@ export function useBranding() {
   }, []);
 
   const url = (type) => (b && b[type] ? `/api/branding/asset/${type}?v=${b.ts}` : null);
-  return { manifest: b, url, logo: url('logo'), background: url('background') };
+  return {
+    manifest: b, url, logo: url('logo'), background: url('background'),
+    appName: b?.appName || '', appSubtitle: b?.appSubtitle || '',
+  };
 }
 
 // نمط الخلفية بملء الشاشة

@@ -193,7 +193,7 @@ export default function JiraExceptionMonitor() {
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
   const [me, setMe] = useState(null);
-  const { logo, background } = useBranding();
+  const { logo, background, appName, appSubtitle } = useBranding();
 
   // المستخدم الحالي وصلاحياته
   useEffect(() => {
@@ -273,9 +273,9 @@ export default function JiraExceptionMonitor() {
               <img src={logo} alt="logo" style={{ height: 40, maxWidth: 160, objectFit: 'contain' }} />
             )}
             <div>
-              <h1 style={{ margin: 0, fontSize: 20 }}>{t.title}</h1>
+              <h1 style={{ margin: 0, fontSize: 20 }}>{appName || t.title}</h1>
               <p style={{ margin: '2px 0 0', color: C.muted, fontSize: 13 }}>
-                {t.subtitle} · {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
+                {appSubtitle || t.subtitle} · {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
               </p>
             </div>
           </div>

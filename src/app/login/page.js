@@ -6,7 +6,7 @@ import { useBranding, backgroundStyle } from '@/components/branding';
 // صفحة تسجيل الدخول — خطوتان: كلمة المرور، ثم رمز TOTP إن كان مفعّلاً.
 // المربع قابل للسحب بالماوس لأي موضع (يُحفظ الموضع محلياً)، وخلفية بملء الشاشة.
 export default function LoginPage() {
-  const { logo, background } = useBranding();
+  const { logo, background, appName } = useBranding();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState('');
@@ -92,7 +92,7 @@ export default function LoginPage() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logo} alt="logo" style={{ height: 28, maxWidth: 120, objectFit: 'contain' }} />
           )}
-          <span style={{ fontWeight: 700 }}>مراقب جيرا</span>
+          <span style={{ fontWeight: 700 }}>{appName || 'مراقب جيرا'}</span>
           <span style={{ marginInlineStart: 'auto', color: '#c2c9cf' }}>⠿</span>
         </div>
 

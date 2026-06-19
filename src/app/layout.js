@@ -11,12 +11,14 @@ const cairo = Cairo({
 // التخطيط الجذري — عربي RTL. الأيقونة المخصّصة تُطبَّق إن رُفعت.
 export async function generateMetadata() {
   let icons;
+  let title = 'مراقب جيرا — لوحة الاستثناءات';
   try {
     const m = await brandManifest();
     if (m.favicon) icons = { icon: `/api/branding/asset/favicon?v=${m.ts}` };
+    if (m.appName) title = m.appName;
   } catch { /* قاعدة البيانات غير جاهزة بعد */ }
   return {
-    title: 'مراقب جيرا — لوحة الاستثناءات',
+    title,
     description: 'تحويل مئات تذاكر جيرا إلى ما يحتاج تدخّل المدير فقط',
     icons,
   };

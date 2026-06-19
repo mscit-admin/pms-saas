@@ -42,6 +42,8 @@ export async function brandManifest() {
     logo: Boolean(s.brand_logo),
     background: Boolean(s.brand_background),
     favicon: Boolean(s.brand_favicon),
+    appName: s.app_name || '',
+    appSubtitle: s.app_subtitle || '',
     ts: s.brand_ts || '0',
   };
 }

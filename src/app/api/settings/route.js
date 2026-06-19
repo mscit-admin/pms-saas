@@ -15,6 +15,10 @@ export const PUT = handler(async (req) => {
   const body = await req.json().catch(() => ({}));
   let portApply = null;
 
+  // اسم التطبيق وعنوانه الفرعي (إعادة التسمية)
+  if (body.app_name !== undefined) await setSetting('app_name', String(body.app_name).slice(0, 120));
+  if (body.app_subtitle !== undefined) await setSetting('app_subtitle', String(body.app_subtitle).slice(0, 200));
+
   // رقم المنفذ — يُطبَّق فعلياً بإعادة تشغيل الخدمة وتحديث nginx
   if (body.app_port !== undefined) {
     const port = parseInt(body.app_port, 10);

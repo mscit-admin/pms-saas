@@ -17,14 +17,16 @@ export function useBranding() {
   return {
     manifest: b, url, logo: url('logo'), background: url('background'),
     appName: b?.appName || '', appSubtitle: b?.appSubtitle || '',
+    bgDim: b?.bgDim ?? 85,
   };
 }
 
-// نمط الخلفية بملء الشاشة
-export function backgroundStyle(bgUrl) {
+// نمط الخلفية بملء الشاشة مع طبقة تخفيف (dim 0..100) فوق الصورة لزيادة وضوح المحتوى.
+export function backgroundStyle(bgUrl, dim = 85) {
   if (!bgUrl) return {};
+  const a = Math.max(0, Math.min(1, Number(dim) / 100));
   return {
-    backgroundImage: `url(${bgUrl})`,
+    backgroundImage: `linear-gradient(rgba(244,245,246,${a}), rgba(244,245,246,${a})), url(${bgUrl})`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundAttachment: 'fixed',

@@ -44,6 +44,7 @@ export async function brandManifest() {
     favicon: Boolean(s.brand_favicon),
     appName: s.app_name || '',
     appSubtitle: s.app_subtitle || '',
+    bgDim: Number.isFinite(parseInt(s.app_bg_dim, 10)) ? parseInt(s.app_bg_dim, 10) : 85,
     ts: s.brand_ts || '0',
   };
 }

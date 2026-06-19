@@ -23,6 +23,7 @@ const T = {
     roleName: 'اسم الدور', description: 'الوصف', permissions: 'الصلاحيات', system: 'نظام',
     port: 'رقم المنفذ', portHint: 'سيُعاد تشغيل الخدمة تلقائياً ويُحدَّث nginx لتطبيق المنفذ. حدّث الصفحة بعد لحظات.', saved: 'تم الحفظ — جارٍ إعادة التشغيل', portManual: 'حُفظ المنفذ. إعادة التشغيل التلقائي غير مُفعّلة — أعد تشغيل الخدمة يدوياً.',
     appName: 'اسم التطبيق', appSubtitle: 'العنوان الفرعي', savedShort: 'تم الحفظ',
+    bgDim: 'خفوت صورة الخلفية', bgDimHint: 'كلما زادت النسبة، خفتت الصورة وزاد وضوح المحتوى.', refreshHint: 'حدّث الصفحة لرؤية الأثر.',
     enabled: 'مفعّل', disabled: 'غير مفعّل', enable2fa: 'تفعيل التحقق الثنائي',
     scan: 'امسح الرمز بتطبيق المصادقة ثم أدخل الرمز:', confirm: 'تأكيد', code: 'الرمز',
     twofaOn: 'التحقق الثنائي مفعّل لحسابك. لتعطيله يلزم مدير.', selectRoles: 'اختر الأدوار',
@@ -40,6 +41,7 @@ const T = {
     roleName: 'Role name', description: 'Description', permissions: 'Permissions', system: 'system',
     port: 'Port number', portHint: 'The service auto-restarts and nginx is updated to apply the port. Refresh the page in a moment.', saved: 'Saved — restarting', portManual: 'Port saved. Auto-restart not enabled — restart the service manually.',
     appName: 'App name', appSubtitle: 'Subtitle', savedShort: 'Saved',
+    bgDim: 'Background dimming', bgDimHint: 'Higher = fainter image, clearer content.', refreshHint: 'Refresh the page to see the effect.',
     enabled: 'Enabled', disabled: 'Disabled', enable2fa: 'Enable two-factor',
     scan: 'Scan the QR in your authenticator app, then enter the code:', confirm: 'Confirm', code: 'Code',
     twofaOn: 'Two-factor is enabled. Only an admin can disable it.', selectRoles: 'Select roles',
@@ -298,6 +300,7 @@ function SettingsSection({ t }) {
   const [port, setPort] = useState('');
   const [appName, setAppName] = useState('');
   const [appSubtitle, setAppSubtitle] = useState('');
+  const [bgDim, setBgDim] = useState(85);
   const [msg, setMsg] = useState('');
   const [nameMsg, setNameMsg] = useState('');
   const [err, setErr] = useState('');
@@ -307,14 +310,15 @@ function SettingsSection({ t }) {
       setPort(d.settings.app_port || '');
       setAppName(d.settings.app_name || '');
       setAppSubtitle(d.settings.app_subtitle || '');
+      setBgDim(d.settings.app_bg_dim != null ? Number(d.settings.app_bg_dim) : 85);
     }).catch((e) => setErr(e.message));
   }, []);
 
   async function saveName() {
     setNameMsg(''); setErr('');
     try {
-      await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_name: appName, app_subtitle: appSubtitle }) });
-      setNameMsg(t.savedShort);
+      await api('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_name: appName, app_subtitle: appSubtitle, app_bg_dim: bgDim }) });
+      setNameMsg(`${t.savedShort} — ${t.refreshHint}`);
     } catch (e) { setErr(e.message); }
   }
   async function savePort() {
@@ -333,6 +337,11 @@ function SettingsSection({ t }) {
         <input value={appName} onChange={(e) => setAppName(e.target.value)} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
         <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{t.appSubtitle}</label>
         <input value={appSubtitle} onChange={(e) => setAppSubtitle(e.target.value)} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
+
+        <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>{t.bgDim}: {bgDim}%</label>
+        <input type="range" min="0" max="100" value={bgDim} onChange={(e) => setBgDim(Number(e.target.value))} style={{ width: '100%', marginBottom: 4 }} />
+        <p style={{ color: C.muted, fontSize: 12, margin: '0 0 8px' }}>{t.bgDimHint}</p>
+
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={saveName} style={btn(C.green)}>{t.save}</button>
           {nameMsg && <span style={{ color: C.green, fontSize: 13 }}>{nameMsg}</span>}

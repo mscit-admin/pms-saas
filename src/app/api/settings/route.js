@@ -19,6 +19,12 @@ export const PUT = handler(async (req) => {
   if (body.app_name !== undefined) await setSetting('app_name', String(body.app_name).slice(0, 120));
   if (body.app_subtitle !== undefined) await setSetting('app_subtitle', String(body.app_subtitle).slice(0, 200));
 
+  // خفوت الخلفية (0..100): كلما زاد قلّت حدّة الصورة
+  if (body.app_bg_dim !== undefined) {
+    const d = Math.max(0, Math.min(100, parseInt(body.app_bg_dim, 10) || 0));
+    await setSetting('app_bg_dim', d);
+  }
+
   // رقم المنفذ — يُطبَّق فعلياً بإعادة تشغيل الخدمة وتحديث nginx
   if (body.app_port !== undefined) {
     const port = parseInt(body.app_port, 10);

@@ -193,7 +193,7 @@ export default function JiraExceptionMonitor() {
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
   const [me, setMe] = useState(null);
-  const { logo, background, appName, appSubtitle } = useBranding();
+  const { logo, background, appName, appSubtitle, bgDim } = useBranding();
 
   // المستخدم الحالي وصلاحياته
   useEffect(() => {
@@ -254,7 +254,7 @@ export default function JiraExceptionMonitor() {
 
   return (
     <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms }}>
-      <div style={{ minHeight: '100vh', background: C.bg, color: C.text, ...backgroundStyle(background) }}>
+      <div style={{ minHeight: '100vh', background: C.bg, color: C.text, ...backgroundStyle(background, bgDim) }}>
         <header
           style={{
             background: C.card,

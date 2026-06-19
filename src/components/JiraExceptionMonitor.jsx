@@ -220,6 +220,19 @@ async function fetchJson(url) {
   return body.data;
 }
 
+// كشف الشاشات الصغيرة (الجوال) لعرض بطاقات بدل الجداول
+function useIsMobile(bp = 700) {
+  const [m, setM] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${bp}px)`);
+    const on = () => setM(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [bp]);
+  return m;
+}
+
 // ------------------------------------------------------------------- shell
 export default function JiraExceptionMonitor() {
   const [lang, setLang] = useState('ar');
@@ -228,6 +241,7 @@ export default function JiraExceptionMonitor() {
   const [meta, setMeta] = useState(null);
   const [me, setMe] = useState(null);
   const { logo, appBackground, appName, appSubtitle, appBgDim, appBgShow, pageSize } = useBranding();
+  const isMobile = useIsMobile();
 
   // المستخدم الحالي وصلاحياته
   useEffect(() => {
@@ -293,7 +307,7 @@ export default function JiraExceptionMonitor() {
           style={{
             background: C.card,
             borderBottom: `1px solid ${C.border}`,
-            padding: '16px 24px',
+            padding: isMobile ? '12px 14px' : '16px 24px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -332,7 +346,7 @@ export default function JiraExceptionMonitor() {
           </nav>
         </header>
 
-        <main style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+        <main style={{ padding: isMobile ? 12 : 24, maxWidth: 1200, margin: '0 auto' }}>
           {tab === 'operational' && <OperationalTab key={`op-${reloadKey}`} />}
           {tab === 'managerial' && <ManagerialTab key={`mg-${reloadKey}`} />}
           {tab === 'account' && <AdminPanel lang={lang} perms={perms} />}
@@ -796,9 +810,45 @@ function TicketActions({ ticket, onClose, onDone }) {
   );
 }
 
+// بطاقة استثناء للجوال (بديل صف الجدول)
+function ExceptionCard({ it, canManage, canOpen, onAction }) {
+  const { t, fmt, fmtDate } = useUI();
+  const F = ({ label, children }) => (
+    <div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>
+  );
+  const fu = it.followup || {};
+  return (
+    <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, marginBottom: 10, background: '#fff' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <KeyLink k={it.key} />
+        {canOpen && <button onClick={() => onAction(it)} style={ghostBtn}>{t.act}</button>}
+      </div>
+      <div style={{ fontSize: 13, margin: '6px 0', fontWeight: 600 }}>{it.summary}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px', marginBottom: 6 }}>
+        <F label={t.fProject}>{it.project}</F>
+        <F label={t.thStatus}>{it.status}</F>
+        <F label={t.thPriority}>{it.priority}</F>
+        <F label={t.thAssignee}>{it.assignee || <span style={{ color: C.red }}>—</span>}</F>
+        <F label={t.thDue}>{fmtDate(it.dueDate)}</F>
+        <F label={t.thDays}>{fmt(it.daysInStatus)}</F>
+      </div>
+      <div>{it.reasons.map((r) => <Chip key={r} color={EXC_COLORS[r]}>{t.exc[r] || r}</Chip>)}</div>
+      {canManage && (fu.acknowledged || fu.snoozed || fu.ownerName || fu.rootCause) && (
+        <div style={{ marginTop: 4 }}>
+          {fu.acknowledged && <Chip color={C.green}>✓ {t.acked}</Chip>}
+          {fu.snoozed && <Chip color={C.muted}>{t.snoozed} {fmtDate(fu.snoozeUntil)}</Chip>}
+          {fu.ownerName && <Chip color={C.blue}>{fu.ownerName}</Chip>}
+          {fu.rootCause && <Chip color={C.amber}>{t.rc[fu.rootCause] || fu.rootCause}</Chip>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------- العملياتي
 function OperationalTab() {
   const { t, fmt, fmtDate, perms, pageSize } = useUI();
+  const isMobile = useIsMobile();
   const canAct = (perms || []).includes('act_tickets');
   const canManage = (perms || []).includes('manage_exceptions');
   const canOpen = canAct || canManage;
@@ -924,6 +974,14 @@ function OperationalTab() {
           )}
           <button onClick={() => downloadCsv(filtered, t)} style={{ ...ghostBtn, marginInlineStart: 'auto' }}>⬇ {t.exportCsv}</button>
         </div>
+        {isMobile ? (
+          <div>
+            {pageItems.map((it) => (
+              <ExceptionCard key={it.id} it={it} canManage={canManage} canOpen={canOpen} onAction={setActionTicket} />
+            ))}
+            {filtered.length === 0 && <div style={{ textAlign: 'center', color: C.muted, padding: 16 }}>{t.noExceptions}</div>}
+          </div>
+        ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -978,6 +1036,7 @@ function OperationalTab() {
             </tbody>
           </table>
         </div>
+        )}
 
         {/* ترقيم الصفحات */}
         {filtered.length > 0 && (
@@ -1068,12 +1127,13 @@ function ManagerialTab() {
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 340px' }}>
           <Card title={t.sla}>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
               <StatCard label={t.slaState.breached} value={sla.summary.breached} color={C.red} />
               <StatCard label={t.slaState.at_risk} value={sla.summary.at_risk} color={C.amber} />
               <StatCard label={t.slaState.on_track} value={sla.summary.on_track} color={C.green} />
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 320 }}>
               <thead>
                 <tr>
                   <Th>{t.thKey}</Th>
@@ -1094,6 +1154,7 @@ function ManagerialTab() {
                 {atRisk.length === 0 && <tr><Td align="center">{t.noAtRisk}</Td></tr>}
               </tbody>
             </table>
+            </div>
             {atRisk.length > 0 && (
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
                 <button onClick={() => setSlaPage((p) => Math.max(1, p - 1))} disabled={slaSafePage <= 1} style={ghostBtn}>‹ {t.prev}</button>

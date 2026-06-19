@@ -11,7 +11,7 @@ export const jiraConfig = {
   email: process.env.JIRA_EMAIL || '',
   apiToken: process.env.JIRA_API_TOKEN || '',
   jql: process.env.JIRA_JQL || 'ORDER BY updated DESC',
-  searchPath: process.env.JIRA_SEARCH_PATH || '/rest/api/3/search',
+  searchPath: process.env.JIRA_SEARCH_PATH || '/rest/api/3/search/jql',
   pageSize: int(process.env.JIRA_PAGE_SIZE, 100),
 };
 

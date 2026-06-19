@@ -2,6 +2,10 @@ import { jiraConfig, assertJiraConfigured } from './config.js';
 
 // عميل Jira Cloud — Basic Auth (email + API Token) عبر متغيرات البيئة فقط.
 // لا يُستدعى من المتصفح إطلاقاً (CORS + الأسرار) — الخلفية حصراً.
+//
+// نستخدم نقطة /rest/api/3/search/jql الجديدة (القديمة /search أُزيلت — 410 Gone).
+// الترقيم بالرمز nextPageToken بدل startAt. والـ changelog يُجلب من نقطته المخصّصة
+// عند الحاجة لأن نقطة البحث الجديدة قد لا تُرجعه.
 
 function authHeader() {
   const raw = `${jiraConfig.email}:${jiraConfig.apiToken}`;
@@ -24,17 +28,17 @@ const FIELDS = [
   'project',
 ];
 
-async function jiraFetch(path, body) {
+async function jiraRequest(method, path, body) {
   assertJiraConfigured();
   const url = `${jiraConfig.baseUrl}${path}`;
   const res = await fetch(url, {
-    method: 'POST',
+    method,
     headers: {
       Authorization: authHeader(),
       Accept: 'application/json',
-      'Content-Type': 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
-    body: JSON.stringify(body),
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   if (!res.ok) {
@@ -44,34 +48,50 @@ async function jiraFetch(path, body) {
   return res.json();
 }
 
-// صفحة واحدة من البحث مع توسعة changelog (لتاريخ الحالات)
-async function searchPage(jql, startAt, maxResults) {
-  return jiraFetch(jiraConfig.searchPath, {
+// صفحة واحدة من نقطة البحث الجديدة. expand=changelog كمحاولة أولى (مدعومة أحياناً).
+async function searchPage(jql, nextPageToken, maxResults) {
+  const body = {
     jql,
-    startAt,
     maxResults,
     fields: FIELDS,
-    expand: ['changelog'],
-  });
+    expand: 'changelog',
+  };
+  if (nextPageToken) body.nextPageToken = nextPageToken;
+  return jiraRequest('POST', jiraConfig.searchPath, body);
 }
 
-// سحب كل التذاكر المطابقة لـ JQL عبر الترقيم (Pagination).
-// يستدعي onPage لكل دفعة كي تُعالَج/تُخزَّن تدريجياً بدل تحميل الكل في الذاكرة.
-export async function* iterateIssues(jql = jiraConfig.jql, pageSize = jiraConfig.pageSize) {
+// يجلب سجلّ تغييرات تذكرة من النقطة المخصّصة (مرقّمة) — احتياط حين لا يرجعها البحث.
+// شكل القيم value يطابق histories: { id, created, author, items }.
+export async function fetchChangelog(issueIdOrKey) {
+  const histories = [];
   let startAt = 0;
-  let total = Infinity;
+  // حلقة ترقيم كلاسيكية — هذه النقطة ما زالت تستخدم startAt
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const data = await jiraRequest(
+      'GET',
+      `/rest/api/3/issue/${issueIdOrKey}/changelog?startAt=${startAt}&maxResults=100`
+    );
+    const values = data.values || [];
+    histories.push(...values);
+    if (data.isLast || values.length === 0) break;
+    startAt += values.length;
+    if (data.total != null && startAt >= data.total) break;
+  }
+  return { histories };
+}
 
-  while (startAt < total) {
-    const data = await searchPage(jql, startAt, pageSize);
-    total = data.total ?? 0;
+// سحب كل التذاكر المطابقة لـ JQL عبر الترقيم بالرمز (nextPageToken).
+export async function* iterateIssues(jql = jiraConfig.jql, pageSize = jiraConfig.pageSize) {
+  let nextPageToken;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const data = await searchPage(jql, nextPageToken, pageSize);
     const issues = data.issues ?? [];
-    if (issues.length === 0) break;
+    if (issues.length > 0) yield issues;
 
-    yield issues;
-    startAt += issues.length;
-
-    // حماية من حلقة لا نهائية لو رجعت جيرا صفحة فارغة بشكل غير متوقع
-    if (data.maxResults && issues.length < data.maxResults && startAt >= total) break;
+    nextPageToken = data.nextPageToken;
+    if (!nextPageToken || data.isLast) break;
   }
 }
 

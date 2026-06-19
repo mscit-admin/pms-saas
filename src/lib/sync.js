@@ -1,4 +1,4 @@
-import { iterateIssues } from './jira.js';
+import { iterateIssues, fetchChangelog } from './jira.js';
 import { getPool, withTransaction } from './db.js';
 import { mapIssueToRow, extractStatusChanges } from './normalize.js';
 import { snapshotExceptions } from './exceptions.js';
@@ -75,6 +75,11 @@ export async function runSync({ jql = jiraConfig.jql } = {}) {
       for (const issue of page) {
         const syncedAt = nowUtc();
         const row = mapIssueToRow(issue, syncedAt);
+
+        // نقطة البحث الجديدة قد لا تُرجع changelog — نجلبه من نقطته المخصّصة عند غيابه.
+        if (!issue.changelog || !Array.isArray(issue.changelog.histories)) {
+          issue.changelog = await fetchChangelog(issue.id);
+        }
         const changes = extractStatusChanges(issue);
         row.last_status_change_at = computeLastStatusChange(changes, row.jira_created_at);
 

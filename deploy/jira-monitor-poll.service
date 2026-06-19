@@ -1,0 +1,15 @@
+[Unit]
+Description=Jira Exception Monitor - Polling Worker
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/GHProjects/jira-monitor
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run jira:poll
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

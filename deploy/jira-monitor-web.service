@@ -1,0 +1,16 @@
+[Unit]
+Description=Jira Exception Monitor - Web (Next.js)
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/GHProjects/jira-monitor
+Environment=NODE_ENV=production
+Environment=PORT=4445
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

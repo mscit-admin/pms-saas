@@ -1,0 +1,163 @@
+# دليل النشر على خادم Ubuntu (من GitHub)
+
+نشر **مراقب جيرا** على خادم Ubuntu. القيم المستخدمة هنا:
+- المسار: `/GHProjects/jira-monitor`
+- منفذ التطبيق: `4445`
+- الفرع: `claude/gifted-archimedes-el3240`
+
+التطبيق يشغّل **عمليتين**: خادم الويب (Next.js) وعامل السحب الدوري (Polling).
+
+---
+
+## 0) المتطلبات على الخادم
+
+```bash
+sudo apt-get update
+
+# Node.js 20 LTS + git
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs git
+
+# MySQL 8 + Nginx
+sudo apt-get install -y mysql-server nginx
+sudo mysql_secure_installation
+```
+تحقّق: `node -v` (≥ 18.18) و `mysql --version` (≥ 8.0).
+
+---
+
+## 1) قاعدة البيانات
+
+```bash
+sudo mysql
+```
+```sql
+CREATE DATABASE jira_monitor CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'jira_monitor'@'localhost' IDENTIFIED BY 'STRONG_PASSWORD_HERE';
+GRANT ALL PRIVILEGES ON jira_monitor.* TO 'jira_monitor'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+---
+
+## 2) سحب الكود من GitHub إلى /GHProjects
+
+```bash
+sudo mkdir -p /GHProjects && cd /GHProjects
+sudo git clone -b claude/gifted-archimedes-el3240 \
+  https://github.com/mscit-admin/pms.git jira-monitor
+sudo chown -R $USER:$USER /GHProjects/jira-monitor
+cd /GHProjects/jira-monitor
+```
+> مستودع خاص؟ صادِق أولاً (deploy key أو PAT داخل الرابط).
+
+---
+
+## 3) الإعدادات + البناء + المخطط
+
+```bash
+npm ci
+
+cp .env.example .env.local
+nano .env.local        # املأ القيم الحقيقية (أدناه)
+
+npm run db:migrate     # إنشاء الجداول
+npm run build          # بناء الإنتاج
+npm run jira:sync      # أول تعبئة للبيانات — تأكّد أنها تعمل
+```
+
+الحد الأدنى في `.env.local`:
+```
+JIRA_BASE_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=you@example.com
+JIRA_API_TOKEN=xxxxxxxx
+JIRA_JQL=project = OPS ORDER BY updated DESC
+
+DB_HOST=127.0.0.1
+DB_USER=jira_monitor
+DB_PASSWORD=STRONG_PASSWORD_HERE
+DB_NAME=jira_monitor
+
+SYNC_SECRET=any_long_random_string
+SYNC_INTERVAL_MINUTES=5
+```
+> `.env.local` مُستبعَد من git — تبقى الأسرار خارج GitHub.
+
+---
+
+## 4) خدمات systemd (ويب + سحب)
+
+ملفات الوحدات جاهزة في مجلد `deploy/`. انسخها وفعّلها:
+
+```bash
+sudo cp deploy/jira-monitor-web.service  /etc/systemd/system/
+sudo cp deploy/jira-monitor-poll.service /etc/systemd/system/
+
+# منح www-data ملكية المجلد (الخدمات تعمل بهذا المستخدم)
+sudo chown -R www-data:www-data /GHProjects/jira-monitor
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now jira-monitor-web jira-monitor-poll
+sudo systemctl status jira-monitor-web jira-monitor-poll
+```
+
+> الخادم سيستمع على المنفذ **4445** (مضبوط داخل وحدة الويب: `Environment=PORT=4445`).
+> لتشغيل الخدمات بمستخدمك بدل `www-data`، غيّر `User=` في الملفين ثم `daemon-reload`.
+
+---
+
+## 5) Nginx (وكيل عكسي + HTTPS)
+
+```bash
+sudo cp deploy/nginx-jira-monitor.conf /etc/nginx/sites-available/jira-monitor
+sudo nano /etc/nginx/sites-available/jira-monitor   # ضع server_name الصحيح
+sudo ln -s /etc/nginx/sites-available/jira-monitor /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+# HTTPS مجاني مع تجديد تلقائي
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+```
+
+---
+
+## 6) الجدار الناري
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'   # 80 + 443
+sudo ufw enable
+```
+> الوصول عبر Nginx فقط — أبقِ المنفذ 4445 داخلياً. إن أردت الوصول المباشر `http://IP:4445` فافتحه: `sudo ufw allow 4445`.
+
+---
+
+## 7) التحقّق
+
+```bash
+curl http://127.0.0.1:4445/api/health        # يجب أن يُظهر db:true, jira:true
+journalctl -u jira-monitor-poll -f           # متابعة سجلّ السحب
+journalctl -u jira-monitor-web -n 50         # سجلّ الويب
+```
+
+---
+
+## 8) التحديث بعد commits جديدة
+
+```bash
+cd /GHProjects/jira-monitor
+bash scripts/deploy.sh
+```
+السكربت: يسحب الفرع، `npm ci`، `npm run build`، ثم يعيد تشغيل الخدمتين.
+
+---
+
+## ملاحظات
+- المزامنة عبر **عامل السحب** (`jira-monitor-poll`) كل `SYNC_INTERVAL_MINUTES` — لا حاجة لـ cron.
+  بديل: احذف خدمة poll واستخدم cron مع المسار المحمي:
+  ```
+  */5 * * * * curl -fsS -X POST "http://127.0.0.1:4445/api/sync" -H "x-sync-secret: YOUR_SECRET"
+  ```
+- التطبيق وقاعدة البيانات على نفس الخادم؛ أبقِ MySQL مربوطاً بـ `127.0.0.1` (الافتراضي).
+- التواريخ كلها UTC؛ السحب idempotent — إعادة التشغيل آمنة.

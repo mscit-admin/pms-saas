@@ -46,7 +46,8 @@ export async function setSessionCookie(payload) {
   cookies().set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    // عبر HTTP العادي لا يُرسَل الكوكي الآمن — نفعّله فقط عند توفّر HTTPS (COOKIE_SECURE=true)
+    secure: process.env.COOKIE_SECURE === 'true',
     path: '/',
     maxAge: SESSION_HOURS * 3600,
   });

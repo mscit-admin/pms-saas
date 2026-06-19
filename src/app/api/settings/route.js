@@ -16,9 +16,11 @@ export const PUT = handler(async (req) => {
   const body = await req.json().catch(() => ({}));
   let portApply = null;
 
-  // اسم التطبيق وعنوانه الفرعي (إعادة التسمية)
+  // اسم التطبيق وعنوانه الفرعي (عربي + إنجليزي)
   if (body.app_name !== undefined) await setSetting('app_name', String(body.app_name).slice(0, 120));
   if (body.app_subtitle !== undefined) await setSetting('app_subtitle', String(body.app_subtitle).slice(0, 200));
+  if (body.app_name_en !== undefined) await setSetting('app_name_en', String(body.app_name_en).slice(0, 120));
+  if (body.app_subtitle_en !== undefined) await setSetting('app_subtitle_en', String(body.app_subtitle_en).slice(0, 200));
 
   // عدد الصفوف في الصفحة (للجداول)
   if (body.page_size !== undefined) {

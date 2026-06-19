@@ -10,7 +10,7 @@ const L = {
 
 // صفحة تسجيل الدخول — لغة + ثيم قابلان للتبديل، مربع قابل للسحب، خلفية بملء الشاشة.
 export default function LoginPage() {
-  const { logo, loginBackground, appName, loginBgDim, loginBgShow } = useBranding();
+  const { logo, loginBackground, appName, appNameEn, loginBgDim, loginBgShow } = useBranding();
   const [lang, setLang] = useState('ar');
   const [theme, setTheme] = useState('light');
   const [username, setUsername] = useState('');
@@ -111,7 +111,7 @@ export default function LoginPage() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logo} alt="logo" style={{ height: 28, maxWidth: 120, objectFit: 'contain' }} />
           )}
-          <span style={{ fontWeight: 700 }}>{appName || 'مراقب جيرا'}</span>
+          <span style={{ fontWeight: 700 }}>{(lang === 'en' ? (appNameEn || appName) : (appName || appNameEn)) || 'مراقب جيرا'}</span>
           <span style={{ marginInlineStart: 'auto', color: 'var(--c-muted)' }}>⠿</span>
         </div>
 

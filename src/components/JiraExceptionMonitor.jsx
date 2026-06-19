@@ -241,7 +241,7 @@ export default function JiraExceptionMonitor() {
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
   const [me, setMe] = useState(null);
-  const { logo, appBackground, appName, appSubtitle, appBgDim, appBgShow, pageSize } = useBranding();
+  const { logo, appBackground, appName, appSubtitle, appNameEn, appSubtitleEn, appBgDim, appBgShow, pageSize } = useBranding();
   const isMobile = useIsMobile();
 
   // المستخدم الحالي وصلاحياته + لغته المحفوظة على حسابه
@@ -345,9 +345,11 @@ export default function JiraExceptionMonitor() {
               <img src={logo} alt="logo" style={{ height: 40, maxWidth: 160, objectFit: 'contain' }} />
             )}
             <div>
-              <h1 style={{ margin: 0, fontSize: 20 }}>{appName || t.title}</h1>
+              <h1 style={{ margin: 0, fontSize: 20 }}>
+                {(lang === 'en' ? (appNameEn || appName) : (appName || appNameEn)) || t.title}
+              </h1>
               <p style={{ margin: '2px 0 0', color: C.muted, fontSize: 13 }}>
-                {appSubtitle || t.subtitle} · {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
+                {(lang === 'en' ? (appSubtitleEn || appSubtitle) : (appSubtitle || appSubtitleEn)) || t.subtitle} · {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
               </p>
             </div>
           </div>

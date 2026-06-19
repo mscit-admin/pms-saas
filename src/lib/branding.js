@@ -47,6 +47,8 @@ export async function brandManifest() {
     favicon: Boolean(s.brand_favicon),
     appName: s.app_name || '',
     appSubtitle: s.app_subtitle || '',
+    appNameEn: s.app_name_en || '',
+    appSubtitleEn: s.app_subtitle_en || '',
     pageSize: int(s.page_size, 25),
     appBgDim: int(s.app_bg_dim, 85),
     loginBgDim: int(s.login_bg_dim, 85),

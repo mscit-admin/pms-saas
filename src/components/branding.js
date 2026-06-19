@@ -20,6 +20,7 @@ export function useBranding() {
     appBackground: b ? asset('background', b.background) : null,
     loginBackground: b ? asset('login_background', b.loginBackground) : null,
     appName: b?.appName || '', appSubtitle: b?.appSubtitle || '',
+    appNameEn: b?.appNameEn || '', appSubtitleEn: b?.appSubtitleEn || '',
     pageSize: b?.pageSize ?? 25,
     appBgDim: b?.appBgDim ?? 85,
     loginBgDim: b?.loginBgDim ?? 85,

@@ -71,21 +71,14 @@ export default function LoginPage() {
   return (
     <div
       style={{
-        position: 'relative', minHeight: '100vh', width: '100%', overflow: 'hidden',
+        position: 'relative', minHeight: '100vh', width: '100%',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: '#f4f5f6', ...backgroundStyle(loginBgShow ? loginBackground : null, loginBgDim),
       }}
     >
-      {/* حركة كأمواج البحر + طفو المربع */}
-      <style>{`
-        @keyframes jemFloat { 0%,100%{ transform: translateY(0) rotate(-0.5deg);} 50%{ transform: translateY(-10px) rotate(0.5deg);} }
-        @keyframes jemWave { from{ transform: translateX(0);} to{ transform: translateX(-50%);} }
-      `}</style>
-      <Waves />
-
       <form
         onSubmit={submit}
-        style={{ position: 'relative', zIndex: 1, animation: pos ? 'none' : 'jemFloat 6s ease-in-out infinite', background: '#fff', border: '1px solid #e2e6e9', borderRadius: 10, width: 340, boxShadow: '0 8px 28px rgba(0,0,0,.14)', ...positioned }}
+        style={{ background: '#fff', border: '1px solid #e2e6e9', borderRadius: 10, width: 340, boxShadow: '0 4px 20px rgba(0,0,0,.12)', ...positioned }}
       >
         {/* شريط السحب */}
         <div
@@ -126,25 +119,6 @@ export default function LoginPage() {
           </button>
         </div>
       </form>
-    </div>
-  );
-}
-
-// أمواج بحر متحركة أسفل الشاشة (طبقتان بسرعات مختلفة) — SVG بلا مكتبات
-function Waves() {
-  // مسار يغطّي دورتين (period=1440) كي يلفّ بسلاسة عند translateX(-50%)
-  const d = 'M0,70 C240,30 480,30 720,70 C960,110 1200,110 1440,70 C1680,30 1920,30 2160,70 C2400,110 2640,110 2880,70 L2880,140 L0,140 Z';
-  const layer = (color, opacity, dur, height) => (
-    <svg viewBox="0 0 2880 140" preserveAspectRatio="none"
-      style={{ position: 'absolute', bottom: 0, left: 0, width: '200%', height, animation: `jemWave ${dur}s linear infinite` }}>
-      <path d={d} fill={color} opacity={opacity} />
-    </svg>
-  );
-  return (
-    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 160, pointerEvents: 'none', zIndex: 0 }}>
-      {layer('#2490ef', 0.18, 18, 160)}
-      {layer('#1f7a4d', 0.16, 12, 130)}
-      {layer('#2490ef', 0.28, 8, 100)}
     </div>
   );
 }

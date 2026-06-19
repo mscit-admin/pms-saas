@@ -45,7 +45,10 @@ async function jiraRequest(method, path, body) {
     const text = await res.text().catch(() => '');
     throw new Error(`فشل طلب جيرا ${res.status} ${res.statusText}: ${text.slice(0, 500)}`);
   }
-  return res.json();
+  // بعض نقاط الكتابة (الإسناد/الانتقال) تُرجع 204 بلا محتوى — تفادَ JSON على جسم فارغ
+  if (res.status === 204) return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // صفحة واحدة من نقطة البحث الجديدة. expand=changelog كمحاولة أولى (مدعومة أحياناً).

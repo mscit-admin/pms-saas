@@ -1118,6 +1118,7 @@ function OperationalTab() {
 // ------------------------------------------------------------------- الإداري
 function ManagerialTab() {
   const { t, pageSize } = useUI();
+  const isMobile = useIsMobile();
   const [summary, setSummary] = useState(null);
   const [trend, setTrend] = useState(null);
   const [sla, setSla] = useState(null);
@@ -1207,6 +1208,22 @@ function ManagerialTab() {
               <StatCard label={t.slaState.at_risk} value={sla.summary.at_risk} color={C.amber} />
               <StatCard label={t.slaState.on_track} value={sla.summary.on_track} color={C.green} />
             </div>
+            {isMobile ? (
+              <div>
+                {atRiskPage.map((x) => (
+                  <div key={x.key} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <KeyLink k={x.key} />
+                      <Chip color={SLA_COLORS[x.slaStatus]}>{t.slaState[x.slaStatus]}</Chip>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                      {x.priority} · {t.thRemaining}: <DaysCell value={x.daysRemaining} />
+                    </div>
+                  </div>
+                ))}
+                {atRisk.length === 0 && <div style={{ color: C.muted, fontSize: 13, textAlign: 'center' }}>{t.noAtRisk}</div>}
+              </div>
+            ) : (
             <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 320 }}>
               <thead>
@@ -1230,6 +1247,7 @@ function ManagerialTab() {
               </tbody>
             </table>
             </div>
+            )}
             {atRisk.length > 0 && (
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
                 <button onClick={() => setSlaPage((p) => Math.max(1, p - 1))} disabled={slaSafePage <= 1} style={ghostBtn}>‹ {t.prev}</button>
@@ -1269,9 +1287,41 @@ function DaysCell({ value }) {
 // بطاقة صحة المشاريع (RAG)
 function Scorecard({ items }) {
   const { t, fmt } = useUI();
+  const isMobile = useIsMobile();
   const HC = { red: C.red, amber: C.amber, green: C.green };
   if (!items) return <Loading />;
   if (items.length === 0) return <div style={{ color: C.muted, fontSize: 13 }}>—</div>;
+
+  const healthBadge = (x) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ width: 10, height: 10, borderRadius: '50%', background: HC[x.health], display: 'inline-block' }} />
+      {t.healthLabel[x.health]}
+    </span>
+  );
+
+  if (isMobile) {
+    const F = ({ label, children }) => (<div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>);
+    return (
+      <div>
+        {items.map((x) => (
+          <div key={x.project} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <strong>{x.project}</strong>
+              {healthBadge(x)}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
+              <F label={t.colOpen}>{fmt(x.openCount)}</F>
+              <F label={t.colExc}>{fmt(x.exceptions)}</F>
+              <F label={t.colBreach}><span style={{ color: x.breached > 0 ? C.red : C.text }}>{fmt(x.breached)}</span></F>
+              <F label={t.onTime}>{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</F>
+              <F label={t.colCycle}>{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)}${t.dayUnit}`}</F>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
@@ -1290,12 +1340,7 @@ function Scorecard({ items }) {
           {items.map((x) => (
             <tr key={x.project}>
               <Td><strong>{x.project}</strong></Td>
-              <Td>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: HC[x.health], display: 'inline-block' }} />
-                  {t.healthLabel[x.health]}
-                </span>
-              </Td>
+              <Td>{healthBadge(x)}</Td>
               <Td align="center">{fmt(x.openCount)}</Td>
               <Td align="center">{fmt(x.exceptions)}</Td>
               <Td align="center"><span style={{ color: x.breached > 0 ? C.red : C.text }}>{fmt(x.breached)}</span></Td>
@@ -1402,9 +1447,11 @@ function Throughput({ data }) {
 // تدفّق العمل: WIP حسب المرحلة (أعمدة) + جدول أقدم العالقين
 function Flow({ flow }) {
   const { t, fmt, fmtDate } = useUI();
+  const isMobile = useIsMobile();
   if (!flow) return <Loading />;
   const ageColor = (d) => (d > 14 ? C.red : d > 7 ? C.amber : C.green);
   const maxWip = Math.max(1, ...(flow.wip || []).map((w) => w.count));
+  const aging = (flow.aging || []).slice(0, 20);
   return (
     <div>
       <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>{t.wipByStage}</div>
@@ -1420,6 +1467,22 @@ function Flow({ flow }) {
       ))}
 
       <div style={{ fontSize: 13, color: C.muted, margin: '14px 0 6px' }}>{t.agingWip}</div>
+      {isMobile ? (
+        <div>
+          {aging.map((x) => (
+            <div key={x.key} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <KeyLink k={x.key} />
+                <span style={{ color: ageColor(x.daysInStatus), fontWeight: 700 }}>{fmt(x.daysInStatus)} {t.dayUnit}</span>
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                {x.project} · {x.status} · {x.assignee || '—'}
+              </div>
+            </div>
+          ))}
+          {aging.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+        </div>
+      ) : (
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
           <thead>
@@ -1432,7 +1495,7 @@ function Flow({ flow }) {
             </tr>
           </thead>
           <tbody>
-            {(flow.aging || []).slice(0, 20).map((x) => (
+            {aging.map((x) => (
               <tr key={x.key}>
                 <Td><KeyLink k={x.key} /></Td>
                 <Td>{x.project}</Td>
@@ -1441,10 +1504,11 @@ function Flow({ flow }) {
                 <Td align="center"><span style={{ color: ageColor(x.daysInStatus), fontWeight: 600 }}>{fmt(x.daysInStatus)}</span></Td>
               </tr>
             ))}
-            {(!flow.aging || flow.aging.length === 0) && <tr><Td align="center">—</Td></tr>}
+            {aging.length === 0 && <tr><Td align="center">—</Td></tr>}
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

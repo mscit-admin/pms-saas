@@ -111,6 +111,7 @@ const DICT = {
     healthLabel: { red: 'حرِج', amber: 'تحذير', green: 'سليم' },
     flow: 'تدفّق العمل والاختناقات', wipByStage: 'العمل الجاري حسب المرحلة (العدد · متوسط العمر)', agingWip: 'أقدم العناصر العالقة',
     ageDays: 'عمر بالحالة',
+    wipOverTime: 'تدفّق العمل عبر الزمن', wipOther: 'أخرى', wipEmpty: 'تتراكم لقطات التدفّق يومياً مع كل مزامنة.',
     throughput: 'الإنتاجية والتنبؤ', weeklyDone: 'منجزة أسبوعياً', avgWeekly: 'متوسط أسبوعي',
     weeksUnit: 'أسبوع', byDate: 'بحلول', atPace: 'بالوتيرة الحالية',
     fcOpen: 'استنزاف المفتوحة', fcOverdue: 'استنزاف المتأخرة', fcBreach: 'استنزاف متجاوزات SLA', noForecast: 'يتعذّر التنبؤ (لا إنتاجية كافية)',
@@ -209,6 +210,7 @@ const DICT = {
     healthLabel: { red: 'Critical', amber: 'Warning', green: 'Healthy' },
     flow: 'Flow & bottlenecks', wipByStage: 'WIP by stage (count · avg age)', agingWip: 'Oldest stuck items',
     ageDays: 'Age in status',
+    wipOverTime: 'WIP over time', wipOther: 'Other', wipEmpty: 'Flow snapshots accumulate daily with each sync.',
     throughput: 'Throughput & forecast', weeklyDone: 'Resolved per week', avgWeekly: 'Weekly average',
     weeksUnit: 'weeks', byDate: 'by', atPace: 'At current pace',
     fcOpen: 'Clear open', fcOverdue: 'Clear overdue', fcBreach: 'Clear SLA-breached', noForecast: 'Cannot forecast (not enough throughput)',
@@ -1123,6 +1125,7 @@ function ManagerialTab() {
   const [scorecard, setScorecard] = useState(null);
   const [flow, setFlow] = useState(null);
   const [throughput, setThroughput] = useState(null);
+  const [wip, setWip] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [slaPage, setSlaPage] = useState(1);
@@ -1130,7 +1133,7 @@ function ManagerialTab() {
   useEffect(() => {
     (async () => {
       try {
-        const [s, tr, sl, c, sc, fl, tp] = await Promise.all([
+        const [s, tr, sl, c, sc, fl, tp, wp] = await Promise.all([
           fetchJson('/api/analytics/summary'),
           fetchJson('/api/analytics/trend?days=30'),
           fetchJson('/api/analytics/sla-forecast'),
@@ -1138,6 +1141,7 @@ function ManagerialTab() {
           fetchJson('/api/analytics/scorecard'),
           fetchJson('/api/analytics/flow'),
           fetchJson('/api/analytics/throughput?weeks=12'),
+          fetchJson('/api/analytics/wip?days=30'),
         ]);
         setSummary(s);
         setTrend(tr.series);
@@ -1146,6 +1150,7 @@ function ManagerialTab() {
         setScorecard(sc.items);
         setFlow(fl);
         setThroughput(tp);
+        setWip(wp);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -1180,6 +1185,10 @@ function ManagerialTab() {
 
       <Card title={t.flow}>
         <Flow flow={flow} />
+      </Card>
+
+      <Card title={t.wipOverTime}>
+        <WipChart data={wip} />
       </Card>
 
       <Card title={t.throughput}>
@@ -1296,6 +1305,64 @@ function Scorecard({ items }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// تدفّق العمل عبر الزمن: مساحات متراكمة لأعداد كل حالة (CFD مبسّط)
+const WIP_PALETTE = ['#2490ef', '#1f7a4d', '#cb8a14', '#7c4dff', '#e0568b', '#14b8a6', '#8a96a3'];
+function WipChart({ data }) {
+  const { t, fmt } = useUI();
+  if (!data) return <Loading />;
+  const { series = [], statuses = [] } = data;
+  if (series.length === 0 || statuses.length === 0) {
+    return <div style={{ color: C.muted, fontSize: 13 }}>{t.wipEmpty}</div>;
+  }
+  const colorOf = (s, i) => (s === 'other' ? '#8a96a3' : WIP_PALETTE[i % WIP_PALETTE.length]);
+  const labelOf = (s) => (s === 'other' ? t.wipOther : s);
+
+  const W = 1000, H = 240, padL = 38, padB = 26, padT = 12;
+  const n = series.length;
+  const totals = series.map((d) => statuses.reduce((a, s) => a + (d[s] || 0), 0));
+  const maxTotal = Math.max(1, ...totals);
+  const x = (i) => padL + (n === 1 ? (W - padL - 10) / 2 : (i * (W - padL - 10)) / (n - 1));
+  const y = (v) => padT + (1 - v / maxTotal) * (H - padT - padB);
+  const ticks = 4;
+  const grid = Array.from({ length: ticks + 1 }, (_, i) => Math.round((maxTotal / ticks) * i));
+
+  // قيم متراكمة لكل يوم
+  const stacks = series.map((d) => {
+    let base = 0;
+    return statuses.map((s) => { const v = d[s] || 0; const seg = { s, base, top: base + v }; base += v; return seg; });
+  });
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      {series.length < 2 && <div style={{ color: C.amber, fontSize: 13, textAlign: 'center', marginBottom: 6 }}>{t.trendCollecting(series.length)}</div>}
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 600, height: H }}>
+        {grid.map((g, i) => (
+          <g key={i}>
+            <line x1={padL} y1={y(g)} x2={W - 10} y2={y(g)} style={{ stroke: C.border }} strokeDasharray="3 3" opacity="0.6" />
+            <text x={padL - 6} y={y(g) + 3} textAnchor="end" fontSize="10" style={{ fill: C.muted }}>{fmt(g)}</text>
+          </g>
+        ))}
+        {statuses.map((s, si) => {
+          const tops = stacks.map((segs) => segs[si]);
+          const pts = [
+            ...tops.map((p, i) => `${x(i)},${y(p.top)}`),
+            ...tops.map((p, i) => `${x(i)},${y(p.base)}`).reverse(),
+          ].join(' ');
+          return <polygon key={s} points={pts} fill={colorOf(s, si)} opacity="0.82" />;
+        })}
+      </svg>
+      <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+        {statuses.map((s, si) => (
+          <span key={s} style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 12, height: 10, background: colorOf(s, si), display: 'inline-block', borderRadius: 2 }} />
+            {labelOf(s)}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

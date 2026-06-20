@@ -173,6 +173,55 @@ export async function getStageResidence({ days = 90 } = {}) {
 }
 
 // ---------------------------------------------------------------------
+// لقطة يومية لتوزيع WIP على الحالات (تُستدعى نهاية المزامنة) — لرسم التدفّق عبر الزمن.
+// ---------------------------------------------------------------------
+export async function snapshotWip() {
+  const rows = await query(
+    `SELECT status, COUNT(*) AS cnt FROM tickets WHERE status_category <> 'done' GROUP BY status`
+  );
+  for (const r of rows) {
+    await query(
+      `INSERT INTO wip_snapshots (snapshot_date, status, count) VALUES (CURRENT_DATE, :s, :c)
+       ON DUPLICATE KEY UPDATE count = VALUES(count)`,
+      { s: r.status, c: Number(r.cnt) }
+    );
+  }
+}
+
+// تدفّق العمل عبر الزمن: سلسلة يومية لأعداد كل حالة (أعلى الحالات + "أخرى").
+export async function getWipOverTime({ days = 30, top = 6 } = {}) {
+  const rows = await query(
+    `SELECT snapshot_date, status, count FROM wip_snapshots
+     WHERE snapshot_date >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+     ORDER BY snapshot_date ASC`,
+    { days }
+  );
+  if (rows.length === 0) return { series: [], statuses: [] };
+
+  // أعلى الحالات حسب إجمالي العدّ عبر المدى
+  const totals = new Map();
+  for (const r of rows) totals.set(r.status, (totals.get(r.status) || 0) + Number(r.count));
+  const ranked = Array.from(totals.entries()).sort((a, b) => b[1] - a[1]).map((x) => x[0]);
+  const topStatuses = ranked.slice(0, top);
+  const hasOther = ranked.length > top;
+  const statuses = hasOther ? [...topStatuses, 'other'] : topStatuses;
+
+  const fmtDay = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
+  const byDate = new Map();
+  for (const r of rows) {
+    const key = fmtDay(r.snapshot_date);
+    if (!byDate.has(key)) {
+      const init = { date: key };
+      for (const s of statuses) init[s] = 0;
+      byDate.set(key, init);
+    }
+    const bucket = topStatuses.includes(r.status) ? r.status : 'other';
+    if (statuses.includes(bucket)) byDate.get(key)[bucket] += Number(r.count);
+  }
+  return { series: Array.from(byDate.values()), statuses };
+}
+
+// ---------------------------------------------------------------------
 // الإنتاجية والتنبؤ: المنجَز أسبوعياً + تقدير متى يُستنزف المتراكم بالوتيرة الحالية.
 // ---------------------------------------------------------------------
 export async function getThroughput({ weeks = 12 } = {}) {

@@ -2,6 +2,7 @@ import { iterateIssues, fetchChangelog, getIssue } from './jira.js';
 import { getPool, withTransaction } from './db.js';
 import { mapIssueToRow, extractStatusChanges } from './normalize.js';
 import { snapshotExceptions } from './exceptions.js';
+import { snapshotWip } from './analytics.js';
 import { detectAndAlert } from './alerts.js';
 
 // محرّك السحب: يجلب التذاكر من جيرا، يحدّث جدول tickets (upsert)،
@@ -102,8 +103,9 @@ export async function runSync({ jql } = {}) {
       }
     }
 
-    // لقطة يومية لعدد الاستثناءات (لرسم الاتجاه) — تُحدَّث لتاريخ اليوم
+    // لقطات يومية: عدد الاستثناءات + توزيع WIP على الحالات (للاتجاه والتدفّق)
     await snapshotExceptions();
+    await snapshotWip();
 
     // تنبيه بالاستثناءات الجديدة (إن كانت الإشعارات مهيّأة)
     try {

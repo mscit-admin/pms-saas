@@ -111,6 +111,7 @@ const DICT = {
     healthLabel: { red: 'حرِج', amber: 'تحذير', green: 'سليم' },
     flow: 'تدفّق العمل والاختناقات', wipByStage: 'العمل الجاري حسب المرحلة (العدد · متوسط العمر)', agingWip: 'أقدم العناصر العالقة',
     ageDays: 'عمر بالحالة',
+    bottleneck: 'الاختناق', bottleneckTag: 'اختناق', items: 'عنصر', avgAgeLabel: 'متوسط العمر',
     wipOverTime: 'تدفّق العمل عبر الزمن', wipOther: 'أخرى', wipEmpty: 'تتراكم لقطات التدفّق يومياً مع كل مزامنة.',
     throughput: 'الإنتاجية والتنبؤ', weeklyDone: 'منجزة أسبوعياً', avgWeekly: 'متوسط أسبوعي',
     weeksUnit: 'أسبوع', byDate: 'بحلول', atPace: 'بالوتيرة الحالية',
@@ -210,6 +211,7 @@ const DICT = {
     healthLabel: { red: 'Critical', amber: 'Warning', green: 'Healthy' },
     flow: 'Flow & bottlenecks', wipByStage: 'WIP by stage (count · avg age)', agingWip: 'Oldest stuck items',
     ageDays: 'Age in status',
+    bottleneck: 'Bottleneck', bottleneckTag: 'bottleneck', items: 'items', avgAgeLabel: 'avg age',
     wipOverTime: 'WIP over time', wipOther: 'Other', wipEmpty: 'Flow snapshots accumulate daily with each sync.',
     throughput: 'Throughput & forecast', weeklyDone: 'Resolved per week', avgWeekly: 'Weekly average',
     weeksUnit: 'weeks', byDate: 'by', atPace: 'At current pace',
@@ -1452,16 +1454,25 @@ function Flow({ flow }) {
   const ageColor = (d) => (d > 14 ? C.red : d > 7 ? C.amber : C.green);
   const maxWip = Math.max(1, ...(flow.wip || []).map((w) => w.count));
   const aging = (flow.aging || []).slice(0, 20);
+  const bn = flow.bottleneck;
   return (
     <div>
+      {bn && (
+        <div style={{ background: `${C.red}12`, border: `1px solid ${C.red}44`, borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 13 }}>
+          <strong style={{ color: C.red }}>⛔ {t.bottleneck}:</strong> {bn.stage}
+          <span style={{ color: C.muted }}> — {fmt(bn.count)} {t.items}{bn.avgAge != null ? ` · ${t.avgAgeLabel} ${fmt(bn.avgAge)}${t.dayUnit}` : ''}</span>
+        </div>
+      )}
       <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>{t.wipByStage}</div>
       {(flow.wip || []).map((w) => (
         <BarRow
           key={w.stage}
-          label={w.stage}
+          label={bn && w.stage === bn.stage
+            ? <span>{w.stage} <Chip color={C.red}>{t.bottleneckTag}</Chip></span>
+            : w.stage}
           value={w.count}
           max={maxWip}
-          color={ageColor(w.avgAge || 0)}
+          color={bn && w.stage === bn.stage ? C.red : ageColor(w.avgAge || 0)}
           suffix={w.avgAge != null ? ` · ${fmt(w.avgAge)}${t.dayUnit}` : ''}
         />
       ))}

@@ -279,7 +279,7 @@ export async function getThroughput({ weeks = 12 } = {}) {
 // (CFD حقيقي يحتاج لقطات يومية؛ هنا نعرض الحالة الراهنة وأين يتراكم العمل ويهرم.)
 // ---------------------------------------------------------------------
 export async function getFlow({ agingLimit = 50 } = {}) {
-  const wip = await query(
+  const wipRows = await query(
     `SELECT t.status AS stage, t.status_category AS category,
         COUNT(*) AS count,
         AVG(TIMESTAMPDIFF(HOUR, t.last_status_change_at, UTC_TIMESTAMP())) / 24 AS avg_age
@@ -296,13 +296,25 @@ export async function getFlow({ agingLimit = 50 } = {}) {
      LIMIT ${Math.max(1, Math.min(200, parseInt(agingLimit, 10) || 50))}`
   );
 
+  const wip = wipRows.map((r) => ({
+    stage: r.stage,
+    category: r.category,
+    count: Number(r.count),
+    avgAge: r.avg_age != null ? Number(Number(r.avg_age).toFixed(1)) : null,
+  }));
+
+  // الاختناق: المرحلة التي يتراكم فيها العمل ويهرم أكثر (العدد × متوسط العمر).
+  let bottleneck = null;
+  for (const w of wip) {
+    const score = w.count * (w.avgAge || 0);
+    if (!bottleneck || score > bottleneck.score || (score === bottleneck.score && w.count > bottleneck.count)) {
+      bottleneck = { stage: w.stage, count: w.count, avgAge: w.avgAge, score };
+    }
+  }
+
   return {
-    wip: wip.map((r) => ({
-      stage: r.stage,
-      category: r.category,
-      count: Number(r.count),
-      avgAge: r.avg_age != null ? Number(Number(r.avg_age).toFixed(1)) : null,
-    })),
+    wip,
+    bottleneck,
     aging: aging.map((r) => ({
       key: r.issue_key,
       summary: r.summary,

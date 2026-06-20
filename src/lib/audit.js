@@ -30,6 +30,18 @@ export async function logAudit({
   }
 }
 
+// عدد محاولات الدخول الفاشلة من نفس الـ IP خلال نافذة زمنية (لمنع التخمين)
+export async function countRecentFailures({ ip, minutes = 15 }) {
+  if (!ip) return 0;
+  const rows = await query(
+    `SELECT COUNT(*) AS c FROM audit_log
+     WHERE category = 'login' AND action = 'login_failed' AND ip = :ip
+       AND created_at > DATE_SUB(NOW(), INTERVAL :minutes MINUTE)`,
+    { ip, minutes }
+  );
+  return Number(rows[0]?.c || 0);
+}
+
 // قراءة السجلّات مع فلترة وترقيم
 export async function listAudit({ category, action, actorId, from, to, limit = 50, offset = 0 } = {}) {
   // LIMIT/OFFSET لا تُدعَم كوسائط في الجُمل المُحضّرة — ندرجها كأعداد صحيحة مُتحقَّق منها

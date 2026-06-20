@@ -29,6 +29,7 @@ const T = {
     appNameEn: 'اسم التطبيق (إنجليزي)', appSubtitleEn: 'العنوان الفرعي (إنجليزي)',
     rowsPerPage: 'عدد الصفوف في الصفحة',
     bgDim: 'خفوت صورة الخلفية', bgDimHint: 'كلما زادت النسبة، خفتت الصورة وزاد وضوح المحتوى.', refreshHint: 'حدّث الصفحة لرؤية الأثر.',
+    changePwd: 'تغيير كلمة المرور', curPwd: 'كلمة المرور الحالية', newPwd: 'كلمة المرور الجديدة', confPwd: 'تأكيد كلمة المرور', pwdChanged: 'تم تغيير كلمة المرور', pwdMismatch: 'كلمتا المرور غير متطابقتين',
     enabled: 'مفعّل', disabled: 'غير مفعّل', enable2fa: 'تفعيل التحقق الثنائي',
     scan: 'امسح الرمز بتطبيق المصادقة ثم أدخل الرمز:', confirm: 'تأكيد', code: 'الرمز',
     twofaOn: 'التحقق الثنائي مفعّل لحسابك. لتعطيله يلزم مدير.', selectRoles: 'اختر الأدوار',
@@ -52,6 +53,7 @@ const T = {
     appNameEn: 'App name (English)', appSubtitleEn: 'Subtitle (English)',
     rowsPerPage: 'Rows per page',
     bgDim: 'Background dimming', bgDimHint: 'Higher = fainter image, clearer content.', refreshHint: 'Refresh the page to see the effect.',
+    changePwd: 'Change password', curPwd: 'Current password', newPwd: 'New password', confPwd: 'Confirm password', pwdChanged: 'Password changed', pwdMismatch: 'Passwords do not match',
     enabled: 'Enabled', disabled: 'Disabled', enable2fa: 'Enable two-factor',
     scan: 'Scan the QR in your authenticator app, then enter the code:', confirm: 'Confirm', code: 'Code',
     twofaOn: 'Two-factor is enabled. Only an admin can disable it.', selectRoles: 'Select roles',
@@ -642,12 +644,27 @@ function TwoFactorSection({ t }) {
   const [enroll, setEnroll] = useState(null);
   const [code, setCode] = useState('');
   const [err, setErr] = useState('');
+  // تغيير كلمة المرور
+  const [cur, setCur] = useState('');
+  const [npw, setNpw] = useState('');
+  const [cpw, setCpw] = useState('');
+  const [pmsg, setPmsg] = useState('');
+  const [perr, setPerr] = useState('');
 
   const load = useCallback(async () => {
     const d = await api('/api/auth/me');
     setMe(d.user);
   }, []);
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
+
+  async function changePwd() {
+    setPmsg(''); setPerr('');
+    if (npw !== cpw) { setPerr(t.pwdMismatch); return; }
+    try {
+      await api('/api/auth/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ currentPassword: cur, newPassword: npw }) });
+      setCur(''); setNpw(''); setCpw(''); setPmsg(t.pwdChanged);
+    } catch (e) { setPerr(e.message); }
+  }
 
   async function start() {
     setErr('');
@@ -664,6 +681,19 @@ function TwoFactorSection({ t }) {
   }
 
   return (
+    <>
+    <div style={box}>
+      <h3 style={{ marginTop: 0 }}>{t.changePwd}</h3>
+      <input type="password" value={cur} onChange={(e) => setCur(e.target.value)} placeholder={t.curPwd} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 6 }} />
+      <input type="password" value={npw} onChange={(e) => setNpw(e.target.value)} placeholder={t.newPwd} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 6 }} />
+      <input type="password" value={cpw} onChange={(e) => setCpw(e.target.value)} placeholder={t.confPwd} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button onClick={changePwd} style={btn(C.green)}>{t.changePwd}</button>
+        {pmsg && <span style={{ color: C.green, fontSize: 13 }}>{pmsg}</span>}
+        {perr && <span style={{ color: C.red, fontSize: 13 }}>{perr}</span>}
+      </div>
+    </div>
+
     <div style={box}>
       <h3 style={{ marginTop: 0 }}>{t.sec2fa}</h3>
       {me?.totpEnabled ? (
@@ -684,5 +714,6 @@ function TwoFactorSection({ t }) {
       )}
       {err && <div style={{ color: C.red, fontSize: 13, marginTop: 8 }}>{err}</div>}
     </div>
+    </>
   );
 }

@@ -228,6 +228,30 @@ sudo systemctl daemon-reload && sudo systemctl restart jira-monitor-web
 
 > مجلد `uploads/` يجب أن يكون قابلاً للكتابة لمستخدم الخدمة (www-data) — `chown` يغطّي ذلك.
 
+## 13) التحصين (نسخ احتياطي + HTTPS + حدّ المحاولات)
+
+**نسخ احتياطي ليلي** (قاعدة البيانات + uploads مع تدوير):
+```bash
+sudo cp deploy/backup.sh /usr/local/bin/jem-backup && sudo chmod 755 /usr/local/bin/jem-backup
+# جرّبه يدوياً:
+APP_DIR=/GHProjects/jira-monitor /usr/local/bin/jem-backup
+# cron يومياً 2 ص:
+( crontab -l 2>/dev/null; echo "0 2 * * * APP_DIR=/GHProjects/jira-monitor /usr/local/bin/jem-backup >> /var/log/jem-backup.log 2>&1" ) | crontab -
+```
+
+**حدّ محاولات الدخول:** مُفعّل تلقائياً — بعد 10 محاولات فاشلة من نفس الـ IP خلال 15 دقيقة
+يُرفض الدخول مؤقتاً (429). يظهر ذلك في سجلّ الدخول.
+
+**تغيير كلمة المرور:** كل مستخدم يغيّرها من تبويب «حسابي».
+
+**HTTPS** (يتطلب نطاقاً يشير للخادم):
+```bash
+sudo certbot --nginx -d your-domain.com
+# بعد نجاحه فعّل الكوكي الآمن:
+echo 'COOKIE_SECURE=true' >> /GHProjects/jira-monitor/.env.local
+sudo systemctl restart jira-monitor-web
+```
+
 ## ملاحظات
 - المزامنة عبر **عامل السحب** (`jira-monitor-poll`) كل `SYNC_INTERVAL_MINUTES` — لا حاجة لـ cron.
   بديل: احذف خدمة poll واستخدم cron مع المسار المحمي:

@@ -2,9 +2,12 @@ import { handler, ok, fail } from '@/lib/http';
 import { query } from '@/lib/db';
 import { verifyPassword, setSessionCookie } from '@/lib/auth';
 import { verifyToken } from '@/lib/totp';
-import { logAudit, clientIp } from '@/lib/audit';
+import { logAudit, clientIp, countRecentFailures } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
+
+const MAX_FAILS = 10;       // أقصى محاولات فاشلة
+const WINDOW_MIN = 15;      // خلال هذه الدقائق
 
 // تسجيل الدخول: اسم مستخدم + كلمة مرور (+ رمز TOTP إن كان 2FA مفعّلاً).
 export const POST = handler(async (req) => {
@@ -12,6 +15,13 @@ export const POST = handler(async (req) => {
   const body = await req.json().catch(() => ({}));
   const { username, password, token } = body;
   if (!username || !password) return fail('اسم المستخدم وكلمة المرور مطلوبان', 400);
+
+  // حدّ المحاولات لمنع التخمين
+  const fails = await countRecentFailures({ ip, minutes: WINDOW_MIN });
+  if (fails >= MAX_FAILS) {
+    await logAudit({ category: 'login', action: 'login_failed', actorName: username, detail: 'rate limited', ip });
+    return fail('محاولات كثيرة جداً. يُرجى المحاولة بعد قليل.', 429);
+  }
 
   const rows = await query(
     `SELECT id, username, password_hash, is_active, totp_enabled, totp_secret

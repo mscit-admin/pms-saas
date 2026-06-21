@@ -76,7 +76,28 @@ const btn = (bg) => ({ background: bg, color: '#fff', border: 0, borderRadius: 5
 const ghost = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 5, padding: '6px 10px', fontSize: 13, cursor: 'pointer' };
 const cell = { padding: '7px 9px', borderBottom: `1px solid ${C.border}`, fontSize: 13, textAlign: 'start' };
 
-export default function AdminPanel({ lang = 'ar', perms = [] }) {
+const SECTION_LABELS = (t) => ({
+  users: t.secUsers, roles: t.secRoles, integration: t.secIntegration, ai: t.secAi,
+  branding: t.secBranding, settings: t.secSettings, logs: t.secLogs, '2fa': t.sec2fa,
+});
+
+// قائمة أقسام الإدارة (بدون 2FA) لبنائها في القائمة الجانبية الموحّدة.
+export function adminSections(perms = [], lang = 'ar') {
+  const t = T[lang] || T.ar;
+  const can = (k) => perms.includes(k);
+  const labels = SECTION_LABELS(t);
+  return [
+    can('manage_users') && 'users',
+    can('manage_roles') && 'roles',
+    can('manage_integration') && 'integration',
+    can('manage_integration') && 'ai',
+    can('manage_branding') && 'branding',
+    can('manage_settings') && 'settings',
+    can('view_audit') && 'logs',
+  ].filter(Boolean).map((id) => ({ id, label: labels[id] }));
+}
+
+export default function AdminPanel({ lang = 'ar', perms = [], section }) {
   const t = T[lang] || T.ar;
   const can = (k) => perms.includes(k);
   const sections = [
@@ -89,19 +110,21 @@ export default function AdminPanel({ lang = 'ar', perms = [] }) {
     can('view_audit') && 'logs',
     '2fa',
   ].filter(Boolean);
-  const [sec, setSec] = useState(sections[0]);
-  const secLabel = (s) => ({
-    users: t.secUsers, roles: t.secRoles, integration: t.secIntegration, ai: t.secAi,
-    branding: t.secBranding, settings: t.secSettings, logs: t.secLogs, '2fa': t.sec2fa,
-  }[s]);
+  // وضع مُتحكَّم به: يُمرَّر القسم من القائمة الجانبية الخارجية (نُخفي شريط الأزرار).
+  const controlled = section != null;
+  const [secState, setSecState] = useState(sections[0]);
+  const sec = controlled ? section : secState;
+  const secLabel = (s) => SECTION_LABELS(t)[s];
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {sections.map((s) => (
-          <button key={s} onClick={() => setSec(s)} style={sec === s ? btn(C.green) : ghost}>{secLabel(s)}</button>
-        ))}
-      </div>
+      {!controlled && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {sections.map((s) => (
+            <button key={s} onClick={() => setSecState(s)} style={sec === s ? btn(C.green) : ghost}>{secLabel(s)}</button>
+          ))}
+        </div>
+      )}
       {sec === 'users' && <UsersSection t={t} />}
       {sec === 'roles' && <RolesSection t={t} />}
       {sec === 'integration' && <IntegrationSection t={t} />}

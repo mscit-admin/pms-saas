@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import AdminPanel from './AdminPanel';
+import AdminPanel, { adminSections } from './AdminPanel';
 import { useBranding, backgroundStyle } from './branding';
 
 // ===================================================================
@@ -40,6 +40,9 @@ const DICT = {
     account: 'حسابي',
     logout: 'خروج',
     refresh: 'تحديث', collapseAll: 'طي الكل', expandAll: 'فتح الكل',
+    navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي',
+    scrOverview: 'نظرة عامة', scrKpi: 'المؤشرات العامة', scrCycle: 'زمن الدورة', scrSecurity: 'الأمان',
+    menuShow: 'إظهار القائمة', menuHide: 'إخفاء القائمة',
     lastSync: 'آخر مزامنة',
     never: 'لا يوجد',
     cOverdue: 'متأخر عن الاستحقاق',
@@ -156,6 +159,9 @@ const DICT = {
     account: 'Account',
     logout: 'Log out',
     refresh: 'Refresh', collapseAll: 'Collapse all', expandAll: 'Expand all',
+    navOps: 'Operations', navMgmt: 'Analytics', navAdmin: 'Administration', navAccount: 'My Account',
+    scrOverview: 'Overview', scrKpi: 'KPIs', scrCycle: 'Cycle time', scrSecurity: 'Security',
+    menuShow: 'Show menu', menuHide: 'Hide menu',
     lastSync: 'Last sync',
     never: 'never',
     cOverdue: 'Overdue',
@@ -289,12 +295,13 @@ function useIsMobile(bp = 700) {
 export default function JiraExceptionMonitor() {
   const [lang, setLang] = useState('ar');
   const [theme, setTheme] = useState('light');
-  const [tab, setTab] = useState(null);
+  const [screen, setScreen] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
   const [me, setMe] = useState(null);
-  const [cardSignal, setCardSignal] = useState({ v: 0, collapsed: false });
-  const toggleAll = (collapsed) => setCardSignal((s) => ({ v: s.v + 1, collapsed }));
+  const [menuOpen, setMenuOpen] = useState(true);   // الشريط الجانبي (سطح المكتب)
+  const [drawer, setDrawer] = useState(false);       // درج القائمة (الجوال)
+  const [cardSignal] = useState({ v: 0, collapsed: false });
   const { logo, appBackground, appName, appSubtitle, appNameEn, appSubtitleEn, appBgDim, appBgShow, pageSize } = useBranding();
   const isMobile = useIsMobile();
 
@@ -358,108 +365,164 @@ export default function JiraExceptionMonitor() {
 
   const perms = me?.permissions || [];
   const can = (k) => perms.includes(k);
-  const hasAdmin = can('manage_users') || can('manage_roles') || can('manage_settings') || can('reset_2fa');
-  const tabs = [
-    can('view_operational') && 'operational',
-    can('view_managerial') && 'managerial',
-    'account', // الإدارة/الحساب (يشمل 2FA للجميع)
-  ].filter(Boolean);
+  const hasAdmin = can('manage_users') || can('manage_roles') || can('manage_integration')
+    || can('manage_branding') || can('manage_settings') || can('view_audit');
 
-  // اختر أول تبويب متاح بمجرد معرفة الصلاحيات
+  // نموذج القائمة الجانبية: تصنيفات ← شاشات (ERPNext)
+  const menu = useMemo(() => {
+    const cats = [];
+    if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: '▦', items: [
+      { id: 'ops_overview', label: t.scrOverview },
+      { id: 'ops_exceptions', label: t.exceptions },
+      { id: 'ops_workload', label: t.workload },
+    ] });
+    if (can('view_managerial')) cats.push({ id: 'mgmt', label: t.navMgmt, icon: '▤', items: [
+      { id: 'mgmt_kpi', label: t.scrKpi },
+      { id: 'mgmt_performance', label: t.performance },
+      { id: 'mgmt_scorecard', label: t.scorecard },
+      { id: 'mgmt_flow', label: t.flow },
+      { id: 'mgmt_wip', label: t.wipOverTime },
+      { id: 'mgmt_throughput', label: t.throughput },
+      { id: 'mgmt_trend', label: t.trend },
+      { id: 'mgmt_sla', label: t.sla },
+      { id: 'mgmt_cycle', label: t.scrCycle },
+    ] });
+    if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: '⚙', items:
+      adminSections(perms, lang).map((s) => ({ id: `adm:${s.id}`, label: s.label })) });
+    cats.push({ id: 'account', label: t.navAccount, icon: '◍', items: [
+      { id: 'acc:2fa', label: t.scrSecurity },
+    ] });
+    return cats;
+  }, [me, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // أول شاشة متاحة بمجرد معرفة الصلاحيات
   useEffect(() => {
-    if (me && !tab) setTab(tabs[0]);
-  }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (me && !screen && menu.length) setScreen(menu[0].items[0]?.id || null);
+  }, [me, menu]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.href = '/login';
   }
 
-  const tabLabel = (k) =>
-    k === 'operational' ? t.tabOperational : k === 'managerial' ? t.tabManagerial : hasAdmin ? t.tabAdmin : t.account;
+  const go = (id) => { setScreen(id); if (isMobile) setDrawer(false); };
+
+  const renderScreen = () => {
+    if (!screen) return <Loading />;
+    if (screen.startsWith('ops_')) return <OperationalTab key={`op-${reloadKey}`} screen={screen.slice(4)} />;
+    if (screen.startsWith('mgmt_')) return <ManagerialTab key={`mg-${reloadKey}`} screen={screen.slice(5)} />;
+    if (screen.includes(':')) return <AdminPanel key={`ad-${reloadKey}`} lang={lang} perms={perms} section={screen.split(':')[1]} />;
+    return <Loading />;
+  };
+
+  const sidebarVisible = isMobile ? drawer : menuOpen;
+  const SIDEBAR_W = 248;
+  const appTitle = (lang === 'en' ? (appNameEn || appName) : (appName || appNameEn)) || t.title;
 
   return (
     <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms, pageSize, cardSignal }}>
-      <div style={{ minHeight: '100vh', background: C.bg, color: C.text, ...backgroundStyle(appBgShow ? appBackground : null, appBgDim) }}>
-        <header
-          className="no-print"
-          style={{
-            background: C.card,
-            borderBottom: `1px solid ${C.border}`,
-            padding: isMobile ? '12px 14px' : '16px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {logo && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logo} alt="logo" style={{ height: 40, maxWidth: 160, objectFit: 'contain' }} />
-            )}
-            <div>
-              <h1 style={{ margin: 0, fontSize: 20 }}>
-                {(lang === 'en' ? (appNameEn || appName) : (appName || appNameEn)) || t.title}
-              </h1>
-              <p style={{ margin: '2px 0 0', color: C.muted, fontSize: 13 }}>
-                {(lang === 'en' ? (appSubtitleEn || appSubtitle) : (appSubtitle || appSubtitleEn)) || t.subtitle} · {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
-              </p>
-            </div>
-          </div>
-          <nav style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            {tabs.map((k) => (
-              <TabButton key={k} active={tab === k} onClick={() => setTab(k)}>
-                {tabLabel(k)}
-              </TabButton>
-            ))}
-            <button onClick={() => toggleAll(true)} title={t.collapseAll} style={ghostBtn}>▸</button>
-            <button onClick={() => toggleAll(false)} title={t.expandAll} style={ghostBtn}>▾</button>
-            <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻ {t.refresh}</button>
-            <button onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')} title="theme" style={ghostBtn}>
-              {theme === 'dark' ? '☀︎' : '☾'}
-            </button>
-            <button onClick={() => changeLang(lang === 'ar' ? 'en' : 'ar')} title={t.other} style={ghostBtn}>
-              {t.other}
-            </button>
-            {me && (
-              <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', fontSize: 13, color: C.muted }}>
-                <span>· {me.username}</span>
-                <button onClick={logout} style={ghostBtn}>{t.logout}</button>
-              </span>
-            )}
-          </nav>
-        </header>
+      <div style={{ minHeight: '100vh', background: C.bg, color: C.text, display: 'flex', ...backgroundStyle(appBgShow ? appBackground : null, appBgDim) }}>
+        {/* خلفية معتمة للدرج على الجوال */}
+        {isMobile && drawer && (
+          <div onClick={() => setDrawer(false)} className="no-print" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 40 }} />
+        )}
 
-        <main style={{ padding: isMobile ? 12 : 24, maxWidth: 1200, margin: '0 auto' }}>
-          {tab === 'operational' && <OperationalTab key={`op-${reloadKey}`} />}
-          {tab === 'managerial' && <ManagerialTab key={`mg-${reloadKey}`} />}
-          {tab === 'account' && <AdminPanel lang={lang} perms={perms} />}
-          {!tab && <Loading />}
-        </main>
+        {/* الشريط الجانبي */}
+        {sidebarVisible && (
+          <aside
+            className="no-print"
+            style={{
+              width: SIDEBAR_W, flexShrink: 0, background: C.card, borderInlineEnd: `1px solid ${C.border}`,
+              display: 'flex', flexDirection: 'column', overflowY: 'auto',
+              ...(isMobile
+                ? { position: 'fixed', insetBlock: 0, insetInlineStart: 0, zIndex: 50 }
+                : { position: 'sticky', top: 0, height: '100vh' }),
+            }}
+          >
+            <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+              {logo
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={logo} alt="logo" style={{ height: 34, maxWidth: 150, objectFit: 'contain' }} />
+                : <strong style={{ fontSize: 16 }}>{appTitle}</strong>}
+            </div>
+            <nav style={{ padding: 8, flex: 1 }}>
+              {menu.map((cat) => (
+                <div key={cat.id} style={{ marginBottom: 6 }}>
+                  <div style={{ padding: '8px 10px 4px', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', color: C.muted, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span aria-hidden>{cat.icon}</span> {cat.label}
+                  </div>
+                  {cat.items.map((it) => {
+                    const active = screen === it.id;
+                    return (
+                      <button
+                        key={it.id}
+                        onClick={() => go(it.id)}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'start', padding: '8px 12px',
+                          marginBottom: 2, border: 0, borderRadius: 6, cursor: 'pointer', fontSize: 13.5,
+                          fontWeight: active ? 700 : 500,
+                          background: active ? C.green : 'transparent',
+                          color: active ? '#fff' : C.text,
+                          borderInlineStart: active ? `3px solid ${C.green}` : '3px solid transparent',
+                        }}
+                      >
+                        {it.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
+          </aside>
+        )}
+
+        {/* العمود الرئيسي */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <header
+            className="no-print"
+            style={{
+              background: C.card, borderBottom: `1px solid ${C.border}`,
+              padding: isMobile ? '10px 14px' : '12px 20px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+              position: 'sticky', top: 0, zIndex: 30,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              <button
+                onClick={() => (isMobile ? setDrawer((v) => !v) : setMenuOpen((v) => !v))}
+                title={sidebarVisible ? t.menuHide : t.menuShow}
+                style={{ ...ghostBtn, fontSize: 18, lineHeight: 1, padding: '4px 10px' }}
+              >☰</button>
+              <div style={{ minWidth: 0 }}>
+                <h1 style={{ margin: 0, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{appTitle}</h1>
+                <p style={{ margin: '1px 0 0', color: C.muted, fontSize: 12 }}>
+                  {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
+                </p>
+              </div>
+            </div>
+            <nav style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻</button>
+              <button onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')} title="theme" style={ghostBtn}>
+                {theme === 'dark' ? '☀︎' : '☾'}
+              </button>
+              <button onClick={() => changeLang(lang === 'ar' ? 'en' : 'ar')} title={t.other} style={ghostBtn}>
+                {t.other}
+              </button>
+              {me && (
+                <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', fontSize: 13, color: C.muted }}>
+                  <span>{me.username}</span>
+                  <button onClick={logout} style={ghostBtn}>{t.logout}</button>
+                </span>
+              )}
+            </nav>
+          </header>
+
+          <main style={{ padding: isMobile ? 12 : 20, flex: 1 }}>
+            {renderScreen()}
+          </main>
+        </div>
       </div>
     </LangCtx.Provider>
-  );
-}
-
-function TabButton({ active, onClick, children }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '8px 18px',
-        border: `1px solid ${active ? C.green : C.border}`,
-        background: active ? C.green : C.card,
-        color: active ? '#fff' : C.text,
-        borderRadius: 6,
-        cursor: 'pointer',
-        fontSize: 14,
-        fontWeight: 600,
-      }}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -509,6 +572,24 @@ function Card({ title, children, extra, hint }) {
         </div>
       )}
       {!collapsed && children}
+    </section>
+  );
+}
+
+// شاشة بنمط ERPNext: ترويسة (عنوان + تلميح + إجراءات) ثم المحتوى — تُفتح من القائمة الجانبية
+function Screen({ title, hint, extra, children }) {
+  return (
+    <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
+      {(title || extra) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 14, borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18 }}>{title}</h2>
+            {hint && <p style={{ margin: '5px 0 0', color: C.muted, fontSize: 12.5, lineHeight: 1.5, maxWidth: 720 }}>{hint}</p>}
+          </div>
+          {extra && <div className="no-print" style={{ flexShrink: 0 }}>{extra}</div>}
+        </div>
+      )}
+      {children}
     </section>
   );
 }
@@ -1165,7 +1246,7 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
 }
 
 // ------------------------------------------------------------------- العملياتي
-function OperationalTab() {
+function OperationalTab({ screen = 'overview' }) {
   const { t, fmt, fmtDate, perms, pageSize } = useUI();
   const isMobile = useIsMobile();
   const canAct = (perms || []).includes('act_tickets');
@@ -1252,14 +1333,17 @@ function OperationalTab() {
 
   return (
     <>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+      {screen === 'overview' && (
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <StatCard label={t.cOverdue} value={counts.overdue} color={C.red} />
         <StatCard label={t.cStagnant} value={counts.stagnant} color={C.amber} />
         <StatCard label={t.cReview} value={counts.review} color={C.blue} />
         <StatCard label={t.cUnassigned} value={counts.unassigned} color={C.purple} />
       </div>
+      )}
 
-      <Card
+      {screen === 'exceptions' && (
+      <Screen
         title={`${t.exceptions} · ${t.showing(fmt(filtered.length), fmt(items.length))}`}
         hint={t.hExceptions}
         extra={
@@ -1366,13 +1450,15 @@ function OperationalTab() {
             <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} style={ghostBtn}>{t.next} ›</button>
           </div>
         )}
-      </Card>
+      </Screen>
+      )}
 
       {actionTicket && (
         <TicketActions ticket={actionTicket} onClose={() => setActionTicket(null)} onDone={load} />
       )}
 
-      <Card title={t.workload} hint={t.hWorkload}>
+      {screen === 'workload' && (
+      <Screen title={t.workload} hint={t.hWorkload}>
         {(workload || []).map((w) => (
           <BarRow
             key={w.accountId || w.assignee}
@@ -1383,13 +1469,14 @@ function OperationalTab() {
             suffix={w.overdue > 0 ? t.overdueSuffix(fmt(w.overdue)) : ''}
           />
         ))}
-      </Card>
+      </Screen>
+      )}
     </>
   );
 }
 
 // ------------------------------------------------------------------- الإداري
-function ManagerialTab() {
+function ManagerialTab({ screen = 'kpi' }) {
   const { t, pageSize } = useUI();
   const isMobile = useIsMobile();
   const [summary, setSummary] = useState(null);
@@ -1458,41 +1545,56 @@ function ManagerialTab() {
         <button onClick={() => window.print()} style={{ ...ghostBtn, marginInlineStart: 'auto' }}>{t.printReport}</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+      {screen === 'kpi' && (
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <StatCard label={t.sTotal} value={summary.totalTickets} color={C.blue} />
         <StatCard label={t.sOpen} value={summary.openTickets} color={C.amber} />
         <StatCard label={t.sDone} value={summary.doneTickets} color={C.green} />
         <StatCard label={t.sBreached} value={summary.slaBreached} color={C.red} />
         <StatCard label={t.sAvgCycle} value={summary.avgCycleDays} color={C.purple} />
       </div>
+      )}
 
-      <Card title={`${t.performance} · ${perf ? t.windowD(perf.windowDays) : ''}`} hint={t.hPerformance}>
+      {screen === 'performance' && (
+      <Screen title={`${t.performance} · ${perf ? t.windowD(perf.windowDays) : ''}`} hint={t.hPerformance}>
         <Performance data={perf} />
-      </Card>
+      </Screen>
+      )}
 
-      <Card title={t.scorecard} hint={t.hScorecard}>
+      {screen === 'scorecard' && (
+      <Screen title={t.scorecard} hint={t.hScorecard}>
         <Scorecard items={scorecard} />
-      </Card>
+      </Screen>
+      )}
 
-      <Card title={t.flow} hint={t.hFlow}>
+      {screen === 'flow' && (
+      <Screen title={t.flow} hint={t.hFlow}>
         <Flow flow={flow} />
-      </Card>
+      </Screen>
+      )}
 
-      <Card title={t.wipOverTime} hint={t.hWip}>
+      {screen === 'wip' && (
+      <Screen title={t.wipOverTime} hint={t.hWip}>
         <WipChart data={wip} />
-      </Card>
+      </Screen>
+      )}
 
-      <Card title={t.throughput} hint={t.hThroughput}>
+      {screen === 'throughput' && (
+      <Screen title={t.throughput} hint={t.hThroughput}>
         <Throughput data={throughput} />
-      </Card>
+      </Screen>
+      )}
 
-      <Card title={t.trend} hint={t.hTrend}>
+      {screen === 'trend' && (
+      <Screen title={t.trend} hint={t.hTrend}>
         <TrendChart series={trend} />
-      </Card>
+      </Screen>
+      )}
 
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 340px' }}>
-          <Card title={t.sla} hint={t.hSla}>
+      {screen === 'sla' && (
+      <div>
+        <div>
+          <Screen title={t.sla} hint={t.hSla}>
             <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
               <StatCard label={t.slaState.breached} value={sla.summary.breached} color={C.red} />
               <StatCard label={t.slaState.at_risk} value={sla.summary.at_risk} color={C.amber} />
@@ -1545,26 +1647,32 @@ function ManagerialTab() {
                 <button onClick={() => setSlaPage((p) => Math.min(slaTotalPages, p + 1))} disabled={slaSafePage >= slaTotalPages} style={ghostBtn}>{t.next} ›</button>
               </div>
             )}
-          </Card>
+          </Screen>
         </div>
+      </div>
+      )}
 
+      {screen === 'cycle' && (
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 340px' }}>
-          <Card title={t.cycleByPriority} hint={t.hCycle}>
+          <Screen title={t.cycleByPriority} hint={t.hCycle}>
             {(cycle?.cycle?.byPriority || []).map((p) => (
               <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix={t.dayUnit} />
             ))}
-          </Card>
-
-          <Card title={t.stageResidence} hint={t.hCycle}>
+          </Screen>
+        </div>
+        <div style={{ flex: '1 1 340px' }}>
+          <Screen title={t.stageResidence} hint={t.hCycle}>
             {(cycle?.stages || []).slice(0, 8).map((s) => (
               <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix={t.dayUnit} />
             ))}
             {(!cycle?.stages || cycle.stages.length === 0) && (
               <div style={{ color: C.muted, fontSize: 13 }}>{t.noStages}</div>
             )}
-          </Card>
+          </Screen>
         </div>
       </div>
+      )}
     </>
   );
 }

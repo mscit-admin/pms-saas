@@ -173,6 +173,114 @@ export async function getStageResidence({ days = 90 } = {}) {
 }
 
 // ---------------------------------------------------------------------
+// تقييم الأداء: درجات للمسؤولين والمشاريع (متعدّد العوامل) + مؤشّر عام.
+// أداة توازن ومساءلة بنّاءة — تُعرض القيم بسياقها (الحِمل) لا للمحاسبة الفردية.
+// ---------------------------------------------------------------------
+function scaler(values, invert = false) {
+  const nums = values.filter((v) => v != null && Number.isFinite(v));
+  if (nums.length === 0) return () => 70;
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  return (v) => {
+    if (v == null || !Number.isFinite(v)) return 70;
+    if (max === min) return 80;
+    let s = (v - min) / (max - min);
+    if (invert) s = 1 - s;
+    return Math.round(s * 100);
+  };
+}
+
+export async function getPerformance({ days = 90 } = {}) {
+  const stuckDays = ruleConfig.stagnantDays;
+
+  // ---- المسؤولون ----
+  const aDone = await query(
+    `SELECT assignee_account_id AS id, assignee_name AS name,
+        COUNT(*) AS resolved,
+        AVG(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS avg_cycle,
+        SUM(due_date IS NOT NULL) AS with_due,
+        SUM(due_date IS NOT NULL AND DATE(resolved_at) <= due_date) AS on_time
+     FROM tickets
+     WHERE status_category = 'done' AND resolved_at IS NOT NULL AND assignee_account_id IS NOT NULL
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+     GROUP BY assignee_account_id, assignee_name`,
+    { days }
+  );
+  const aOpen = await query(
+    `SELECT assignee_account_id AS id, COUNT(*) AS open_count,
+        SUM(status_category = 'indeterminate' AND TIMESTAMPDIFF(DAY, last_status_change_at, UTC_TIMESTAMP()) > :stuckDays) AS stuck,
+        SUM(due_date IS NOT NULL AND due_date < CURRENT_DATE) AS overdue
+     FROM tickets WHERE status_category <> 'done' AND assignee_account_id IS NOT NULL
+     GROUP BY assignee_account_id`,
+    { stuckDays }
+  );
+  const openById = new Map(aOpen.map((r) => [r.id, r]));
+
+  const aRaw = aDone.map((r) => {
+    const o = openById.get(r.id) || {};
+    const withDue = Number(r.with_due || 0);
+    return {
+      name: r.name || '—',
+      resolved: Number(r.resolved),
+      avgCycleDays: r.avg_cycle != null ? Number(Number(r.avg_cycle).toFixed(1)) : null,
+      onTimeRate: withDue > 0 ? Math.round((Number(r.on_time) / withDue) * 100) : null,
+      openLoad: Number(o.open_count || 0),
+      stuck: Number(o.stuck || 0),
+      overdue: Number(o.overdue || 0),
+    };
+  });
+
+  const cycleScale = scaler(aRaw.map((x) => x.avgCycleDays), true);
+  const thrScale = scaler(aRaw.map((x) => x.resolved));
+  const assignees = aRaw.map((x) => {
+    const onTime = x.onTimeRate == null ? 70 : x.onTimeRate;
+    const cycle = cycleScale(x.avgCycleDays);
+    const reliability = x.openLoad > 0 ? Math.round((1 - x.stuck / x.openLoad) * 100) : 100;
+    const throughput = thrScale(x.resolved);
+    const overall = Math.round(0.35 * onTime + 0.30 * cycle + 0.20 * reliability + 0.15 * throughput);
+    return { ...x, scores: { onTime, cycle, reliability, throughput }, overall };
+  }).sort((a, b) => b.overall - a.overall);
+
+  // ---- المشاريع/الفِرق ----
+  const tDone = await query(
+    `SELECT project_key AS p,
+        COUNT(*) AS resolved,
+        AVG(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS avg_cycle,
+        STDDEV_POP(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at) / 24) AS sd_cycle,
+        SUM(due_date IS NOT NULL) AS with_due,
+        SUM(due_date IS NOT NULL AND DATE(resolved_at) <= due_date) AS on_time
+     FROM tickets
+     WHERE status_category = 'done' AND resolved_at IS NOT NULL
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+     GROUP BY project_key`,
+    { days }
+  );
+  const tRaw = tDone.map((r) => {
+    const withDue = Number(r.with_due || 0);
+    return {
+      project: r.p,
+      resolved: Number(r.resolved),
+      avgCycleDays: r.avg_cycle != null ? Number(Number(r.avg_cycle).toFixed(1)) : null,
+      sdCycle: r.sd_cycle != null ? Number(Number(r.sd_cycle).toFixed(1)) : null,
+      onTimeRate: withDue > 0 ? Math.round((Number(r.on_time) / withDue) * 100) : null,
+    };
+  });
+  const tCycleScale = scaler(tRaw.map((x) => x.avgCycleDays), true);
+  const tThrScale = scaler(tRaw.map((x) => x.resolved));
+  const tPredScale = scaler(tRaw.map((x) => x.sdCycle), true);
+  const teams = tRaw.map((x) => {
+    const onTime = x.onTimeRate == null ? 70 : x.onTimeRate;
+    const cycle = tCycleScale(x.avgCycleDays);
+    const predictability = tPredScale(x.sdCycle);
+    const throughput = tThrScale(x.resolved);
+    const overall = Math.round(0.30 * onTime + 0.25 * cycle + 0.25 * predictability + 0.20 * throughput);
+    return { ...x, scores: { onTime, cycle, predictability, throughput }, overall };
+  }).sort((a, b) => b.overall - a.overall);
+
+  return { windowDays: days, assignees, teams };
+}
+
+// ---------------------------------------------------------------------
 // لقطة يومية لتوزيع WIP على الحالات (تُستدعى نهاية المزامنة) — لرسم التدفّق عبر الزمن.
 // ---------------------------------------------------------------------
 export async function snapshotWip() {

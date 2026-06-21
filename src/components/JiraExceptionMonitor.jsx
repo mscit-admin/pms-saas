@@ -106,6 +106,8 @@ const DICT = {
     chartLines: 'خطوط', chartArea: 'مساحات', chartBars: 'أعمدة',
     trendEmpty: 'لا لقطات اتجاه بعد — تتراكم يومياً مع كل مزامنة.',
     trendCollecting: (n) => `الاتجاه يتراكم يومياً — يوجد ${n} يوم حتى الآن، يظهر الخط بعد يومين أو أكثر.`,
+    performance: 'تقييم الأداء', perfNote: 'أداة توازن بنّاءة — الدرجات بسياق الحِمل، لا للمحاسبة الفردية.',
+    perfAssignees: 'المسؤولون', perfTeams: 'المشاريع', score: 'الدرجة', colResolved: 'منجَز', colLoad: 'الحِمل', colPredict: 'الثبات', windowD: (d) => `آخر ${d} يوم`,
     scorecard: 'صحة المشاريع (RAG)',
     health: 'الصحة', onTime: 'التسليم بالموعد', colOpen: 'مفتوحة', colExc: 'استثناءات', colBreach: 'متجاوز SLA', colCycle: 'زمن الدورة',
     healthLabel: { red: 'حرِج', amber: 'تحذير', green: 'سليم' },
@@ -207,6 +209,8 @@ const DICT = {
     chartLines: 'Lines', chartArea: 'Area', chartBars: 'Bars',
     trendEmpty: 'No trend snapshots yet — they accumulate daily with each sync.',
     trendCollecting: (n) => `Trend is building daily — ${n} day(s) so far; a line appears once there are 2+ days.`,
+    performance: 'Performance evaluation', perfNote: 'A constructive balancing tool — scores shown in context of load, not for individual blame.',
+    perfAssignees: 'Assignees', perfTeams: 'Projects', score: 'Score', colResolved: 'Resolved', colLoad: 'Load', colPredict: 'Consistency', windowD: (d) => `last ${d} days`,
     scorecard: 'Project health (RAG)',
     health: 'Health', onTime: 'On-time', colOpen: 'Open', colExc: 'Exceptions', colBreach: 'SLA breached', colCycle: 'Cycle time',
     healthLabel: { red: 'Critical', amber: 'Warning', green: 'Healthy' },
@@ -1131,6 +1135,7 @@ function ManagerialTab() {
   const [flow, setFlow] = useState(null);
   const [throughput, setThroughput] = useState(null);
   const [wip, setWip] = useState(null);
+  const [perf, setPerf] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [slaPage, setSlaPage] = useState(1);
@@ -1138,7 +1143,7 @@ function ManagerialTab() {
   useEffect(() => {
     (async () => {
       try {
-        const [s, tr, sl, c, sc, fl, tp, wp] = await Promise.all([
+        const [s, tr, sl, c, sc, fl, tp, wp, pf] = await Promise.all([
           fetchJson('/api/analytics/summary'),
           fetchJson('/api/analytics/trend?days=30'),
           fetchJson('/api/analytics/sla-forecast'),
@@ -1147,6 +1152,7 @@ function ManagerialTab() {
           fetchJson('/api/analytics/flow'),
           fetchJson('/api/analytics/throughput?weeks=12'),
           fetchJson('/api/analytics/wip?days=30'),
+          fetchJson('/api/analytics/performance?days=90'),
         ]);
         setSummary(s);
         setTrend(tr.series);
@@ -1156,6 +1162,7 @@ function ManagerialTab() {
         setFlow(fl);
         setThroughput(tp);
         setWip(wp);
+        setPerf(pf);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -1183,6 +1190,10 @@ function ManagerialTab() {
         <StatCard label={t.sBreached} value={summary.slaBreached} color={C.red} />
         <StatCard label={t.sAvgCycle} value={summary.avgCycleDays} color={C.purple} />
       </div>
+
+      <Card title={`${t.performance} · ${perf ? t.windowD(perf.windowDays) : ''}`}>
+        <Performance data={perf} />
+      </Card>
 
       <Card title={t.scorecard}>
         <Scorecard items={scorecard} />
@@ -1286,6 +1297,89 @@ function ManagerialTab() {
 function DaysCell({ value }) {
   const { fmt } = useUI();
   return <span style={{ color: value < 0 ? C.red : C.text }}>{fmt(value)}</span>;
+}
+
+// تقييم الأداء: مسؤولون + مشاريع، مع مؤشّر عام
+function scoreColor(s) { return s >= 75 ? C.green : s >= 50 ? C.amber : C.red; }
+function ScorePill({ value }) {
+  return <span style={{ fontWeight: 700, color: scoreColor(value) }}>{value}</span>;
+}
+function Performance({ data }) {
+  const { t, fmt } = useUI();
+  const isMobile = useIsMobile();
+  if (!data) return <Loading />;
+
+  const F = ({ label, children }) => (<div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>);
+
+  const assigneeCard = (x) => (
+    <div key={x.name} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <strong>{x.name}</strong><ScorePill value={x.overall} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px', marginTop: 4 }}>
+        <F label={t.colResolved}>{fmt(x.resolved)}</F>
+        <F label={t.onTime}>{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</F>
+        <F label={t.colCycle}>{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)}${t.dayUnit}`}</F>
+        <F label={t.colLoad}>{fmt(x.openLoad)}{x.stuck ? ` · ${fmt(x.stuck)} ${t.stuckLabel}` : ''}</F>
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 10 }}>{t.perfNote}</div>
+
+      <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0 6px' }}>{t.perfAssignees}</div>
+      {isMobile ? (
+        (data.assignees || []).map(assigneeCard)
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+            <thead><tr>
+              <Th>{t.thAssignee}</Th><Th align="center">{t.score}</Th><Th align="center">{t.colResolved}</Th>
+              <Th align="center">{t.onTime}</Th><Th align="center">{t.colCycle}</Th><Th align="center">{t.colLoad}</Th>
+            </tr></thead>
+            <tbody>
+              {(data.assignees || []).map((x) => (
+                <tr key={x.name}>
+                  <Td>{x.name}</Td>
+                  <Td align="center"><ScorePill value={x.overall} /></Td>
+                  <Td align="center">{fmt(x.resolved)}</Td>
+                  <Td align="center">{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</Td>
+                  <Td align="center">{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)} ${t.dayUnit}`}</Td>
+                  <Td align="center">{fmt(x.openLoad)}{x.stuck ? ` · ${fmt(x.stuck)}⚠` : ''}</Td>
+                </tr>
+              ))}
+              {(!data.assignees || data.assignees.length === 0) && <tr><Td align="center">—</Td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ fontSize: 13, fontWeight: 600, margin: '14px 0 6px' }}>{t.perfTeams}</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+          <thead><tr>
+            <Th>{t.fProject}</Th><Th align="center">{t.score}</Th><Th align="center">{t.colResolved}</Th>
+            <Th align="center">{t.onTime}</Th><Th align="center">{t.colCycle}</Th><Th align="center">{t.colPredict}</Th>
+          </tr></thead>
+          <tbody>
+            {(data.teams || []).map((x) => (
+              <tr key={x.project}>
+                <Td><strong>{x.project}</strong></Td>
+                <Td align="center"><ScorePill value={x.overall} /></Td>
+                <Td align="center">{fmt(x.resolved)}</Td>
+                <Td align="center">{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</Td>
+                <Td align="center">{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)} ${t.dayUnit}`}</Td>
+                <Td align="center"><ScorePill value={x.scores.predictability} /></Td>
+              </tr>
+            ))}
+            {(!data.teams || data.teams.length === 0) && <tr><Td align="center">—</Td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 // بطاقة صحة المشاريع (RAG)

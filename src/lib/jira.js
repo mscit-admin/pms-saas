@@ -154,6 +154,16 @@ export async function transitionIssue(idOrKey, transitionId, fields) {
   return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions`, body);
 }
 
+// تفاصيل إضافية للتاريخ: المهام الفرعية + سجل التغييرات الكامل.
+export async function getIssueExtra(idOrKey) {
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}?fields=subtasks,parent&expand=changelog`);
+}
+
+// تعليقات التذكرة (مرقّمة، الأحدث أولاً).
+export async function getComments(idOrKey, startAt = 0, maxResults = 30) {
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/comment?startAt=${startAt}&maxResults=${maxResults}&orderBy=-created`);
+}
+
 // اختبار سريع للاتصال — يُستخدم في /api/health وزر اختبار الربط.
 // يقبل إعدادات اختيارية لاختبار اتصال قبل حفظه.
 export async function ping(override) {

@@ -74,6 +74,7 @@ const DICT = {
     pick: 'اختر…',
     actDone: 'تم بنجاح',
     close: 'إغلاق',
+    history: 'السجل', subtasksL: 'المهام الفرعية', commentsL: 'التعليقات', changelogL: 'سجل التغييرات', loadMore: 'تحميل المزيد', noHistory: 'لا يوجد',
     followup: 'المتابعة',
     acknowledge: 'إقرار (رأيتها/أتابعها)',
     acked: 'مُقَرّ',
@@ -188,6 +189,7 @@ const DICT = {
     pick: 'Select…',
     actDone: 'Done',
     close: 'Close',
+    history: 'History', subtasksL: 'Sub-tasks', commentsL: 'Comments', changelogL: 'Change log', loadMore: 'Load more', noHistory: 'none',
     followup: 'Follow-up',
     acknowledge: 'Acknowledge (seen / on it)',
     acked: 'Acked',
@@ -674,6 +676,73 @@ async function postJson(url, body) {
   return j.data;
 }
 
+// سجل التذكرة الكامل (مباشر من جيرا): المهام الفرعية + التعليقات + سجل التغييرات
+function HistorySection({ ticketKey }) {
+  const { t, fmt, fmtDateTime, jiraBaseUrl } = useUI();
+  const [data, setData] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [shown, setShown] = useState(0);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    fetchJson(`/api/tickets/${ticketKey}/history?cstart=0`)
+      .then((d) => { setData(d); setComments(d.comments.items); setTotal(d.comments.total); setShown(d.comments.items.length); })
+      .catch((e) => setErr(e.message));
+  }, [ticketKey]);
+
+  async function more() {
+    try {
+      const d = await fetchJson(`/api/tickets/${ticketKey}/history?cstart=${shown}`);
+      setComments((c) => [...c, ...d.comments.items]);
+      setShown((s) => s + d.comments.items.length);
+    } catch (e) { setErr(e.message); }
+  }
+
+  if (err) return <ErrorBox message={err} />;
+  if (!data) return <Loading />;
+
+  const block = { fontSize: 13, color: C.muted, fontWeight: 600, margin: '4px 0 6px' };
+  return (
+    <div style={{ fontSize: 13 }}>
+      {data.subtasks.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={block}>{t.subtasksL} ({data.subtasks.length})</div>
+          {data.subtasks.map((s) => (
+            <div key={s.key} style={{ padding: '3px 0', borderBottom: `1px solid ${C.border}` }}>
+              {jiraBaseUrl ? <a href={`${jiraBaseUrl}/browse/${s.key}`} target="_blank" rel="noreferrer" style={{ color: C.blue, fontWeight: 600 }}>{s.key}</a> : <strong>{s.key}</strong>}
+              {' '}{s.summary} {s.status && <Chip color="#8a96a3">{s.status}</Chip>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={block}>{t.commentsL} ({fmt(total)})</div>
+      {comments.length === 0 && <div style={{ color: C.muted }}>{t.noHistory}</div>}
+      {comments.map((c, i) => (
+        <div key={i} style={{ padding: '6px 0', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ color: C.muted, fontSize: 12, marginBottom: 2 }}>{c.author || '—'} · {fmtDateTime(c.created)}</div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{c.body || '—'}</div>
+        </div>
+      ))}
+      {shown < total && <button onClick={more} style={{ ...ghostBtn, marginTop: 8 }}>{t.loadMore} ({total - shown})</button>}
+
+      <div style={{ ...block, marginTop: 14 }}>{t.changelogL} ({data.changelog.length})</div>
+      {data.changelog.length === 0 && <div style={{ color: C.muted }}>{t.noHistory}</div>}
+      {data.changelog.map((h, i) => (
+        <div key={i} style={{ padding: '4px 0', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ color: C.muted, fontSize: 12 }}>{h.author || '—'} · {fmtDateTime(h.created)}</div>
+          {h.items.map((it, j) => (
+            <div key={j} style={{ fontSize: 12.5 }}>
+              <span style={{ color: C.muted }}>{it.field}:</span> {it.from || '∅'} → <strong>{it.to || '∅'}</strong>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // نافذة إجراءات على تذكرة: تعليق · إسناد · نقل الحالة (Write-back لجيرا)
 function TicketActions({ ticket, onClose, onDone }) {
   const { t, perms } = useUI();
@@ -697,12 +766,13 @@ function TicketActions({ ticket, onClose, onDone }) {
 
   const actTabs = [
     canManage && 'followup',
+    'history',
     canAct && 'comment',
     canAct && 'assign',
     canAct && 'fields',
     canAct && 'transition',
   ].filter(Boolean);
-  const tabLabel = { followup: t.followup, comment: t.comment, assign: t.assign, fields: t.editFields, transition: t.transition };
+  const tabLabel = { followup: t.followup, history: t.history, comment: t.comment, assign: t.assign, fields: t.editFields, transition: t.transition };
 
   useEffect(() => {
     if (!ticket) return;
@@ -802,6 +872,9 @@ function TicketActions({ ticket, onClose, onDone }) {
             <button disabled={busy} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/followup`, { acknowledged: fu.acknowledged, note: fu.note, snoozeUntil: fu.snoozeUntil || null, ownerUserId: fu.ownerUserId || null, rootCause: fu.rootCause || null }))} style={{ background: C.green, color: '#fff', border: 0, borderRadius: 5, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>{t.saveFollowup}</button>
           </div>
         )}
+
+        {/* السجل */}
+        {tab === 'history' && <HistorySection ticketKey={ticket.key} />}
 
         {/* تعليق */}
         {tab === 'comment' && (<>

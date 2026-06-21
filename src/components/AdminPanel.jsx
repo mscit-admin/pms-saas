@@ -31,6 +31,7 @@ const T = {
     rowsPerPage: 'عدد الصفوف في الصفحة',
     bgDim: 'خفوت صورة الخلفية', bgDimHint: 'كلما زادت النسبة، خفتت الصورة وزاد وضوح المحتوى.', refreshHint: 'حدّث الصفحة لرؤية الأثر.',
     changePwd: 'تغيير كلمة المرور', curPwd: 'كلمة المرور الحالية', newPwd: 'كلمة المرور الجديدة', confPwd: 'تأكيد كلمة المرور', pwdChanged: 'تم تغيير كلمة المرور', pwdMismatch: 'كلمتا المرور غير متطابقتين',
+    profile: 'الملف الشخصي', profilePic: 'صورة الملف الشخصي', profileSaved: 'تم حفظ الملف الشخصي',
     enabled: 'مفعّل', disabled: 'غير مفعّل', enable2fa: 'تفعيل التحقق الثنائي',
     scan: 'امسح الرمز بتطبيق المصادقة ثم أدخل الرمز:', confirm: 'تأكيد', code: 'الرمز',
     twofaOn: 'التحقق الثنائي مفعّل لحسابك. لتعطيله يلزم مدير.', selectRoles: 'اختر الأدوار',
@@ -56,6 +57,7 @@ const T = {
     rowsPerPage: 'Rows per page',
     bgDim: 'Background dimming', bgDimHint: 'Higher = fainter image, clearer content.', refreshHint: 'Refresh the page to see the effect.',
     changePwd: 'Change password', curPwd: 'Current password', newPwd: 'New password', confPwd: 'Confirm password', pwdChanged: 'Password changed', pwdMismatch: 'Passwords do not match',
+    profile: 'Profile', profilePic: 'Profile picture', profileSaved: 'Profile saved',
     enabled: 'Enabled', disabled: 'Disabled', enable2fa: 'Enable two-factor',
     scan: 'Scan the QR in your authenticator app, then enter the code:', confirm: 'Confirm', code: 'Code',
     twofaOn: 'Two-factor is enabled. Only an admin can disable it.', selectRoles: 'Select roles',
@@ -725,12 +727,48 @@ function TwoFactorSection({ t }) {
   const [cpw, setCpw] = useState('');
   const [pmsg, setPmsg] = useState('');
   const [perr, setPerr] = useState('');
+  // الملف الشخصي (الاسم + الصورة)
+  const [name, setName] = useState('');
+  const [profMsg, setProfMsg] = useState('');
+  const [profErr, setProfErr] = useState('');
+  const [avatarTs, setAvatarTs] = useState(Date.now());
 
   const load = useCallback(async () => {
     const d = await api('/api/auth/me');
     setMe(d.user);
+    setName(d.user?.fullName || '');
   }, []);
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
+
+  async function saveName() {
+    setProfMsg(''); setProfErr('');
+    try {
+      await api('/api/auth/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fullName: name }) });
+      setProfMsg(t.profileSaved);
+      await load();
+    } catch (e) { setProfErr(e.message); }
+  }
+  async function uploadAvatar(file) {
+    setProfMsg(''); setProfErr('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/auth/avatar', { method: 'POST', body: fd });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error || 'error');
+      setAvatarTs(Date.now());
+      setProfMsg(t.profileSaved);
+      await load();
+    } catch (e) { setProfErr(e.message); }
+  }
+  async function removeAvatar() {
+    setProfMsg(''); setProfErr('');
+    try {
+      await fetch('/api/auth/avatar', { method: 'DELETE' });
+      setAvatarTs(Date.now());
+      await load();
+    } catch (e) { setProfErr(e.message); }
+  }
 
   async function changePwd() {
     setPmsg(''); setPerr('');
@@ -757,6 +795,39 @@ function TwoFactorSection({ t }) {
 
   return (
     <>
+    <div style={box}>
+      <h3 style={{ marginTop: 0 }}>{t.profile}</h3>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ textAlign: 'center' }}>
+          {me?.avatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/api/auth/avatar?ts=${avatarTs}`} alt="avatar" width={72} height={72} style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: `1px solid ${C.border}` }} />
+          ) : (
+            <div style={{ width: 72, height: 72, borderRadius: '50%', background: C.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700 }}>
+              {(me?.fullName || me?.username || '?').trim().charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div style={{ marginTop: 6, display: 'flex', gap: 6, justifyContent: 'center' }}>
+            <label style={{ ...btn(C.green), cursor: 'pointer', fontSize: 12 }}>
+              {t.upload}
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && uploadAvatar(e.target.files[0])} />
+            </label>
+            {me?.avatar && <button onClick={removeAvatar} style={{ ...ghost, fontSize: 12 }}>{t.remove}</button>}
+          </div>
+        </div>
+        <div style={{ flex: '1 1 200px' }}>
+          <label style={{ fontSize: 13, color: C.muted }}>{t.fullName}</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+            <input value={name} onChange={(e) => setName(e.target.value)} style={{ ...inp, flex: 1 }} />
+            <button onClick={saveName} style={btn(C.green)}>{t.save}</button>
+          </div>
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>{me?.username}{me?.email ? ` · ${me.email}` : ''}</div>
+          {profMsg && <div style={{ color: C.green, fontSize: 13, marginTop: 6 }}>{profMsg}</div>}
+          {profErr && <div style={{ color: C.red, fontSize: 13, marginTop: 6 }}>{profErr}</div>}
+        </div>
+      </div>
+    </div>
+
     <div style={box}>
       <h3 style={{ marginTop: 0 }}>{t.changePwd}</h3>
       <input type="password" value={cur} onChange={(e) => setCur(e.target.value)} placeholder={t.curPwd} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 6 }} />

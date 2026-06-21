@@ -594,7 +594,12 @@ export default function JiraExceptionMonitor() {
                     title={t.navAccount}
                     style={{ display: 'inline-flex', gap: 8, alignItems: 'center', padding: '4px 8px', border: `1px solid ${C.border}`, background: profileOpen ? C.bg : C.card, borderRadius: 20, cursor: 'pointer', fontSize: 13, color: C.text }}
                   >
-                    <span style={{ width: 26, height: 26, borderRadius: '50%', background: C.blue, color: '#fff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{initials(me.fullName || me.username)}</span>
+                    {me.avatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src="/api/auth/avatar" alt="" width={26} height={26} style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ width: 26, height: 26, borderRadius: '50%', background: C.blue, color: '#fff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{initials(me.fullName || me.username)}</span>
+                    )}
                     {!isMobile && <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me.username}</span>}
                     <span aria-hidden style={{ fontSize: 9, color: C.muted }}>▾</span>
                   </button>

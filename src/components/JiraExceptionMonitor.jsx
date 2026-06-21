@@ -64,6 +64,7 @@ const DICT = {
     actions: 'إجراءات',
     act: '⋯',
     comment: 'تعليق',
+    aiSuggest: '✨ اقتراح بالذكاء', aiThinking: '… يفكّر',
     assign: 'إسناد',
     editFields: 'تعديل الحقول',
     commaSep: 'افصل بفواصل',
@@ -179,6 +180,7 @@ const DICT = {
     actions: 'Actions',
     act: '⋯',
     comment: 'Comment',
+    aiSuggest: '✨ AI suggest', aiThinking: '… thinking',
     assign: 'Assign',
     editFields: 'Edit fields',
     commaSep: 'comma-separated',
@@ -760,6 +762,7 @@ function TicketActions({ ticket, onClose, onDone }) {
   const [editFields, setEditFields] = useState([]);
   const [editValues, setEditValues] = useState({});
   const [busy, setBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [tab, setTab] = useState(null);
@@ -878,8 +881,20 @@ function TicketActions({ ticket, onClose, onDone }) {
 
         {/* تعليق */}
         {tab === 'comment' && (<>
-        <label style={{ fontSize: 13, color: C.muted }}>{t.comment}</label>
-        <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={3} style={{ width: '100%', boxSizing: 'border-box', ...inputStyle, marginBottom: 6 }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <label style={{ fontSize: 13, color: C.muted }}>{t.comment}</label>
+          <button
+            disabled={aiBusy}
+            onClick={async () => {
+              setAiBusy(true); setErr('');
+              try { const d = await postJson(`/api/tickets/${ticket.key}/suggest-comment`); setCommentText(d.suggestion || ''); }
+              catch (e) { setErr(e.message); }
+              finally { setAiBusy(false); }
+            }}
+            style={{ ...ghostBtn, color: C.purple }}
+          >{aiBusy ? t.aiThinking : t.aiSuggest}</button>
+        </div>
+        <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={4} style={{ width: '100%', boxSizing: 'border-box', ...inputStyle, marginTop: 6, marginBottom: 6 }} />
         <button disabled={busy || !commentText.trim()} onClick={() => run(async () => { await postJson(`/api/tickets/${ticket.key}/comment`, { body: commentText }); setCommentText(''); })} style={ghostBtn}>{t.send}</button>
         </>)}
 

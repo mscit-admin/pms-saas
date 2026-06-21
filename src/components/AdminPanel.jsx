@@ -13,7 +13,8 @@ const C = {
 const T = {
   ar: {
     secUsers: 'المستخدمون', secRoles: 'الأدوار والصلاحيات', secSettings: 'الإعدادات', sec2fa: 'التحقق الثنائي',
-    secBranding: 'الهوية', secIntegration: 'الربط بجيرا', secLogs: 'السجلّات',
+    secBranding: 'الهوية', secIntegration: 'الربط بجيرا', secLogs: 'السجلّات', secAi: 'الذكاء الاصطناعي',
+    aiEnabled: 'تفعيل اقتراح التعليقات', aiProvider: 'المزوّد', aiBaseUrl: 'الرابط (Base URL)', aiModel: 'النموذج', aiKeyL: 'مفتاح API', aiAnthropic: 'Anthropic (Claude)', aiOpenai: 'متوافق مع OpenAI',
     loginLogs: 'سجلّ الدخول', auditLogs: 'سجلّ التدقيق', time: 'الوقت', actor: 'المنفّذ', actionC: 'الإجراء', target: 'الهدف', ipC: 'IP', detailC: 'تفاصيل', noLogs: 'لا سجلّات', from2: 'من', to2: 'إلى',
     al: { login_success: 'دخول ناجح', login_failed: 'محاولة فاشلة', logout: 'خروج', user_create: 'إنشاء مستخدم', user_update: 'تعديل مستخدم', user_delete: 'حذف مستخدم', reset_2fa: 'إعادة ضبط 2FA', role_create: 'إنشاء دور', role_update: 'تعديل دور', role_delete: 'حذف دور', settings_update: 'تعديل إعدادات', integration_update: 'تعديل الربط', branding_upload: 'رفع هوية', branding_remove: 'إزالة هوية', ticket_assign: 'إسناد تذكرة', ticket_comment: 'تعليق', ticket_transition: 'نقل حالة', ticket_fields: 'تعديل حقول', followup_update: 'متابعة' },
     logo: 'الشعار', favicon: 'أيقونة المتصفح', upload: 'رفع', remove: 'إزالة', currentImg: 'الحالي', noImg: 'لا يوجد',
@@ -37,7 +38,8 @@ const T = {
   },
   en: {
     secUsers: 'Users', secRoles: 'Roles & permissions', secSettings: 'Settings', sec2fa: 'Two-factor',
-    secBranding: 'Branding', secIntegration: 'Jira connection', secLogs: 'Logs',
+    secBranding: 'Branding', secIntegration: 'Jira connection', secLogs: 'Logs', secAi: 'AI',
+    aiEnabled: 'Enable comment suggestions', aiProvider: 'Provider', aiBaseUrl: 'Base URL', aiModel: 'Model', aiKeyL: 'API key', aiAnthropic: 'Anthropic (Claude)', aiOpenai: 'OpenAI-compatible',
     loginLogs: 'Login log', auditLogs: 'Audit log', time: 'Time', actor: 'Actor', actionC: 'Action', target: 'Target', ipC: 'IP', detailC: 'Detail', noLogs: 'No entries', from2: 'From', to2: 'To',
     al: { login_success: 'Login OK', login_failed: 'Login failed', logout: 'Logout', user_create: 'Create user', user_update: 'Update user', user_delete: 'Delete user', reset_2fa: 'Reset 2FA', role_create: 'Create role', role_update: 'Update role', role_delete: 'Delete role', settings_update: 'Update settings', integration_update: 'Update integration', branding_upload: 'Branding upload', branding_remove: 'Branding remove', ticket_assign: 'Assign ticket', ticket_comment: 'Comment', ticket_transition: 'Transition', ticket_fields: 'Edit fields', followup_update: 'Follow-up' },
     logo: 'Logo', favicon: 'Favicon', upload: 'Upload', remove: 'Remove', currentImg: 'Current', noImg: 'none',
@@ -81,6 +83,7 @@ export default function AdminPanel({ lang = 'ar', perms = [] }) {
     can('manage_users') && 'users',
     can('manage_roles') && 'roles',
     can('manage_integration') && 'integration',
+    can('manage_integration') && 'ai',
     can('manage_branding') && 'branding',
     can('manage_settings') && 'settings',
     can('view_audit') && 'logs',
@@ -88,7 +91,7 @@ export default function AdminPanel({ lang = 'ar', perms = [] }) {
   ].filter(Boolean);
   const [sec, setSec] = useState(sections[0]);
   const secLabel = (s) => ({
-    users: t.secUsers, roles: t.secRoles, integration: t.secIntegration,
+    users: t.secUsers, roles: t.secRoles, integration: t.secIntegration, ai: t.secAi,
     branding: t.secBranding, settings: t.secSettings, logs: t.secLogs, '2fa': t.sec2fa,
   }[s]);
 
@@ -102,6 +105,7 @@ export default function AdminPanel({ lang = 'ar', perms = [] }) {
       {sec === 'users' && <UsersSection t={t} />}
       {sec === 'roles' && <RolesSection t={t} />}
       {sec === 'integration' && <IntegrationSection t={t} />}
+      {sec === 'ai' && <AiSection t={t} />}
       {sec === 'branding' && <BrandingSection t={t} />}
       {sec === 'settings' && <SettingsSection t={t} />}
       {sec === 'logs' && <LogsSection t={t} />}
@@ -490,6 +494,54 @@ function UploadBtn({ type, onUpload, t }) {
       {t.upload}
       <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => e.target.files[0] && onUpload(type, e.target.files[0])} />
     </label>
+  );
+}
+
+// ----------------------------------------------------------- AI
+function AiSection({ t }) {
+  const [f, setF] = useState(null);
+  const [key, setKey] = useState('');
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  const load = useCallback(async () => { setF(await api('/api/integration/ai')); }, []);
+  useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
+  if (!f) return <div style={{ color: C.muted, padding: 10 }}>…</div>;
+
+  const upd = (k, v) => setF({ ...f, [k]: v });
+  async function save() {
+    setMsg(''); setErr('');
+    try {
+      await api('/api/integration/ai', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: f.enabled, provider: f.provider, baseUrl: f.baseUrl, model: f.model, apiKey: key }) });
+      setKey(''); await load(); setMsg(t.savedShort);
+    } catch (e) { setErr(e.message); }
+  }
+
+  return (
+    <div style={box}>
+      <h3 style={{ marginTop: 0 }}>{t.secAi}</h3>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, fontSize: 14 }}>
+        <input type="checkbox" checked={!!f.enabled} onChange={(e) => upd('enabled', e.target.checked)} /> {t.aiEnabled}
+      </label>
+      <label style={{ display: 'block', fontSize: 13, color: C.muted, marginBottom: 3 }}>{t.aiProvider}</label>
+      <select value={f.provider} onChange={(e) => upd('provider', e.target.value)} style={{ ...inp, width: '100%', cursor: 'pointer', marginBottom: 10 }}>
+        <option value="anthropic">{t.aiAnthropic}</option>
+        <option value="openai">{t.aiOpenai}</option>
+      </select>
+      <label style={{ display: 'block', fontSize: 13, color: C.muted, marginBottom: 3 }}>{t.aiBaseUrl}</label>
+      <input value={f.baseUrl || ''} onChange={(e) => upd('baseUrl', e.target.value)} dir="ltr" style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 10 }} />
+      <label style={{ display: 'block', fontSize: 13, color: C.muted, marginBottom: 3 }}>{t.aiModel}</label>
+      <input value={f.model || ''} onChange={(e) => upd('model', e.target.value)} dir="ltr" style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 10 }} />
+      <label style={{ display: 'block', fontSize: 13, color: C.muted, marginBottom: 3 }}>
+        {t.aiKeyL} <span style={{ color: f.hasKey ? C.green : C.amber }}>({f.hasKey ? t.tokenSet : t.tokenNone})</span>
+      </label>
+      <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder={t.tokenKeep} dir="ltr" style={{ ...inp, width: '100%', boxSizing: 'border-box', marginBottom: 10 }} />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button onClick={save} style={btn(C.green)}>{t.saveSettings}</button>
+        {msg && <span style={{ color: C.green, fontSize: 13 }}>{msg}</span>}
+        {err && <span style={{ color: C.red, fontSize: 13 }}>{err}</span>}
+      </div>
+    </div>
   );
 }
 

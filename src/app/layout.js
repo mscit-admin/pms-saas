@@ -29,6 +29,12 @@ const THEME_CSS = `
 :root{--c-bg:#f4f5f6;--c-card:#ffffff;--c-border:#e2e6e9;--c-text:#1f272e;--c-muted:#6b7785;color-scheme:light;}
 [data-theme="dark"]{--c-bg:#0f141b;--c-card:#171f29;--c-border:#2a3642;--c-text:#e6edf3;--c-muted:#94a3b3;color-scheme:dark;}
 input,select,textarea{background:var(--c-card);color:var(--c-text);}
+@media print{
+  .no-print{display:none !important;}
+  :root,[data-theme="dark"]{--c-bg:#ffffff;--c-card:#ffffff;--c-border:#cccccc;--c-text:#000000;--c-muted:#444444;}
+  body{background:#fff;}
+  section{break-inside:avoid;box-shadow:none !important;}
+}
 `;
 const THEME_INIT = `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t;}catch(e){}`;
 

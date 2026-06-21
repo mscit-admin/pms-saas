@@ -106,6 +106,7 @@ const DICT = {
     chartLines: 'خطوط', chartArea: 'مساحات', chartBars: 'أعمدة',
     trendEmpty: 'لا لقطات اتجاه بعد — تتراكم يومياً مع كل مزامنة.',
     trendCollecting: (n) => `الاتجاه يتراكم يومياً — يوجد ${n} يوم حتى الآن، يظهر الخط بعد يومين أو أكثر.`,
+    windowL: 'النافذة', d30: '30 يوم', d90: '90 يوم', d180: '180 يوم', printReport: '🖨 طباعة التقرير',
     performance: 'تقييم الأداء', perfNote: 'أداة توازن بنّاءة — الدرجات بسياق الحِمل، لا للمحاسبة الفردية.',
     perfAssignees: 'المسؤولون', perfTeams: 'المشاريع', score: 'الدرجة', colResolved: 'منجَز', colLoad: 'الحِمل', colPredict: 'الثبات', windowD: (d) => `آخر ${d} يوم`,
     scorecard: 'صحة المشاريع (RAG)',
@@ -219,6 +220,7 @@ const DICT = {
     chartLines: 'Lines', chartArea: 'Area', chartBars: 'Bars',
     trendEmpty: 'No trend snapshots yet — they accumulate daily with each sync.',
     trendCollecting: (n) => `Trend is building daily — ${n} day(s) so far; a line appears once there are 2+ days.`,
+    windowL: 'Window', d30: '30d', d90: '90d', d180: '180d', printReport: '🖨 Print report',
     performance: 'Performance evaluation', perfNote: 'A constructive balancing tool — scores shown in context of load, not for individual blame.',
     perfAssignees: 'Assignees', perfTeams: 'Projects', score: 'Score', colResolved: 'Resolved', colLoad: 'Load', colPredict: 'Consistency', windowD: (d) => `last ${d} days`,
     scorecard: 'Project health (RAG)',
@@ -374,6 +376,7 @@ export default function JiraExceptionMonitor() {
     <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms, pageSize }}>
       <div style={{ minHeight: '100vh', background: C.bg, color: C.text, ...backgroundStyle(appBgShow ? appBackground : null, appBgDim) }}>
         <header
+          className="no-print"
           style={{
             background: C.card,
             borderBottom: `1px solid ${C.border}`,
@@ -1177,20 +1180,22 @@ function ManagerialTab() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [slaPage, setSlaPage] = useState(1);
+  const [windowDays, setWindowDays] = useState(90);
 
   useEffect(() => {
     (async () => {
       try {
+        const wk = Math.max(4, Math.ceil(windowDays / 7));
         const [s, tr, sl, c, sc, fl, tp, wp, pf] = await Promise.all([
           fetchJson('/api/analytics/summary'),
-          fetchJson('/api/analytics/trend?days=30'),
+          fetchJson(`/api/analytics/trend?days=${windowDays}`),
           fetchJson('/api/analytics/sla-forecast'),
-          fetchJson('/api/analytics/cycle-time?days=90'),
+          fetchJson(`/api/analytics/cycle-time?days=${windowDays}`),
           fetchJson('/api/analytics/scorecard'),
           fetchJson('/api/analytics/flow'),
-          fetchJson('/api/analytics/throughput?weeks=12'),
-          fetchJson('/api/analytics/wip?days=30'),
-          fetchJson('/api/analytics/performance?days=90'),
+          fetchJson(`/api/analytics/throughput?weeks=${wk}`),
+          fetchJson(`/api/analytics/wip?days=${windowDays}`),
+          fetchJson(`/api/analytics/performance?days=${windowDays}`),
         ]);
         setSummary(s);
         setTrend(tr.series);
@@ -1207,7 +1212,7 @@ function ManagerialTab() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [windowDays]);
 
   if (loading) return <Loading />;
   if (error) return <ErrorBox message={error} />;
@@ -1221,6 +1226,14 @@ function ManagerialTab() {
 
   return (
     <>
+      <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+        <span style={{ fontSize: 13, color: C.muted }}>{t.windowL}:</span>
+        {[[30, t.d30], [90, t.d90], [180, t.d180]].map(([d, label]) => (
+          <button key={d} onClick={() => setWindowDays(d)} style={windowDays === d ? { ...ghostBtn, background: C.green, color: '#fff', border: 0 } : ghostBtn}>{label}</button>
+        ))}
+        <button onClick={() => window.print()} style={{ ...ghostBtn, marginInlineStart: 'auto' }}>{t.printReport}</button>
+      </div>
+
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
         <StatCard label={t.sTotal} value={summary.totalTickets} color={C.blue} />
         <StatCard label={t.sOpen} value={summary.openTickets} color={C.amber} />

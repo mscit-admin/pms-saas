@@ -78,6 +78,7 @@ const DICT = {
     editFields: 'تعديل الحقول',
     commaSep: 'افصل بفواصل',
     transition: 'نقل الحالة',
+    linkDep: 'اعتمادية', relBlockedBy: 'هذه التذكرة محجوبة بـ (تعتمد على)', relBlocks: 'هذه التذكرة تحجب', otherKeyPh: 'مفتاح التذكرة الأخرى، مثل GR2-36', linkHint: 'يُنشئ رابط Blocks في جيرا. بعد المزامنة يظهر في «اختناقات الاعتمادية».',
     send: 'إرسال',
     apply: 'تطبيق',
     unassign: 'إلغاء الإسناد',
@@ -211,6 +212,7 @@ const DICT = {
     editFields: 'Edit fields',
     commaSep: 'comma-separated',
     transition: 'Transition',
+    linkDep: 'Dependency', relBlockedBy: 'This ticket is blocked by (depends on)', relBlocks: 'This ticket blocks', otherKeyPh: 'Other ticket key, e.g. GR2-36', linkHint: 'Creates a Blocks link in Jira. After a sync it appears in Dependency bottlenecks.',
     send: 'Send',
     apply: 'Apply',
     unassign: 'Unassign',
@@ -1317,6 +1319,8 @@ function TicketActions({ ticket, onClose, onDone }) {
   const [fieldValues, setFieldValues] = useState({});
   const [editFields, setEditFields] = useState([]);
   const [editValues, setEditValues] = useState({});
+  const [linkRelation, setLinkRelation] = useState('blocked_by');
+  const [linkOther, setLinkOther] = useState('');
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -1330,8 +1334,9 @@ function TicketActions({ ticket, onClose, onDone }) {
     canAct && 'assign',
     canAct && 'fields',
     canAct && 'transition',
+    canAct && 'link',
   ].filter(Boolean);
-  const tabLabel = { followup: t.followup, history: t.history, comment: t.comment, assign: t.assign, fields: t.editFields, transition: t.transition };
+  const tabLabel = { followup: t.followup, history: t.history, comment: t.comment, assign: t.assign, fields: t.editFields, transition: t.transition, link: t.linkDep };
 
   useEffect(() => {
     if (!ticket) return;
@@ -1467,6 +1472,20 @@ function TicketActions({ ticket, onClose, onDone }) {
           </select>
           <button disabled={busy || !accountId} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/assign`, { accountId: accountId === '__unassign__' ? null : accountId }))} style={ghostBtn}>{t.apply}</button>
         </div>
+        </>)}
+
+        {/* اعتمادية / حجب بين التذاكر */}
+        {tab === 'link' && (<>
+        <label style={{ fontSize: 13, color: C.muted, display: 'block', marginBottom: 6 }}>{t.linkDep}</label>
+        <select value={linkRelation} onChange={(e) => setLinkRelation(e.target.value)} style={{ ...inputStyle, width: '100%', cursor: 'pointer', marginBottom: 6 }}>
+          <option value="blocked_by">{t.relBlockedBy}</option>
+          <option value="blocks">{t.relBlocks}</option>
+        </select>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input value={linkOther} onChange={(e) => setLinkOther(e.target.value)} placeholder={t.otherKeyPh} style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }} />
+          <button disabled={busy || !linkOther.trim()} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/link`, { relation: linkRelation, otherKey: linkOther.trim() }).then(() => setLinkOther('')))} style={ghostBtn}>{t.apply}</button>
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.6 }}>{t.linkHint}</div>
         </>)}
 
         {/* تعديل الحقول (لتلبية شروط الانتقالات مثل labels) */}

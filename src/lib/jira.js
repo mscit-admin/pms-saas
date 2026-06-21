@@ -131,6 +131,15 @@ export async function addComment(idOrKey, text, mentions = []) {
   });
 }
 
+// إنشاء رابط بين تذكرتين (Blocks). الدلالة: outwardIssue «يحجب» inwardIssue.
+export async function createIssueLink({ type = 'Blocks', inwardKey, outwardKey }) {
+  return jiraRequest('POST', '/rest/api/3/issueLink', {
+    type: { name: type },
+    inwardIssue: { key: inwardKey },
+    outwardIssue: { key: outwardKey },
+  });
+}
+
 // بحث مستخدمي جيرا (للإشارات @) — حسب نص الاستعلام.
 export async function searchUsers(q) {
   const data = await jiraRequest('GET', `/rest/api/3/user/search?query=${encodeURIComponent(q || '')}&maxResults=10`);

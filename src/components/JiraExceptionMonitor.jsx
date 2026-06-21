@@ -291,6 +291,43 @@ function useIsMobile(bp = 700) {
   return m;
 }
 
+// ------------------------------------------------------------------- icons
+// أيقونات خطّية أحادية اللون (نمط ERPNext/Feather) — currentColor فتتبع الثيم.
+const ICON_PATHS = {
+  grid: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+  barChart: 'M18 20V10M12 20V4M6 20v-6',
+  settings: 'M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z',
+  user: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 11a4 4 0 100-8 4 4 0 000 8z',
+  home: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10',
+  flag: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z M4 22v-7',
+  activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
+  trendingUp: 'M23 6l-9.5 9.5-5-5L1 18 M17 6h6v6',
+  trendingDown: 'M23 18l-9.5-9.5-5 5L1 6 M17 18h6v-6',
+  award: 'M12 15a7 7 0 100-14 7 7 0 000 14z M8.21 13.89L7 23l5-3 5 3-1.21-9.12',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  shuffle: 'M16 3h5v5 M4 20L21 3 M21 16v5h-5 M15 15l6 6 M4 4l5 5',
+  layers: 'M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5',
+  zap: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+  clock: 'M12 22a10 10 0 100-20 10 10 0 000 20z M12 6v6l4 2',
+  refresh: 'M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0114.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0020.49 15',
+  users: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75',
+  link: 'M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71 M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71',
+  cpu: 'M5 4h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1z M9 9h6v6H9z M9 1v3 M15 1v3 M9 20v3 M15 20v3 M20 9h3 M20 14h3 M1 9h3 M1 14h3',
+  image: 'M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 15l-5-5L5 21',
+  fileText: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8',
+  lock: 'M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z M7 11V7a5 5 0 0110 0v4',
+};
+function Icon({ name, size = 16 }) {
+  const d = ICON_PATHS[name];
+  if (!d) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d={d} />
+    </svg>
+  );
+}
+
 // ------------------------------------------------------------------- shell
 export default function JiraExceptionMonitor() {
   const [lang, setLang] = useState('ar');
@@ -369,30 +406,30 @@ export default function JiraExceptionMonitor() {
   const hasAdmin = can('manage_users') || can('manage_roles') || can('manage_integration')
     || can('manage_branding') || can('manage_settings') || can('view_audit');
 
-  // نموذج القائمة الجانبية: تصنيفات ← شاشات (ERPNext) مع أيقونات
-  const ADM_ICONS = { users: '👥', roles: '🛡️', integration: '🔗', ai: '🤖', branding: '🎨', settings: '⚙️', logs: '📜' };
+  // نموذج القائمة الجانبية: تصنيفات ← شاشات (ERPNext) مع أيقونات خطّية
+  const ADM_ICONS = { users: 'users', roles: 'shield', integration: 'link', ai: 'cpu', branding: 'image', settings: 'settings', logs: 'fileText' };
   const menu = useMemo(() => {
     const cats = [];
-    if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: '🗂️', items: [
-      { id: 'ops_overview', label: t.scrOverview, icon: '🏠' },
-      { id: 'ops_exceptions', label: t.exceptions, icon: '🚩' },
-      { id: 'ops_workload', label: t.workload, icon: '⚖️' },
+    if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: 'grid', items: [
+      { id: 'ops_overview', label: t.scrOverview, icon: 'home' },
+      { id: 'ops_exceptions', label: t.exceptions, icon: 'flag' },
+      { id: 'ops_workload', label: t.workload, icon: 'activity' },
     ] });
-    if (can('view_managerial')) cats.push({ id: 'mgmt', label: t.navMgmt, icon: '📊', items: [
-      { id: 'mgmt_kpi', label: t.scrKpi, icon: '📈' },
-      { id: 'mgmt_performance', label: t.performance, icon: '🏅' },
-      { id: 'mgmt_scorecard', label: t.scorecard, icon: '🚦' },
-      { id: 'mgmt_flow', label: t.flow, icon: '🔀' },
-      { id: 'mgmt_wip', label: t.wipOverTime, icon: '📐' },
-      { id: 'mgmt_throughput', label: t.throughput, icon: '⚡' },
-      { id: 'mgmt_trend', label: t.trend, icon: '📉' },
-      { id: 'mgmt_sla', label: t.sla, icon: '⏰' },
-      { id: 'mgmt_cycle', label: t.scrCycle, icon: '🔄' },
+    if (can('view_managerial')) cats.push({ id: 'mgmt', label: t.navMgmt, icon: 'barChart', items: [
+      { id: 'mgmt_kpi', label: t.scrKpi, icon: 'trendingUp' },
+      { id: 'mgmt_performance', label: t.performance, icon: 'award' },
+      { id: 'mgmt_scorecard', label: t.scorecard, icon: 'shield' },
+      { id: 'mgmt_flow', label: t.flow, icon: 'shuffle' },
+      { id: 'mgmt_wip', label: t.wipOverTime, icon: 'layers' },
+      { id: 'mgmt_throughput', label: t.throughput, icon: 'zap' },
+      { id: 'mgmt_trend', label: t.trend, icon: 'trendingDown' },
+      { id: 'mgmt_sla', label: t.sla, icon: 'clock' },
+      { id: 'mgmt_cycle', label: t.scrCycle, icon: 'refresh' },
     ] });
-    if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: '⚙️', items:
-      adminSections(perms, lang).map((s) => ({ id: `adm:${s.id}`, label: s.label, icon: ADM_ICONS[s.id] || '•' })) });
-    cats.push({ id: 'account', label: t.navAccount, icon: '👤', items: [
-      { id: 'acc:2fa', label: t.scrSecurity, icon: '🔐' },
+    if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: 'settings', items:
+      adminSections(perms, lang).map((s) => ({ id: `adm:${s.id}`, label: s.label, icon: ADM_ICONS[s.id] || 'settings' })) });
+    cats.push({ id: 'account', label: t.navAccount, icon: 'user', items: [
+      { id: 'acc:2fa', label: t.scrSecurity, icon: 'lock' },
     ] });
     return cats;
   }, [me, lang]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -462,7 +499,7 @@ export default function JiraExceptionMonitor() {
                         textTransform: 'uppercase', textAlign: 'start',
                       }}
                     >
-                      <span aria-hidden style={{ fontSize: 14 }}>{cat.icon}</span>
+                      <Icon name={cat.icon} size={15} />
                       <span style={{ flex: 1 }}>{cat.label}</span>
                       <span aria-hidden style={{ fontSize: 10, transition: 'transform .15s' }}>{catCollapsed ? '▸' : '▾'}</span>
                     </button>
@@ -481,7 +518,7 @@ export default function JiraExceptionMonitor() {
                             borderInlineStart: active ? `3px solid ${C.green}` : '3px solid transparent',
                           }}
                         >
-                          <span aria-hidden style={{ fontSize: 14, width: 18, textAlign: 'center', opacity: active ? 1 : 0.85 }}>{it.icon}</span>
+                          <span style={{ width: 18, display: 'inline-flex', justifyContent: 'center', opacity: active ? 1 : 0.8 }}><Icon name={it.icon} size={16} /></span>
                           <span style={{ flex: 1 }}>{it.label}</span>
                         </button>
                       );

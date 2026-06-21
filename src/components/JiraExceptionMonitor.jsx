@@ -45,6 +45,7 @@ const DICT = {
     dragHint: 'اسحب البطاقات لإعادة ترتيبها', resetLayout: 'إعادة الترتيب الافتراضي',
     scrOverview: 'نظرة عامة', scrKpi: 'المؤشرات العامة', scrCycle: 'زمن الدورة', scrSecurity: 'الأمان',
     menuShow: 'إظهار القائمة', menuHide: 'إخفاء القائمة',
+    searchPlaceholder: 'بحث في الشاشات والتذاكر…', recent: 'عمليات البحث الأخيرة', screensGroup: 'الشاشات', ticketsGroup: 'التذاكر', noResults: 'لا نتائج', clearHistory: 'مسح',
     lastSync: 'آخر مزامنة',
     never: 'لا يوجد',
     cOverdue: 'متأخر عن الاستحقاق',
@@ -173,6 +174,7 @@ const DICT = {
     dragHint: 'Drag cards to rearrange', resetLayout: 'Reset layout',
     scrOverview: 'Overview', scrKpi: 'KPIs', scrCycle: 'Cycle time', scrSecurity: 'Security',
     menuShow: 'Show menu', menuHide: 'Hide menu',
+    searchPlaceholder: 'Search screens & tickets…', recent: 'Recent searches', screensGroup: 'Screens', ticketsGroup: 'Tickets', noResults: 'No results', clearHistory: 'Clear',
     lastSync: 'Last sync',
     never: 'never',
     cOverdue: 'Overdue',
@@ -337,6 +339,7 @@ const ICON_PATHS = {
   list: 'M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01',
   dashboard: 'M3 3h8v8H3z M13 3h8v5h-8z M13 12h8v9h-8z M3 13h8v8H3z',
   logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9',
+  search: 'M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.35-4.35',
 };
 function Icon({ name, size = 16 }) {
   const d = ICON_PATHS[name];
@@ -346,6 +349,130 @@ function Icon({ name, size = 16 }) {
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
       <path d={d} />
     </svg>
+  );
+}
+
+// ------------------------------------------------------------------- لوحة البحث (Ctrl/⌘+K)
+const SEARCH_HIST_KEY = 'search_history_v1';
+function CommandPalette({ open, onClose, menu, onNavigate, jiraBaseUrl, canTickets, t }) {
+  const [q, setQ] = useState('');
+  const [tickets, setTickets] = useState([]);
+  const [sel, setSel] = useState(0);
+  const [history, setHistory] = useState([]);
+  const inputRef = useRef(null);
+  const debRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setQ(''); setTickets([]); setSel(0);
+    try { setHistory(JSON.parse(localStorage.getItem(SEARCH_HIST_KEY) || '[]')); } catch { setHistory([]); }
+    const id = setTimeout(() => inputRef.current?.focus(), 30);
+    return () => clearTimeout(id);
+  }, [open]);
+
+  const screens = useMemo(() => {
+    const out = [];
+    (menu || []).forEach((cat) => (cat.items || []).forEach((it) => out.push({ type: 'screen', id: it.id, label: it.label, sub: cat.label, icon: it.icon })));
+    return out;
+  }, [menu]);
+
+  const qlc = q.trim().toLowerCase();
+  const screenResults = qlc ? screens.filter((s) => s.label.toLowerCase().includes(qlc) || (s.sub || '').toLowerCase().includes(qlc)) : [];
+
+  useEffect(() => {
+    if (!open || !canTickets) { setTickets([]); return undefined; }
+    const term = q.trim();
+    clearTimeout(debRef.current);
+    if (term.length < 2) { setTickets([]); return undefined; }
+    debRef.current = setTimeout(async () => {
+      try { const d = await fetchJson(`/api/tickets/search?q=${encodeURIComponent(term)}`); setTickets(d.items || []); }
+      catch { setTickets([]); }
+    }, 220);
+    return () => clearTimeout(debRef.current);
+  }, [q, open, canTickets]);
+
+  // قائمة موحّدة قابلة للتنقل بالكيبورد
+  const items = qlc
+    ? [...screenResults, ...tickets.map((tk) => ({ type: 'ticket', ...tk }))]
+    : history;
+  useEffect(() => { setSel(0); }, [qlc, tickets.length, open]);
+
+  const pushHistory = (item) => {
+    const idOf = (x) => (x.type === 'ticket' ? `t:${x.key}` : `s:${x.id}`);
+    setHistory((prev) => {
+      const next = [item, ...prev.filter((x) => idOf(x) !== idOf(item))].slice(0, 8);
+      try { localStorage.setItem(SEARCH_HIST_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+  const clearHistory = () => { try { localStorage.removeItem(SEARCH_HIST_KEY); } catch { /* ignore */ } setHistory([]); };
+
+  const activate = (item) => {
+    if (!item) return;
+    if (item.type === 'screen') { pushHistory(item); onNavigate(item.id); onClose(); }
+    else if (item.type === 'ticket') {
+      pushHistory(item);
+      if (jiraBaseUrl) window.open(`${jiraBaseUrl}/browse/${item.key}`, '_blank', 'noopener');
+      onClose();
+    }
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') { onClose(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setSel((i) => Math.min(items.length - 1, i + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((i) => Math.max(0, i - 1)); }
+    else if (e.key === 'Enter') { e.preventDefault(); activate(items[sel]); }
+  };
+
+  if (!open) return null;
+  const rowStyle = (active) => ({ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 8, cursor: 'pointer', background: active ? C.bg : 'transparent' });
+  const groupLabel = { fontSize: 11, fontWeight: 700, letterSpacing: '.04em', color: C.muted, textTransform: 'uppercase', padding: '8px 10px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+  let idx = -1; // مؤشّر مسطّح للعناصر القابلة للتفعيل
+
+  return (
+    <div onClick={onClose} className="no-print" style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,.35)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: '10vh' }}>
+      <div onClick={(e) => e.stopPropagation()} dir="auto" style={{ width: 'min(640px, 92vw)', background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: '0 18px 50px rgba(0,0,0,.3)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', borderBottom: `1px solid ${C.border}`, color: C.muted }}>
+          <Icon name="search" size={18} />
+          <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKeyDown} placeholder={t.searchPlaceholder}
+            style={{ flex: 1, border: 0, outline: 'none', background: 'transparent', color: C.text, fontSize: 15, fontFamily: 'inherit' }} />
+          <kbd style={{ fontSize: 11, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 6px' }}>ESC</kbd>
+        </div>
+        <div style={{ maxHeight: '58vh', overflowY: 'auto', padding: 6 }}>
+          {!qlc && (
+            history.length === 0
+              ? <div style={{ padding: 16, color: C.muted, fontSize: 13 }}>{t.searchPlaceholder}</div>
+              : <div style={groupLabel}><span>{t.recent}</span><button onClick={clearHistory} style={{ ...ghostBtn, padding: '1px 7px', fontSize: 11 }}>{t.clearHistory}</button></div>
+          )}
+          {qlc && screenResults.length > 0 && <div style={groupLabel}>{t.screensGroup}</div>}
+          {(qlc ? screenResults : history.filter((h) => h.type === 'screen')).map((s) => {
+            idx += 1; const here = idx;
+            return (
+              <div key={`s-${s.id}`} onMouseEnter={() => setSel(here)} onClick={() => activate(s)} style={rowStyle(sel === here)}>
+                <Icon name={s.icon || 'list'} size={16} />
+                <span style={{ flex: 1, fontSize: 14 }}>{s.label}</span>
+                <span style={{ fontSize: 11, color: C.muted }}>{s.sub}</span>
+              </div>
+            );
+          })}
+          {qlc && tickets.length > 0 && <div style={groupLabel}>{t.ticketsGroup}</div>}
+          {(qlc ? tickets.map((tk) => ({ type: 'ticket', ...tk })) : history.filter((h) => h.type === 'ticket')).map((tk) => {
+            idx += 1; const here = idx;
+            return (
+              <div key={`t-${tk.key}`} onMouseEnter={() => setSel(here)} onClick={() => activate(tk)} style={rowStyle(sel === here)}>
+                <Icon name="flag" size={16} />
+                <span style={{ fontWeight: 700, fontSize: 13, color: C.blue }}>{tk.key}</span>
+                <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk.summary}</span>
+                {tk.status && <span style={{ fontSize: 11, color: C.muted }}>{tk.status}</span>}
+              </div>
+            );
+          })}
+          {qlc && screenResults.length === 0 && tickets.length === 0 && (
+            <div style={{ padding: 16, color: C.muted, fontSize: 13 }}>{t.noResults}</div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -361,6 +488,7 @@ export default function JiraExceptionMonitor() {
   const [drawer, setDrawer] = useState(false);       // درج القائمة (الجوال)
   const [collapsedCats, setCollapsedCats] = useState({}); // طي/فتح تصنيفات القائمة
   const [profileOpen, setProfileOpen] = useState(false);  // قائمة الملف الشخصي المنسدلة
+  const [paletteOpen, setPaletteOpen] = useState(false);  // لوحة البحث (Ctrl/⌘+K)
   const [cardSignal] = useState({ v: 0, collapsed: false });
   const { logo, appBackground, appName, appSubtitle, appNameEn, appSubtitleEn, appBgDim, appBgShow, pageSize } = useBranding();
   const isMobile = useIsMobile();
@@ -410,6 +538,15 @@ export default function JiraExceptionMonitor() {
   useEffect(() => {
     fetchJson('/api/meta').then(setMeta).catch(() => {});
   }, [reloadKey]);
+
+  // اختصار البحث العام: Ctrl/⌘ + K
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setPaletteOpen(true); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const t = DICT[lang];
   const fmt = (n) => (n == null ? '—' : new Intl.NumberFormat('en-US').format(n));
@@ -572,6 +709,16 @@ export default function JiraExceptionMonitor() {
                 {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
               </span>
             </div>
+
+            <button
+              onClick={() => setPaletteOpen(true)}
+              title="Ctrl/⌘ + K"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, flex: isMobile ? '0 0 auto' : '0 1 320px', maxWidth: 320, border: `1px solid ${C.border}`, background: C.bg, color: C.muted, borderRadius: 8, padding: isMobile ? '7px 9px' : '7px 12px', cursor: 'pointer', fontSize: 13 }}
+            >
+              <Icon name="search" size={16} />
+              {!isMobile && <span style={{ flex: 1, textAlign: 'start' }}>{t.searchPlaceholder}</span>}
+              {!isMobile && <kbd style={{ fontSize: 11, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 5px' }}>Ctrl K</kbd>}
+            </button>
             <nav style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻</button>
               <button onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')} title="theme" style={ghostBtn}>
@@ -628,6 +775,16 @@ export default function JiraExceptionMonitor() {
             {renderScreen()}
           </main>
         </div>
+
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          menu={menu}
+          onNavigate={go}
+          jiraBaseUrl={meta?.jiraBaseUrl || null}
+          canTickets={can('view_operational')}
+          t={t}
+        />
       </div>
     </LangCtx.Provider>
   );

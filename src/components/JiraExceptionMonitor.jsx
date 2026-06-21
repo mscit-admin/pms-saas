@@ -42,6 +42,7 @@ const DICT = {
     refresh: 'تحديث', collapseAll: 'طي الكل', expandAll: 'فتح الكل',
     navDashboard: 'لوحة المعلومات', navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي',
     scrDashboard: 'المؤشرات', hDashboard: 'أهم مؤشرات الأداء في لقطة واحدة. تظهر المؤشرات أو تُخفى حسب صلاحيات دورك.', noKpi: 'لا توجد مؤشرات متاحة لدورك.',
+    dragHint: 'اسحب البطاقات لإعادة ترتيبها', resetLayout: 'إعادة الترتيب الافتراضي',
     scrOverview: 'نظرة عامة', scrKpi: 'المؤشرات العامة', scrCycle: 'زمن الدورة', scrSecurity: 'الأمان',
     menuShow: 'إظهار القائمة', menuHide: 'إخفاء القائمة',
     lastSync: 'آخر مزامنة',
@@ -169,6 +170,7 @@ const DICT = {
     refresh: 'Refresh', collapseAll: 'Collapse all', expandAll: 'Expand all',
     navDashboard: 'Dashboard', navOps: 'Operations', navMgmt: 'Analytics', navAdmin: 'Administration', navAccount: 'My Account',
     scrDashboard: 'KPIs', hDashboard: 'Key performance indicators at a glance. Tiles show or hide based on your role permissions.', noKpi: 'No KPIs available for your role.',
+    dragHint: 'Drag cards to rearrange', resetLayout: 'Reset layout',
     scrOverview: 'Overview', scrKpi: 'KPIs', scrCycle: 'Cycle time', scrSecurity: 'Security',
     menuShow: 'Show menu', menuHide: 'Hide menu',
     lastSync: 'Last sync',
@@ -465,7 +467,7 @@ export default function JiraExceptionMonitor() {
 
   const renderScreen = () => {
     if (!screen) return <Loading />;
-    if (screen === 'dash_main') return <DashboardScreen key={`dash-${reloadKey}`} perms={perms} />;
+    if (screen === 'dash_main') return <DashboardScreen key={`dash-${reloadKey}`} perms={perms} userId={me?.id} />;
     if (screen.startsWith('ops_')) return <OperationalTab key={`op-${reloadKey}`} screen={screen.slice(4)} />;
     if (screen.startsWith('mgmt_')) return <ManagerialTab key={`mg-${reloadKey}`} screen={screen.slice(5)} />;
     if (screen.includes(':')) return <AdminPanel key={`ad-${reloadKey}`} lang={lang} perms={perms} section={screen.split(':')[1]} />;
@@ -1358,13 +1360,16 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
 
 // ------------------------------------------------------------------- لوحة المعلومات
 // شاشة واحدة تجمع كل العناصر؛ كل عنصر (KPI/أداة) يظهر حسب صلاحية الدور.
-function DashboardScreen({ perms = [] }) {
+function DashboardScreen({ perms = [], userId }) {
   const { t, fmt } = useUI();
   const isMobile = useIsMobile();
   const has = (k) => perms.includes(k);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [windowDays, setWindowDays] = useState(90);
+  const [order, setOrder] = useState([]);
+  const [dragKey, setDragKey] = useState(null);
+  const storeKey = `dash_order_${userId || 'me'}`;
 
   useEffect(() => {
     setData(null);
@@ -1395,6 +1400,36 @@ function DashboardScreen({ perms = [] }) {
   const showWindow = showWip || showThroughput || showTrend || showCyclePri || showStage;
   const anyWidget = showKpi || showWorkload || showWindow;
 
+  // مفاتيح البطاقات المرئية بالترتيب الافتراضي
+  const visibleKeys = [
+    showKpi && 'kpi', showWorkload && 'workload', showWip && 'wip',
+    showThroughput && 'throughput', showTrend && 'trend',
+    showCyclePri && 'cycle_priority', showStage && 'stage',
+  ].filter(Boolean);
+  const visKeyStr = visibleKeys.join(',');
+
+  // ترتيب البطاقات: المحفوظ للمستخدم + أي بطاقات جديدة مرئية
+  useEffect(() => {
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem(storeKey) || '[]'); } catch { saved = []; }
+    const keys = visKeyStr ? visKeyStr.split(',') : [];
+    const merged = [...saved.filter((k) => keys.includes(k)), ...keys.filter((k) => !saved.includes(k))];
+    setOrder(merged);
+  }, [visKeyStr, storeKey]);
+
+  const persist = (next) => { try { localStorage.setItem(storeKey, JSON.stringify(next)); } catch { /* ignore */ } };
+  const resetLayout = () => { try { localStorage.removeItem(storeKey); } catch { /* ignore */ } setOrder(visibleKeys); };
+  const onDragEnter = (k) => {
+    if (!dragKey || dragKey === k) return;
+    setOrder((prev) => {
+      const from = prev.indexOf(dragKey); const to = prev.indexOf(k);
+      if (from < 0 || to < 0) return prev;
+      const next = [...prev]; next.splice(from, 1); next.splice(to, 0, dragKey);
+      return next;
+    });
+  };
+  const onDragEnd = () => { setDragKey(null); persist(order); };
+
   if (error) return <Screen title={t.scrDashboard} hint={t.hDashboard}><ErrorBox message={error} /></Screen>;
   if (!anyWidget) return <Screen title={t.scrDashboard} hint={t.hDashboard}><div style={{ color: C.muted, fontSize: 14, padding: 12 }}>{t.noKpi}</div></Screen>;
   if (!data) return <Screen title={t.scrDashboard} hint={t.hDashboard}><Loading /></Screen>;
@@ -1405,54 +1440,86 @@ function DashboardScreen({ perms = [] }) {
   const maxCycle = Math.max(1, ...byPriority.map((p) => p.avgDays || 0));
   const maxStage = Math.max(1, ...stages.map((s) => s.avgDays || 0));
 
+  // عقدة كل بطاقة حسب مفتاحها
+  const nodes = {
+    kpi: { full: true, node: (
+      <Screen title={t.scrKpi} hint={t.hDashboard}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+          {kpiVisible.map((k) => <StatCard key={k.perm} label={k.label} value={k.val(data.kpis)} color={k.color} />)}
+        </div>
+      </Screen>
+    ) },
+    workload: { node: (
+      <Screen title={t.workload} hint={t.hWorkload}>
+        {(data.workload || []).map((w) => (
+          <BarRow key={w.accountId || w.assignee} label={w.assignee} value={w.openCount} max={maxLoad}
+            color={w.overdue > 0 ? C.amber : C.green} suffix={w.overdue > 0 ? t.overdueSuffix(fmt(w.overdue)) : ''} />
+        ))}
+        {(data.workload || []).length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+      </Screen>
+    ) },
+    wip: { node: <Screen title={t.wipOverTime} hint={t.hWip}><WipChart data={data.wip} /></Screen> },
+    throughput: { node: <Screen title={t.throughput} hint={t.hThroughput}><Throughput data={data.throughput} /></Screen> },
+    trend: { node: <Screen title={t.trend} hint={t.hTrend}><TrendChart series={data.trend} /></Screen> },
+    cycle_priority: { node: (
+      <Screen title={t.cycleByPriority} hint={t.hCycle}>
+        {byPriority.map((p) => <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix={t.dayUnit} />)}
+        {byPriority.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+      </Screen>
+    ) },
+    stage: { node: (
+      <Screen title={t.stageResidence} hint={t.hCycle}>
+        {stages.slice(0, 8).map((s) => <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix={t.dayUnit} />)}
+        {stages.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>{t.noStages}</div>}
+      </Screen>
+    ) },
+  };
+
+  const gripStyle = { position: 'absolute', insetInlineEnd: 10, top: 10, zIndex: 5, cursor: 'grab', color: C.muted, fontSize: 15, lineHeight: 1, padding: '3px 7px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.card };
+
   return (
     <div>
-      {showWindow && (
-        <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+      <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+        {showWindow && (<>
           <span style={{ fontSize: 13, color: C.muted }}>{t.windowL}:</span>
           {[[30, t.d30], [90, t.d90], [180, t.d180]].map(([d, label]) => (
             <button key={d} onClick={() => setWindowDays(d)} style={windowDays === d ? { ...ghostBtn, background: C.green, color: '#fff', border: 0 } : ghostBtn}>{label}</button>
           ))}
-        </div>
-      )}
+          <span style={{ width: 1, height: 18, background: C.border, margin: '0 4px' }} />
+        </>)}
+        <span style={{ fontSize: 12.5, color: C.muted }}>⠿ {t.dragHint}</span>
+        <button onClick={resetLayout} style={{ ...ghostBtn, marginInlineStart: 'auto' }}>{t.resetLayout}</button>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'start' }}>
-        {showKpi && (
-          <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
-            <Screen title={t.scrKpi} hint={t.hDashboard}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
-                {kpiVisible.map((k) => <StatCard key={k.perm} label={k.label} value={k.val(data.kpis)} color={k.color} />)}
-              </div>
-            </Screen>
-          </div>
-        )}
-
-        {showWorkload && (
-          <Screen title={t.workload} hint={t.hWorkload}>
-            {(data.workload || []).map((w) => (
-              <BarRow key={w.accountId || w.assignee} label={w.assignee} value={w.openCount} max={maxLoad}
-                color={w.overdue > 0 ? C.amber : C.green} suffix={w.overdue > 0 ? t.overdueSuffix(fmt(w.overdue)) : ''} />
-            ))}
-            {(data.workload || []).length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
-          </Screen>
-        )}
-
-        {showWip && <Screen title={t.wipOverTime} hint={t.hWip}><WipChart data={data.wip} /></Screen>}
-        {showThroughput && <Screen title={t.throughput} hint={t.hThroughput}><Throughput data={data.throughput} /></Screen>}
-        {showTrend && <Screen title={t.trend} hint={t.hTrend}><TrendChart series={data.trend} /></Screen>}
-
-        {showCyclePri && (
-          <Screen title={t.cycleByPriority} hint={t.hCycle}>
-            {byPriority.map((p) => <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix={t.dayUnit} />)}
-            {byPriority.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
-          </Screen>
-        )}
-        {showStage && (
-          <Screen title={t.stageResidence} hint={t.hCycle}>
-            {stages.slice(0, 8).map((s) => <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix={t.dayUnit} />)}
-            {stages.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>{t.noStages}</div>}
-          </Screen>
-        )}
+        {order.filter((k) => nodes[k]).map((k) => {
+          const w = nodes[k];
+          return (
+            <div
+              key={k}
+              data-card
+              onDragEnter={() => onDragEnter(k)}
+              onDragOver={(e) => e.preventDefault()}
+              style={{ position: 'relative', gridColumn: w.full && !isMobile ? '1 / -1' : 'auto', opacity: dragKey === k ? 0.4 : 1, transition: 'opacity .12s' }}
+            >
+              <div
+                className="no-print"
+                draggable
+                title={t.dragHint}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', k);
+                  const card = e.currentTarget.parentElement;
+                  if (card) { try { e.dataTransfer.setDragImage(card, 20, 20); } catch { /* ignore */ } }
+                  setDragKey(k);
+                }}
+                onDragEnd={onDragEnd}
+                style={gripStyle}
+              >⠿</div>
+              {w.node}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

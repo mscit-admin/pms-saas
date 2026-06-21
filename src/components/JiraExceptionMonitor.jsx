@@ -2698,14 +2698,6 @@ function Flow({ flow }) {
         </div>
       )}
 
-      {(flow.dependencies || []).length > 0 && (
-        <div style={{ marginTop: 14 }}>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 2 }}>{t.depBottlenecks}</div>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>{t.depHint}</div>
-          {flow.dependencies.map((d) => <DepRow key={d.key} d={d} ageColor={ageColor} />)}
-        </div>
-      )}
-
       <div style={{ fontSize: 13, color: C.muted, margin: '14px 0 6px' }}>{t.agingWip}</div>
       {isMobile ? (
         <div>

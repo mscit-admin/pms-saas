@@ -732,7 +732,12 @@ function caretCoords(el, pos) {
   const top = span.offsetTop - el.scrollTop;
   const left = span.offsetLeft - el.scrollLeft;
   document.body.removeChild(div);
-  return { top, left, lh: parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.3 };
+  return {
+    top,
+    left,
+    w: el.clientWidth,
+    lh: parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.3,
+  };
 }
 
 function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) {
@@ -742,7 +747,8 @@ function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) 
   const [sugg, setSugg] = useState([]);
   const [match, setMatch] = useState(null);
   const [hover, setHover] = useState(-1);
-  const [pos, setPos] = useState({ top: 0, left: 0, lh: 20 });
+  const [pos, setPos] = useState({ top: 0, left: 0, w: 0, lh: 20 });
+  const DW = 250; // عرض القائمة الثابت لحساب القَصّ داخل الإطار
 
   function search(q) {
     clearTimeout(debRef.current);
@@ -789,7 +795,7 @@ function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) 
         style={{ width: '100%', boxSizing: 'border-box', ...inputStyle }}
       />
       {open && sugg.length > 0 && (
-        <div style={{ position: 'absolute', zIndex: 60, top: pos.top + pos.lh + 2, left: Math.max(0, pos.left - 8), background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 240, maxWidth: 320, maxHeight: 240, overflowY: 'auto', padding: 4 }}>
+        <div style={{ position: 'absolute', zIndex: 60, top: pos.top + pos.lh + 2, left: Math.max(0, Math.min(pos.left - 8, (pos.w || DW) - DW)), width: DW, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.18)', maxHeight: 240, overflowY: 'auto', padding: 4, boxSizing: 'border-box' }}>
           {sugg.map((u, i) => (
             <div key={u.accountId}
               onMouseEnter={() => setHover(i)}

@@ -467,7 +467,8 @@ function TabButton({ active, onClick, children }) {
 function Card({ title, children, extra, hint }) {
   const ui = useUI();
   const [showHint, setShowHint] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // كل البطاقات مطويّة افتراضياً — تُفتح بالنقر على الأيقونة
+  const [collapsed, setCollapsed] = useState(true);
   // مزامنة مع زر «طي/فتح الكل»
   const sig = ui?.cardSignal;
   useEffect(() => { if (sig) setCollapsed(sig.collapsed); }, [sig?.v]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -480,10 +481,10 @@ function Card({ title, children, extra, hint }) {
               type="button"
               onClick={() => setCollapsed((v) => !v)}
               aria-label="toggle"
-              style={{ width: 20, height: 20, border: `1px solid ${C.border}`, borderRadius: 4, background: 'transparent', color: C.muted, cursor: 'pointer', padding: 0, fontSize: 11 }}
+              style={{ width: 20, height: 20, border: `1px solid ${C.border}`, borderRadius: 4, background: collapsed ? C.blue : 'transparent', color: collapsed ? '#fff' : C.muted, cursor: 'pointer', padding: 0, fontSize: 11 }}
             >{collapsed ? '▸' : '▾'}</button>
             <span onClick={() => setCollapsed((v) => !v)} style={{ cursor: 'pointer' }}>{title}</span>
-            {hint && (
+            {hint && !collapsed && (
               <button
                 type="button"
                 onClick={() => setShowHint((v) => !v)}
@@ -494,6 +495,12 @@ function Card({ title, children, extra, hint }) {
             )}
           </h2>
           {!collapsed && extra}
+        </div>
+      )}
+      {/* عند الطي: نعرض التلميح كنبذة عن محتوى البطاقة */}
+      {collapsed && hint && (
+        <div onClick={() => setCollapsed(false)} style={{ marginTop: 6, fontSize: 12.5, color: C.muted, lineHeight: 1.5, cursor: 'pointer' }}>
+          {hint}
         </div>
       )}
       {!collapsed && hint && showHint && (
@@ -700,6 +707,34 @@ function initials(name) {
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
 
+// إحداثيات المؤشّر داخل textarea — لإظهار قائمة الإشارات بجانب «@».
+function caretCoords(el, pos) {
+  if (typeof document === 'undefined') return { top: 0, left: 0 };
+  const style = getComputedStyle(el);
+  const div = document.createElement('div');
+  const props = ['boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'fontStyle',
+    'fontWeight', 'fontSize', 'fontFamily', 'lineHeight', 'letterSpacing', 'textTransform',
+    'wordSpacing', 'textIndent', 'direction'];
+  props.forEach((p) => { div.style[p] = style[p]; });
+  div.style.position = 'absolute';
+  div.style.visibility = 'hidden';
+  div.style.whiteSpace = 'pre-wrap';
+  div.style.wordWrap = 'break-word';
+  div.style.overflow = 'hidden';
+  div.style.top = '0';
+  div.style.left = '0';
+  div.textContent = el.value.slice(0, pos);
+  const span = document.createElement('span');
+  span.textContent = el.value.slice(pos) || '.';
+  div.appendChild(span);
+  document.body.appendChild(div);
+  const top = span.offsetTop - el.scrollTop;
+  const left = span.offsetLeft - el.scrollLeft;
+  document.body.removeChild(div);
+  return { top, left, lh: parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.3 };
+}
+
 function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) {
   const ref = useRef(null);
   const debRef = useRef(null);
@@ -707,6 +742,7 @@ function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) 
   const [sugg, setSugg] = useState([]);
   const [match, setMatch] = useState(null);
   const [hover, setHover] = useState(-1);
+  const [pos, setPos] = useState({ top: 0, left: 0, lh: 20 });
 
   function search(q) {
     clearTimeout(debRef.current);
@@ -721,8 +757,12 @@ function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) 
     const caret = e.target.selectionStart;
     const upto = val.slice(0, caret);
     const m = upto.match(/@([^\s@]{0,40})$/);
-    if (m) { setMatch({ len: m[0].length, caret }); setOpen(true); setHover(-1); search(m[1]); }
-    else { setOpen(false); }
+    if (m) {
+      // ضع القائمة عند موضع «@» نفسه
+      const atPos = caret - m[0].length;
+      setPos(caretCoords(e.target, atPos));
+      setMatch({ len: m[0].length, caret }); setOpen(true); setHover(-1); search(m[1]);
+    } else { setOpen(false); }
   }
   function pick(u) {
     const ta = ref.current;
@@ -749,7 +789,7 @@ function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) 
         style={{ width: '100%', boxSizing: 'border-box', ...inputStyle }}
       />
       {open && sugg.length > 0 && (
-        <div style={{ position: 'absolute', zIndex: 60, top: 'calc(100% + 4px)', insetInlineStart: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 240, maxWidth: 320, maxHeight: 240, overflowY: 'auto', padding: 4 }}>
+        <div style={{ position: 'absolute', zIndex: 60, top: pos.top + pos.lh + 2, left: Math.max(0, pos.left - 8), background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 240, maxWidth: 320, maxHeight: 240, overflowY: 'auto', padding: 4 }}>
           {sugg.map((u, i) => (
             <div key={u.accountId}
               onMouseEnter={() => setHover(i)}

@@ -498,11 +498,12 @@ export default function JiraExceptionMonitor() {
                 : { position: 'sticky', top: 0, height: '100vh' }),
             }}
           >
-            <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-              {logo
+            <div style={{ padding: '16px 14px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center' }}>
+              {logo && (
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={logo} alt="logo" style={{ height: 34, maxWidth: 150, objectFit: 'contain' }} />
-                : <strong style={{ fontSize: 16 }}>{appTitle}</strong>}
+                <img src={logo} alt="logo" style={{ height: 42, maxWidth: 170, objectFit: 'contain' }} />
+              )}
+              <strong style={{ fontSize: 15, lineHeight: 1.35 }}>{appTitle}</strong>
             </div>
             <nav style={{ padding: 8, flex: 1 }}>
               {menu.map((cat) => {
@@ -567,12 +568,9 @@ export default function JiraExceptionMonitor() {
                 title={sidebarVisible ? t.menuHide : t.menuShow}
                 style={{ ...ghostBtn, fontSize: 18, lineHeight: 1, padding: '4px 10px' }}
               >☰</button>
-              <div style={{ minWidth: 0 }}>
-                <h1 style={{ margin: 0, fontSize: 17, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{appTitle}</h1>
-                <p style={{ margin: '1px 0 0', color: C.muted, fontSize: 12 }}>
-                  {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
-                </p>
-              </div>
+              <span style={{ color: C.muted, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
+              </span>
             </div>
             <nav style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻</button>
@@ -2172,6 +2170,7 @@ function Scorecard({ items }) {
 const WIP_PALETTE = ['#2490ef', '#1f7a4d', '#cb8a14', '#7c4dff', '#e0568b', '#14b8a6', '#8a96a3'];
 function WipChart({ data }) {
   const { t, fmt } = useUI();
+  const isMobile = useIsMobile();
   if (!data) return <Loading />;
   const { series = [], statuses = [] } = data;
   if (series.length === 0 || statuses.length === 0) {
@@ -2198,7 +2197,7 @@ function WipChart({ data }) {
   return (
     <div style={{ overflowX: 'auto' }}>
       {series.length < 2 && <div style={{ color: C.amber, fontSize: 13, textAlign: 'center', marginBottom: 6 }}>{t.trendCollecting(series.length)}</div>}
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 600, height: H }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: isMobile ? 0 : 600, height: isMobile ? 'auto' : H }}>
         {grid.map((g, i) => (
           <g key={i}>
             <line x1={padL} y1={y(g)} x2={W - 10} y2={y(g)} style={{ stroke: C.border }} strokeDasharray="3 3" opacity="0.6" />
@@ -2356,6 +2355,7 @@ function Flow({ flow }) {
 // رسم الاتجاه (SVG، بلا مكتبات): خطوط · مساحات متراكمة · أعمدة متراكمة
 function TrendChart({ series }) {
   const { t, fmt } = useUI();
+  const isMobile = useIsMobile();
   const [type, setType] = useState('area');
   if (!series || series.length === 0) {
     return <div style={{ color: C.muted, fontSize: 13 }}>{t.trendEmpty}</div>;
@@ -2398,7 +2398,7 @@ function TrendChart({ series }) {
           {t.trendCollecting(series.length)}
         </div>
       )}
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 600, height: H }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: isMobile ? 0 : 600, height: isMobile ? 'auto' : H }}>
         {/* الشبكة */}
         {gridlines.map((g, i) => (
           <g key={i}>

@@ -28,6 +28,7 @@ const FIELDS = [
   'issuetype',
   'project',
   'labels',
+  'issuelinks',
 ];
 
 async function jiraRequest(method, path, body) {

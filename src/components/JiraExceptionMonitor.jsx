@@ -131,6 +131,8 @@ const DICT = {
     ageDays: 'عمر بالحالة',
     bottleneck: 'الاختناق', bottleneckTag: 'اختناق', items: 'عنصر', avgAgeLabel: 'متوسط العمر',
     stuckLabel: 'عالق', maxAgeLabel: 'أقصى عمر', projectBottlenecks: 'اختناقات المشاريع',
+    depBottlenecks: 'اختناقات الاعتمادية (تذاكر حاجبة)', depHint: 'تذاكر مفتوحة تحجب تذاكر أخرى — معالجتها تفكّ عدّة تذاكر دفعةً واحدة.',
+    blocksCount: (n) => `يحجب ${n} ${n === 1 ? 'تذكرة' : 'تذاكر'}`, blockedList: 'المحجوبة', noDeps: 'لا اختناقات اعتمادية',
     wipOverTime: 'تدفّق العمل عبر الزمن', wipOther: 'أخرى', wipEmpty: 'تتراكم لقطات التدفّق يومياً مع كل مزامنة.',
     throughput: 'الإنتاجية والتنبؤ', weeklyDone: 'منجزة أسبوعياً', avgWeekly: 'متوسط أسبوعي',
     weeksUnit: 'أسبوع', byDate: 'بحلول', atPace: 'بالوتيرة الحالية',
@@ -260,6 +262,8 @@ const DICT = {
     ageDays: 'Age in status',
     bottleneck: 'Bottleneck', bottleneckTag: 'bottleneck', items: 'items', avgAgeLabel: 'avg age',
     stuckLabel: 'stuck', maxAgeLabel: 'max age', projectBottlenecks: 'Project bottlenecks',
+    depBottlenecks: 'Dependency bottlenecks (blocking tickets)', depHint: 'Open tickets blocking others — resolving one unblocks several at once.',
+    blocksCount: (n) => `blocks ${n}`, blockedList: 'Blocked', noDeps: 'No dependency bottlenecks',
     wipOverTime: 'WIP over time', wipOther: 'Other', wipEmpty: 'Flow snapshots accumulate daily with each sync.',
     throughput: 'Throughput & forecast', weeklyDone: 'Resolved per week', avgWeekly: 'Weekly average',
     weeksUnit: 'weeks', byDate: 'by', atPace: 'At current pace',
@@ -2496,6 +2500,31 @@ function Flow({ flow }) {
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {(flow.dependencies || []).length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 2 }}>{t.depBottlenecks}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>{t.depHint}</div>
+          {flow.dependencies.map((d) => (
+            <div key={d.key} style={{ border: `1px solid ${C.border}`, borderInlineStart: `3px solid ${C.red}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <KeyLink k={d.key} />
+                  <Chip color={C.red}>{t.blocksCount(fmt(d.blockingCount))}</Chip>
+                </span>
+                <span style={{ fontSize: 12, color: ageColor(d.daysInStatus), fontWeight: 700 }}>{fmt(d.daysInStatus)} {t.dayUnit}</span>
+              </div>
+              <div style={{ fontSize: 13, margin: '4px 0' }}>{d.summary}</div>
+              <div style={{ fontSize: 12, color: C.muted }}>
+                {d.project} · {d.status} · {d.assignee || '—'}
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                {t.blockedList}: {d.blockedKeys.map((k) => <KeyLink key={k} k={k} />).reduce((acc, el, i) => i === 0 ? [el] : [...acc, <span key={`s${i}`}> · </span>, el], [])}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

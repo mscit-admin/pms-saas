@@ -425,6 +425,34 @@ export async function getFlow({ agingLimit = 50 } = {}) {
   }
   const projectBottlenecks = Array.from(projMap.values()).sort((a, b) => b.score - a.score);
 
+  // اختناقات الاعتمادية: تذاكر مفتوحة (حاجبة) تحجب تذاكر مفتوحة أخرى عبر روابط جيرا.
+  // كلما زاد عدد المحجوبة وطال ركود الحاجبة، كان الاختناق أخطر.
+  const depRows = await query(
+    `SELECT b.blocker_key,
+        tb.summary AS blocker_summary, tb.status AS blocker_status,
+        tb.project_key, tb.assignee_name AS blocker_assignee,
+        TIMESTAMPDIFF(DAY, tb.last_status_change_at, UTC_TIMESTAMP()) AS blocker_days,
+        COUNT(DISTINCT b.blocked_key) AS blocking_count,
+        GROUP_CONCAT(DISTINCT b.blocked_key ORDER BY b.blocked_key SEPARATOR ',') AS blocked_keys
+     FROM ticket_blocks b
+     JOIN tickets tb ON tb.issue_key = b.blocker_key
+     JOIN tickets td ON td.issue_key = b.blocked_key
+     WHERE tb.status_category <> 'done' AND td.status_category <> 'done'
+     GROUP BY b.blocker_key, tb.summary, tb.status, tb.project_key, tb.assignee_name, tb.last_status_change_at
+     ORDER BY blocking_count DESC, blocker_days DESC
+     LIMIT 20`
+  );
+  const dependencies = depRows.map((r) => ({
+    key: r.blocker_key,
+    summary: r.blocker_summary,
+    status: r.blocker_status,
+    project: r.project_key,
+    assignee: r.blocker_assignee,
+    daysInStatus: Number(r.blocker_days || 0),
+    blockingCount: Number(r.blocking_count || 0),
+    blockedKeys: (r.blocked_keys || '').split(',').filter(Boolean),
+  }));
+
   const wip = wipRows.map((r) => ({
     stage: r.stage,
     category: r.category,
@@ -447,6 +475,7 @@ export async function getFlow({ agingLimit = 50 } = {}) {
     wip,
     bottleneck,
     projectBottlenecks,
+    dependencies,
     stuckDays,
     aging: aging.map((r) => ({
       key: r.issue_key,

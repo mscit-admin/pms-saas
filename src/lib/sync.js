@@ -1,6 +1,6 @@
 import { iterateIssues, fetchChangelog, getIssue } from './jira.js';
 import { getPool, withTransaction } from './db.js';
-import { mapIssueToRow, extractStatusChanges } from './normalize.js';
+import { mapIssueToRow, extractStatusChanges, extractBlocks } from './normalize.js';
 import { snapshotExceptions } from './exceptions.js';
 import { snapshotWip } from './analytics.js';
 import { detectAndAlert } from './alerts.js';
@@ -70,6 +70,7 @@ async function persistIssue(issue) {
   }
   const changes = extractStatusChanges(issue);
   row.last_status_change_at = computeLastStatusChange(changes, row.jira_created_at);
+  const blocks = extractBlocks(issue);
 
   let inserted = 0;
   await withTransaction(async (conn) => {
@@ -77,6 +78,14 @@ async function persistIssue(issue) {
     for (const ch of changes) {
       const [r] = await conn.execute(INSERT_HISTORY, ch);
       if (r.affectedRows > 0) inserted += 1;
+    }
+    // روابط الحجب: احذف روابط هذه التذكرة ثم أعد بناءها (idempotent مع إزالة الروابط المحذوفة)
+    await conn.execute('DELETE FROM ticket_blocks WHERE source_key = :k', { k: issue.key });
+    for (const e of blocks) {
+      await conn.execute(
+        'INSERT IGNORE INTO ticket_blocks (source_key, blocker_key, blocked_key) VALUES (:source_key, :blocker_key, :blocked_key)',
+        e
+      );
     }
   });
   return inserted;

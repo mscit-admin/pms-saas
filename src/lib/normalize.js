@@ -85,3 +85,40 @@ export function extractStatusChanges(issue) {
   changes.sort((a, b) => (a.changed_at < b.changed_at ? -1 : 1));
   return changes;
 }
+
+// يستخرج حواف الحجب/الاعتمادية من issuelinks.
+// يرجّع [{ source_key, blocker_key, blocked_key }] — blocker_key يحجب blocked_key.
+function relSide(phrase) {
+  const p = (phrase || '').toLowerCase();
+  if (p.includes('blocked by') || p.includes('depends on')) return 'blocked'; // هذه التذكرة محجوبة
+  if (p.includes('block') || p.includes('depended on by') || p.includes('dependency of')) return 'blocker'; // هذه التذكرة تحجب
+  return null;
+}
+export function extractBlocks(issue) {
+  const src = issue.key;
+  const links = issue.fields?.issuelinks || [];
+  const edges = [];
+  const add = (blocker, blocked) => {
+    if (blocker && blocked && blocker !== blocked) edges.push({ source_key: src, blocker_key: blocker, blocked_key: blocked });
+  };
+  for (const link of links) {
+    const type = link.type || {};
+    if (link.outwardIssue?.key) {
+      const r = relSide(type.outward);
+      if (r === 'blocker') add(src, link.outwardIssue.key);
+      else if (r === 'blocked') add(link.outwardIssue.key, src);
+    }
+    if (link.inwardIssue?.key) {
+      const r = relSide(type.inward);
+      if (r === 'blocker') add(src, link.inwardIssue.key);
+      else if (r === 'blocked') add(link.inwardIssue.key, src);
+    }
+  }
+  // إزالة التكرار
+  const seen = new Set();
+  return edges.filter((e) => {
+    const k = `${e.blocker_key}>${e.blocked_key}`;
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+}

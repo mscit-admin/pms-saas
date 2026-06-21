@@ -137,7 +137,7 @@ const DICT = {
     depBottlenecks: 'اختناقات الاعتمادية (تذاكر حاجبة)', depHint: 'تذاكر مفتوحة تحجب تذاكر أخرى — معالجتها تفكّ عدّة تذاكر دفعةً واحدة.',
     blocksCount: (n) => `يحجب ${n} ${n === 1 ? 'تذكرة' : 'تذاكر'}`, blockedList: 'المحجوبة', noDeps: 'لا اختناقات اعتمادية',
     depEmptyHint: 'لإظهار الاختناقات: اربط التذاكر في جيرا بعلاقة «Blocks / is blocked by» (تذكرة تحجب أخرى)، ثم اضغط «مزامنة جيرا».',
-    depLog: 'سجلّ الاعتماديات المُلغاة', depLogHint: 'كل اعتمادية أُلغيت (تلقائياً أو يدوياً) — مع المنفّذ والتاريخ والسبب، للمراجعة.', dlBlocker: 'كانت تحجب', dlBlocked: 'التذكرة المتوقّفة', dlClearStatus: 'الحالة عند الإلغاء', dlWhen: 'تاريخ الإلغاء', dlRemoved: 'حُذف الرابط', dlKept: 'باقٍ', noDepLog: 'لا سجلّات بعد', dlActor: 'من ألغى', dlReason: 'السبب', dlSource: 'المصدر', srcAuto: 'تلقائي', srcManual: 'يدوي',
+    depLog: 'سجلّ الاعتماديات المُلغاة', depLogHint: 'كل اعتمادية أُلغيت (تلقائياً أو يدوياً) — مع المنفّذ والتاريخ والسبب، للمراجعة.', dlBlocker: 'كانت تحجب', dlBlocked: 'التذكرة المتوقّفة', dlClearStatus: 'الحالة عند الإلغاء', dlWhen: 'تاريخ الإلغاء', dlRemoved: 'حُذف الرابط', dlKept: 'باقٍ', noDepLog: 'لا سجلّات بعد', dlActor: 'من ألغى', dlReason: 'السبب', dlSource: 'المصدر', srcAuto: 'تلقائي', srcManual: 'يدوي', dlAction: 'إجراء', dlUndo: 'تراجع (إعادة الرابط)',
     wipOverTime: 'تدفّق العمل عبر الزمن', wipOther: 'أخرى', wipEmpty: 'تتراكم لقطات التدفّق يومياً مع كل مزامنة.',
     throughput: 'الإنتاجية والتنبؤ', weeklyDone: 'منجزة أسبوعياً', avgWeekly: 'متوسط أسبوعي',
     weeksUnit: 'أسبوع', byDate: 'بحلول', atPace: 'بالوتيرة الحالية',
@@ -273,7 +273,7 @@ const DICT = {
     depBottlenecks: 'Dependency bottlenecks (blocking tickets)', depHint: 'Open tickets blocking others — resolving one unblocks several at once.',
     blocksCount: (n) => `blocks ${n}`, blockedList: 'Blocked', noDeps: 'No dependency bottlenecks',
     depEmptyHint: 'To populate this: link tickets in Jira with "Blocks / is blocked by" (one ticket blocks another), then press "Sync Jira".',
-    depLog: 'Cancelled-dependency log', depLogHint: 'Every dependency cleared (auto or manual) — with who, when and why, for review.', dlBlocker: 'Was blocking', dlBlocked: 'Blocked ticket', dlClearStatus: 'Status on clear', dlWhen: 'Cleared at', dlRemoved: 'Link removed', dlKept: 'Kept', noDepLog: 'No records yet', dlActor: 'By', dlReason: 'Reason', dlSource: 'Source', srcAuto: 'Auto', srcManual: 'Manual',
+    depLog: 'Cancelled-dependency log', depLogHint: 'Every dependency cleared (auto or manual) — with who, when and why, for review.', dlBlocker: 'Was blocking', dlBlocked: 'Blocked ticket', dlClearStatus: 'Status on clear', dlWhen: 'Cleared at', dlRemoved: 'Link removed', dlKept: 'Kept', noDepLog: 'No records yet', dlActor: 'By', dlReason: 'Reason', dlSource: 'Source', srcAuto: 'Auto', srcManual: 'Manual', dlAction: 'Action', dlUndo: 'Undo (restore link)',
     wipOverTime: 'WIP over time', wipOther: 'Other', wipEmpty: 'Flow snapshots accumulate daily with each sync.',
     throughput: 'Throughput & forecast', weeklyDone: 'Resolved per week', avgWeekly: 'Weekly average',
     weeksUnit: 'weeks', byDate: 'by', atPace: 'At current pace',
@@ -2586,15 +2586,32 @@ function DepRow({ d, ageColor }) {
 
 // سجلّ الاعتماديات المُلغاة (للمراجعة) — صلاحية مخصّصة.
 function DependencyLog() {
-  const { t, fmtDateTime } = useUI();
+  const { t, fmtDateTime, perms } = useUI();
   const isMobile = useIsMobile();
+  const canAct = (perms || []).includes('act_tickets');
   const [items, setItems] = useState(null);
   const [err, setErr] = useState('');
-  useEffect(() => { fetchJson('/api/analytics/dependency-log').then((d) => setItems(d.items)).catch((e) => setErr(e.message)); }, []);
-  if (err) return <Screen title={t.depLog} hint={t.depLogHint}><ErrorBox message={err} /></Screen>;
+  const [busy, setBusy] = useState(0);
+  const load = () => fetchJson('/api/analytics/dependency-log').then((d) => setItems(d.items)).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, []);
+  const undo = async (id) => {
+    setBusy(id); setErr('');
+    try {
+      const res = await fetch('/api/analytics/dependency-log/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error || 'error');
+      await load();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(0); }
+  };
+  const undoBtn = (r) => (r.removed && canAct
+    ? <button disabled={busy === r.id} onClick={() => undo(r.id)} style={{ ...ghostBtn, color: C.green, borderColor: C.green }}>{busy === r.id ? '…' : t.dlUndo}</button>
+    : null);
+  if (err && !items) return <Screen title={t.depLog} hint={t.depLogHint}><ErrorBox message={err} /></Screen>;
   if (!items) return <Screen title={t.depLog} hint={t.depLogHint}><Loading /></Screen>;
   return (
     <Screen title={t.depLog} hint={t.depLogHint}>
+      {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 8 }}>{err}</div>}
       {items.length === 0 ? (
         <div style={{ color: C.muted, fontSize: 13, padding: 8 }}>{t.noDepLog}</div>
       ) : isMobile ? (
@@ -2606,14 +2623,15 @@ function DependencyLog() {
             </div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{r.project} · {r.status || '—'} · {fmtDateTime(r.clearedAt)}{r.actor ? ` · ${r.actor}` : ''}</div>
             {r.reason && <div style={{ fontSize: 12, marginTop: 4 }}>{t.dlReason}: {r.reason}</div>}
+            {undoBtn(r) && <div style={{ marginTop: 8 }}>{undoBtn(r)}</div>}
           </div>
         ))
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 680 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 740 }}>
             <thead><tr>
               <Th>{t.dlBlocker}</Th><Th>{t.dlBlocked}</Th><Th align="center">{t.dlSource}</Th>
-              <Th>{t.dlActor}</Th><Th>{t.dlWhen}</Th><Th>{t.dlReason}</Th>
+              <Th>{t.dlActor}</Th><Th>{t.dlWhen}</Th><Th>{t.dlReason}</Th><Th align="center">{t.dlAction}</Th>
             </tr></thead>
             <tbody>
               {items.map((r, i) => (
@@ -2624,6 +2642,7 @@ function DependencyLog() {
                   <Td>{r.actor || '—'}</Td>
                   <Td>{fmtDateTime(r.clearedAt)}</Td>
                   <Td>{r.reason || '—'}</Td>
+                  <Td align="center">{undoBtn(r) || (r.removed ? '—' : <span style={{ color: C.muted }}>{t.dlKept}</span>)}</Td>
                 </tr>
               ))}
             </tbody>

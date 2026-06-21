@@ -1,6 +1,6 @@
 import { query } from './db.js';
 import { getSetting } from './settings.js';
-import { deleteIssueLink } from './jira.js';
+import { deleteIssueLink, createIssueLink } from './jira.js';
 
 // معالجة الاعتماديات المُلغاة: عندما تبلغ التذكرة الحاجبة فئة Done أو إحدى حالات
 // الإلغاء المحددة، نسجّل الرابط في dependency_log ثم (إن فُعّل) نحذفه من جيرا.
@@ -83,10 +83,11 @@ export async function logManualCancel({ blocker, blocked, status = null, project
 export async function listDependencyLog(limit = 100) {
   const n = Math.max(1, Math.min(500, parseInt(limit, 10) || 100));
   const rows = await query(
-    `SELECT blocker_key, blocked_key, blocker_status, project_key, removed, source, actor_name, reason, cleared_at
+    `SELECT id, blocker_key, blocked_key, blocker_status, project_key, removed, source, actor_name, reason, cleared_at
      FROM dependency_log ORDER BY cleared_at DESC, id DESC LIMIT ${n}`
   );
   return rows.map((r) => ({
+    id: r.id,
     blocker: r.blocker_key,
     blocked: r.blocked_key,
     status: r.blocker_status,
@@ -97,4 +98,15 @@ export async function listDependencyLog(limit = 100) {
     reason: r.reason || null,
     clearedAt: r.cleared_at,
   }));
+}
+
+// التراجع عن إلغاء اعتمادية: إعادة إنشاء رابط الحجب في جيرا ووسم القيد كمُعاد.
+export async function restoreDependency(id) {
+  const rows = await query('SELECT blocker_key, blocked_key, removed FROM dependency_log WHERE id = :id', { id });
+  if (!rows[0]) throw new Error('السجل غير موجود');
+  const { blocker_key, blocked_key } = rows[0];
+  // الدلالة: outwardIssue يحجب inwardIssue ⇒ blocker يحجب blocked
+  await createIssueLink({ type: 'Blocks', inwardKey: blocked_key, outwardKey: blocker_key });
+  await query('UPDATE dependency_log SET removed = 0 WHERE id = :id', { id });
+  return { blocker: blocker_key, blocked: blocked_key };
 }

@@ -430,17 +430,10 @@ export default function JiraExceptionMonitor() {
   const ADM_ICONS = { users: 'users', roles: 'shield', integration: 'link', ai: 'cpu', branding: 'image', settings: 'settings', logs: 'fileText' };
   const menu = useMemo(() => {
     const cats = [];
-    // لوحة المعلومات: المؤشّرات + الشاشات التحليلية المختارة (كلٌّ مُقيَّد بصلاحيته)
-    const dashItems = [];
-    if (can('view_dashboard')) dashItems.push({ id: 'dash_main', label: t.scrDashboard, icon: 'dashboard' });
-    if (can('view_operational')) dashItems.push({ id: 'ops_workload', label: t.workload, icon: 'activity' });
-    if (can('view_managerial')) {
-      dashItems.push({ id: 'mgmt_wip', label: t.wipOverTime, icon: 'layers' });
-      dashItems.push({ id: 'mgmt_throughput', label: t.throughput, icon: 'zap' });
-      dashItems.push({ id: 'mgmt_trend', label: t.trend, icon: 'trendingDown' });
-      dashItems.push({ id: 'mgmt_cycle', label: t.scrCycle, icon: 'refresh' });
-    }
-    if (dashItems.length) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', items: dashItems });
+    // لوحة المعلومات: شاشة واحدة تجمع كل العناصر (KPI + الأدوات)، كلٌّ حسب صلاحيته
+    if (can('view_dashboard')) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', items: [
+      { id: 'dash_main', label: t.scrDashboard, icon: 'dashboard' },
+    ] });
 
     if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: 'grid', items: [
       { id: 'ops_exceptions', label: t.exceptions, icon: 'flag' },
@@ -1363,16 +1356,19 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
   );
 }
 
-// ------------------------------------------------------------------- لوحة المعلومات (KPI)
-// كل بطاقة مؤشّر مرتبطة بصلاحية؛ تظهر فقط لمن يملكها (تُدار من شاشة الأدوار).
+// ------------------------------------------------------------------- لوحة المعلومات
+// شاشة واحدة تجمع كل العناصر؛ كل عنصر (KPI/أداة) يظهر حسب صلاحية الدور.
 function DashboardScreen({ perms = [] }) {
   const { t, fmt } = useUI();
+  const has = (k) => perms.includes(k);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [windowDays, setWindowDays] = useState(90);
 
   useEffect(() => {
-    fetchJson('/api/analytics/kpis').then(setData).catch((e) => setError(e.message));
-  }, []);
+    setData(null);
+    fetchJson(`/api/analytics/dashboard?days=${windowDays}`).then(setData).catch((e) => setError(e.message));
+  }, [windowDays]);
 
   const KPIS = [
     { perm: 'kpi_total', label: t.sTotal, color: C.blue, val: (d) => d.total },
@@ -1385,24 +1381,83 @@ function DashboardScreen({ perms = [] }) {
     { perm: 'kpi_sla_breached', label: t.sBreached, color: C.red, val: (d) => d.slaBreached },
     { perm: 'kpi_avg_cycle', label: t.sAvgCycle, color: C.purple, val: (d) => d.avgCycle },
   ];
-  const visible = KPIS.filter((k) => perms.includes(k.perm));
+  const kpiVisible = KPIS.filter((k) => has(k.perm));
+
+  // أي العناصر مرئية لهذا الدور
+  const showKpi = kpiVisible.length > 0;
+  const showWorkload = has('widget_workload');
+  const showWip = has('widget_wip');
+  const showThroughput = has('widget_throughput');
+  const showTrend = has('widget_trend');
+  const showCyclePri = has('widget_cycle_priority');
+  const showStage = has('widget_stage_time');
+  const showWindow = showWip || showThroughput || showTrend || showCyclePri || showStage;
+  const anyWidget = showKpi || showWorkload || showWindow;
+
+  if (error) return <Screen title={t.scrDashboard} hint={t.hDashboard}><ErrorBox message={error} /></Screen>;
+  if (!anyWidget) return <Screen title={t.scrDashboard} hint={t.hDashboard}><div style={{ color: C.muted, fontSize: 14, padding: 12 }}>{t.noKpi}</div></Screen>;
+  if (!data) return <Screen title={t.scrDashboard} hint={t.hDashboard}><Loading /></Screen>;
+
+  const maxLoad = Math.max(1, ...((data.workload || []).map((w) => w.openCount)));
+  const byPriority = data.cycle?.byPriority || [];
+  const stages = data.stages || [];
+  const maxCycle = Math.max(1, ...byPriority.map((p) => p.avgDays || 0));
+  const maxStage = Math.max(1, ...stages.map((s) => s.avgDays || 0));
 
   return (
-    <Screen title={t.scrDashboard} hint={t.hDashboard}>
-      {error ? (
-        <ErrorBox message={error} />
-      ) : visible.length === 0 ? (
-        <div style={{ color: C.muted, fontSize: 14, padding: 12 }}>{t.noKpi}</div>
-      ) : !data ? (
-        <Loading />
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
-          {visible.map((k) => (
-            <StatCard key={k.perm} label={k.label} value={k.val(data)} color={k.color} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {showWindow && (
+        <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, color: C.muted }}>{t.windowL}:</span>
+          {[[30, t.d30], [90, t.d90], [180, t.d180]].map(([d, label]) => (
+            <button key={d} onClick={() => setWindowDays(d)} style={windowDays === d ? { ...ghostBtn, background: C.green, color: '#fff', border: 0 } : ghostBtn}>{label}</button>
           ))}
         </div>
       )}
-    </Screen>
+
+      {showKpi && (
+        <Screen title={t.scrKpi} hint={t.hDashboard}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
+            {kpiVisible.map((k) => <StatCard key={k.perm} label={k.label} value={k.val(data.kpis)} color={k.color} />)}
+          </div>
+        </Screen>
+      )}
+
+      {showWorkload && (
+        <Screen title={t.workload} hint={t.hWorkload}>
+          {(data.workload || []).map((w) => (
+            <BarRow key={w.accountId || w.assignee} label={w.assignee} value={w.openCount} max={maxLoad}
+              color={w.overdue > 0 ? C.amber : C.green} suffix={w.overdue > 0 ? t.overdueSuffix(fmt(w.overdue)) : ''} />
+          ))}
+          {(data.workload || []).length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+        </Screen>
+      )}
+
+      {showWip && <Screen title={t.wipOverTime} hint={t.hWip}><WipChart data={data.wip} /></Screen>}
+      {showThroughput && <Screen title={t.throughput} hint={t.hThroughput}><Throughput data={data.throughput} /></Screen>}
+      {showTrend && <Screen title={t.trend} hint={t.hTrend}><TrendChart series={data.trend} /></Screen>}
+
+      {(showCyclePri || showStage) && (
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          {showCyclePri && (
+            <div style={{ flex: '1 1 340px' }}>
+              <Screen title={t.cycleByPriority} hint={t.hCycle}>
+                {byPriority.map((p) => <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix={t.dayUnit} />)}
+                {byPriority.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+              </Screen>
+            </div>
+          )}
+          {showStage && (
+            <div style={{ flex: '1 1 340px' }}>
+              <Screen title={t.stageResidence} hint={t.hCycle}>
+                {stages.slice(0, 8).map((s) => <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix={t.dayUnit} />)}
+                {stages.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>{t.noStages}</div>}
+              </Screen>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -15,6 +15,13 @@ export const PERMISSIONS = [
   { key: 'kpi_review', labelAr: 'مؤشّر: مراجعة متأخرة', labelEn: 'KPI: Long review' },
   { key: 'kpi_sla_breached', labelAr: 'مؤشّر: خرق SLA', labelEn: 'KPI: SLA breached' },
   { key: 'kpi_avg_cycle', labelAr: 'مؤشّر: متوسط زمن الدورة', labelEn: 'KPI: Avg cycle time' },
+  // عناصر لوحة المعلومات (Widgets) — كل عنصر يُظهَر/يُخفى حسب الدور
+  { key: 'widget_workload', labelAr: 'لوحة: أعباء الفريق', labelEn: 'Dashboard: Team workload' },
+  { key: 'widget_wip', labelAr: 'لوحة: العمل الجاري WIP', labelEn: 'Dashboard: WIP over time' },
+  { key: 'widget_throughput', labelAr: 'لوحة: الإنتاجية والتنبؤ', labelEn: 'Dashboard: Throughput & forecast' },
+  { key: 'widget_trend', labelAr: 'لوحة: اتجاه الاستثناءات', labelEn: 'Dashboard: Exceptions trend' },
+  { key: 'widget_cycle_priority', labelAr: 'لوحة: زمن الدورة حسب الأولوية', labelEn: 'Dashboard: Cycle time by priority' },
+  { key: 'widget_stage_time', labelAr: 'لوحة: الزمن في كل مرحلة', labelEn: 'Dashboard: Time in each stage' },
   { key: 'manage_sla', labelAr: 'ضبط SLA', labelEn: 'Manage SLA' },
   { key: 'trigger_sync', labelAr: 'تشغيل المزامنة', labelEn: 'Trigger sync' },
   { key: 'act_tickets', labelAr: 'إجراءات على التذاكر (إسناد/تعليق/نقل)', labelEn: 'Act on tickets (assign/comment/transition)' },

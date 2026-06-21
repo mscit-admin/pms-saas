@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // لوحة الإدارة: المستخدمون · الأدوار والصلاحيات · الإعدادات (المنفذ) · التحقق الثنائي.
 // تظهر فقط لمن يملك صلاحيات إدارية. ثنائية اللغة عبر prop: lang.
@@ -32,6 +32,7 @@ const T = {
     bgDim: 'خفوت صورة الخلفية', bgDimHint: 'كلما زادت النسبة، خفتت الصورة وزاد وضوح المحتوى.', refreshHint: 'حدّث الصفحة لرؤية الأثر.',
     changePwd: 'تغيير كلمة المرور', curPwd: 'كلمة المرور الحالية', newPwd: 'كلمة المرور الجديدة', confPwd: 'تأكيد كلمة المرور', pwdChanged: 'تم تغيير كلمة المرور', pwdMismatch: 'كلمتا المرور غير متطابقتين',
     profile: 'الملف الشخصي', profilePic: 'صورة الملف الشخصي', profileSaved: 'تم حفظ الملف الشخصي',
+    cropTitle: 'قص وتحجيم الصورة', cropZoom: 'تكبير', cancel: 'إلغاء', apply: 'تطبيق',
     enabled: 'مفعّل', disabled: 'غير مفعّل', enable2fa: 'تفعيل التحقق الثنائي',
     scan: 'امسح الرمز بتطبيق المصادقة ثم أدخل الرمز:', confirm: 'تأكيد', code: 'الرمز',
     twofaOn: 'التحقق الثنائي مفعّل لحسابك. لتعطيله يلزم مدير.', selectRoles: 'اختر الأدوار',
@@ -58,6 +59,7 @@ const T = {
     bgDim: 'Background dimming', bgDimHint: 'Higher = fainter image, clearer content.', refreshHint: 'Refresh the page to see the effect.',
     changePwd: 'Change password', curPwd: 'Current password', newPwd: 'New password', confPwd: 'Confirm password', pwdChanged: 'Password changed', pwdMismatch: 'Passwords do not match',
     profile: 'Profile', profilePic: 'Profile picture', profileSaved: 'Profile saved',
+    cropTitle: 'Crop & resize', cropZoom: 'Zoom', cancel: 'Cancel', apply: 'Apply',
     enabled: 'Enabled', disabled: 'Disabled', enable2fa: 'Enable two-factor',
     scan: 'Scan the QR in your authenticator app, then enter the code:', confirm: 'Confirm', code: 'Code',
     twofaOn: 'Two-factor is enabled. Only an admin can disable it.', selectRoles: 'Select roles',
@@ -715,6 +717,99 @@ function LogsSection({ t }) {
   );
 }
 
+// ----------------------------------------------------------- Avatar crop & resize
+// قاطع صور خفيف بالـ canvas (بلا مكتبات): سحب للتحريك + شريط تكبير + إخراج مربّع.
+function AvatarCropper({ t, file, onCancel, onSave }) {
+  const D = 260;   // حجم مربّع المعاينة
+  const OUT = 256; // دقّة الإخراج
+  const canvasRef = useRef(null);
+  const baseRef = useRef(1);
+  const dragRef = useRef(null);
+  const [img, setImg] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const [off, setOff] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      const base = D / Math.min(im.width, im.height);
+      baseRef.current = base;
+      setImg(im);
+      setZoom(1);
+      setOff({ x: (D - im.width * base) / 2, y: (D - im.height * base) / 2 });
+    };
+    im.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const scale = baseRef.current * zoom;
+  const clamp = (o, sc) => {
+    if (!img) return o;
+    const w = img.width * sc; const h = img.height * sc;
+    return { x: Math.min(0, Math.max(D - w, o.x)), y: Math.min(0, Math.max(D - h, o.y)) };
+  };
+
+  useEffect(() => {
+    if (!img || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.clearRect(0, 0, D, D);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, D, D);
+    ctx.drawImage(img, off.x, off.y, img.width * scale, img.height * scale);
+  }, [img, scale, off]);
+
+  // أعد ضبط الإزاحة عند تغيّر التكبير حتى تبقى الصورة مغطّية للمربّع
+  useEffect(() => { setOff((o) => clamp(o, baseRef.current * zoom)); }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const point = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const tp = e.touches ? e.touches[0] : e;
+    return { x: (tp.clientX - rect.left) * (D / rect.width), y: (tp.clientY - rect.top) * (D / rect.height) };
+  };
+  const onDown = (e) => { const p = point(e); dragRef.current = { sx: p.x, sy: p.y, ox: off.x, oy: off.y }; };
+  const onMove = (e) => {
+    if (!dragRef.current) return;
+    const p = point(e);
+    setOff(clamp({ x: dragRef.current.ox + (p.x - dragRef.current.sx), y: dragRef.current.oy + (p.y - dragRef.current.sy) }, scale));
+  };
+  const onUp = () => { dragRef.current = null; };
+
+  const apply = () => {
+    if (!img) return;
+    const out = document.createElement('canvas');
+    out.width = OUT; out.height = OUT;
+    const r = OUT / D;
+    const octx = out.getContext('2d');
+    octx.fillStyle = '#fff'; octx.fillRect(0, 0, OUT, OUT);
+    octx.drawImage(img, off.x * r, off.y * r, img.width * scale * r, img.height * scale * r);
+    out.toBlob((blob) => { if (blob) onSave(blob); }, 'image/jpeg', 0.9);
+  };
+
+  return (
+    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, width: 'min(340px, 94vw)', boxShadow: '0 18px 50px rgba(0,0,0,.3)' }}>
+        <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>{t.cropTitle}</h3>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <canvas
+            ref={canvasRef} width={D} height={D}
+            onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+            onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+            style={{ width: D, height: D, maxWidth: '100%', borderRadius: '50%', border: `1px solid ${C.border}`, cursor: 'grab', touchAction: 'none' }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '14px 0 4px' }}>
+          <span style={{ fontSize: 12, color: C.muted }}>{t.cropZoom}</span>
+          <input type="range" min="1" max="3" step="0.01" value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))} style={{ flex: 1 }} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+          <button onClick={onCancel} style={ghost}>{t.cancel}</button>
+          <button onClick={apply} style={btn(C.green)}>{t.apply}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ----------------------------------------------------------- My 2FA
 function TwoFactorSection({ t }) {
   const [me, setMe] = useState(null);
@@ -732,6 +827,7 @@ function TwoFactorSection({ t }) {
   const [profMsg, setProfMsg] = useState('');
   const [profErr, setProfErr] = useState('');
   const [avatarTs, setAvatarTs] = useState(Date.now());
+  const [cropFile, setCropFile] = useState(null);
 
   const load = useCallback(async () => {
     const d = await api('/api/auth/me');
@@ -752,7 +848,7 @@ function TwoFactorSection({ t }) {
     setProfMsg(''); setProfErr('');
     try {
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', file, 'avatar.jpg');
       const res = await fetch('/api/auth/avatar', { method: 'POST', body: fd });
       const j = await res.json();
       if (!j.ok) throw new Error(j.error || 'error');
@@ -795,6 +891,9 @@ function TwoFactorSection({ t }) {
 
   return (
     <>
+    {cropFile && (
+      <AvatarCropper t={t} file={cropFile} onCancel={() => setCropFile(null)} onSave={(blob) => { setCropFile(null); uploadAvatar(blob); }} />
+    )}
     <div style={box}>
       <h3 style={{ marginTop: 0 }}>{t.profile}</h3>
       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -810,7 +909,7 @@ function TwoFactorSection({ t }) {
           <div style={{ marginTop: 6, display: 'flex', gap: 6, justifyContent: 'center' }}>
             <label style={{ ...btn(C.green), cursor: 'pointer', fontSize: 12 }}>
               {t.upload}
-              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && uploadAvatar(e.target.files[0])} />
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) setCropFile(e.target.files[0]); e.target.value = ''; }} />
             </label>
             {me?.avatar && <button onClick={removeAvatar} style={{ ...ghost, fontSize: 12 }}>{t.remove}</button>}
           </div>

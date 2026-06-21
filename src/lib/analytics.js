@@ -279,13 +279,17 @@ export async function getThroughput({ weeks = 12 } = {}) {
 // (CFD حقيقي يحتاج لقطات يومية؛ هنا نعرض الحالة الراهنة وأين يتراكم العمل ويهرم.)
 // ---------------------------------------------------------------------
 export async function getFlow({ agingLimit = 50 } = {}) {
+  const stuckDays = ruleConfig.stagnantDays;
   const wipRows = await query(
     `SELECT t.status AS stage, t.status_category AS category,
         COUNT(*) AS count,
-        AVG(TIMESTAMPDIFF(HOUR, t.last_status_change_at, UTC_TIMESTAMP())) / 24 AS avg_age
+        AVG(TIMESTAMPDIFF(HOUR, t.last_status_change_at, UTC_TIMESTAMP())) / 24 AS avg_age,
+        MAX(TIMESTAMPDIFF(HOUR, t.last_status_change_at, UTC_TIMESTAMP())) / 24 AS max_age,
+        SUM(TIMESTAMPDIFF(DAY, t.last_status_change_at, UTC_TIMESTAMP()) > :stuckDays) AS stuck
      FROM tickets t WHERE t.status_category <> 'done'
      GROUP BY t.status, t.status_category
-     ORDER BY count DESC`
+     ORDER BY count DESC`,
+    { stuckDays }
   );
 
   const aging = await query(
@@ -296,25 +300,46 @@ export async function getFlow({ agingLimit = 50 } = {}) {
      LIMIT ${Math.max(1, Math.min(200, parseInt(agingLimit, 10) || 50))}`
   );
 
+  // اختناق كل مشروع: المرحلة الأعلى (العدد × متوسط العمر) داخل المشروع
+  const projRows = await query(
+    `SELECT t.project_key AS p, t.status AS stage, COUNT(*) AS count,
+        AVG(TIMESTAMPDIFF(HOUR, t.last_status_change_at, UTC_TIMESTAMP())) / 24 AS avg_age
+     FROM tickets t WHERE t.status_category <> 'done'
+     GROUP BY t.project_key, t.status`
+  );
+  const projMap = new Map();
+  for (const r of projRows) {
+    const score = Number(r.count) * Number(r.avg_age || 0);
+    const cur = projMap.get(r.p);
+    if (!cur || score > cur.score) {
+      projMap.set(r.p, { project: r.p, stage: r.stage, count: Number(r.count), avgAge: Number(Number(r.avg_age || 0).toFixed(1)), score });
+    }
+  }
+  const projectBottlenecks = Array.from(projMap.values()).sort((a, b) => b.score - a.score);
+
   const wip = wipRows.map((r) => ({
     stage: r.stage,
     category: r.category,
     count: Number(r.count),
     avgAge: r.avg_age != null ? Number(Number(r.avg_age).toFixed(1)) : null,
+    maxAge: r.max_age != null ? Number(Number(r.max_age).toFixed(1)) : null,
+    stuck: Number(r.stuck || 0),
   }));
 
-  // الاختناق: المرحلة التي يتراكم فيها العمل ويهرم أكثر (العدد × متوسط العمر).
+  // الاختناق العام: المرحلة التي يتراكم فيها العمل ويهرم أكثر (العدد × متوسط العمر).
   let bottleneck = null;
   for (const w of wip) {
     const score = w.count * (w.avgAge || 0);
     if (!bottleneck || score > bottleneck.score || (score === bottleneck.score && w.count > bottleneck.count)) {
-      bottleneck = { stage: w.stage, count: w.count, avgAge: w.avgAge, score };
+      bottleneck = { stage: w.stage, count: w.count, avgAge: w.avgAge, maxAge: w.maxAge, stuck: w.stuck, score };
     }
   }
 
   return {
     wip,
     bottleneck,
+    projectBottlenecks,
+    stuckDays,
     aging: aging.map((r) => ({
       key: r.issue_key,
       summary: r.summary,

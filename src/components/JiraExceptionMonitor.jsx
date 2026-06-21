@@ -112,6 +112,7 @@ const DICT = {
     flow: 'تدفّق العمل والاختناقات', wipByStage: 'العمل الجاري حسب المرحلة (العدد · متوسط العمر)', agingWip: 'أقدم العناصر العالقة',
     ageDays: 'عمر بالحالة',
     bottleneck: 'الاختناق', bottleneckTag: 'اختناق', items: 'عنصر', avgAgeLabel: 'متوسط العمر',
+    stuckLabel: 'عالق', maxAgeLabel: 'أقصى عمر', projectBottlenecks: 'اختناقات المشاريع',
     wipOverTime: 'تدفّق العمل عبر الزمن', wipOther: 'أخرى', wipEmpty: 'تتراكم لقطات التدفّق يومياً مع كل مزامنة.',
     throughput: 'الإنتاجية والتنبؤ', weeklyDone: 'منجزة أسبوعياً', avgWeekly: 'متوسط أسبوعي',
     weeksUnit: 'أسبوع', byDate: 'بحلول', atPace: 'بالوتيرة الحالية',
@@ -212,6 +213,7 @@ const DICT = {
     flow: 'Flow & bottlenecks', wipByStage: 'WIP by stage (count · avg age)', agingWip: 'Oldest stuck items',
     ageDays: 'Age in status',
     bottleneck: 'Bottleneck', bottleneckTag: 'bottleneck', items: 'items', avgAgeLabel: 'avg age',
+    stuckLabel: 'stuck', maxAgeLabel: 'max age', projectBottlenecks: 'Project bottlenecks',
     wipOverTime: 'WIP over time', wipOther: 'Other', wipEmpty: 'Flow snapshots accumulate daily with each sync.',
     throughput: 'Throughput & forecast', weeklyDone: 'Resolved per week', avgWeekly: 'Weekly average',
     weeksUnit: 'weeks', byDate: 'by', atPace: 'At current pace',
@@ -1460,7 +1462,11 @@ function Flow({ flow }) {
       {bn && (
         <div style={{ background: `${C.red}12`, border: `1px solid ${C.red}44`, borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 13 }}>
           <strong style={{ color: C.red }}>⛔ {t.bottleneck}:</strong> {bn.stage}
-          <span style={{ color: C.muted }}> — {fmt(bn.count)} {t.items}{bn.avgAge != null ? ` · ${t.avgAgeLabel} ${fmt(bn.avgAge)}${t.dayUnit}` : ''}</span>
+          <span style={{ color: C.muted }}> — {fmt(bn.count)} {t.items}
+            {bn.avgAge != null ? ` · ${t.avgAgeLabel} ${fmt(bn.avgAge)}${t.dayUnit}` : ''}
+            {bn.maxAge != null ? ` · ${t.maxAgeLabel} ${fmt(bn.maxAge)}${t.dayUnit}` : ''}
+            {bn.stuck ? ` · ${fmt(bn.stuck)} ${t.stuckLabel}` : ''}
+          </span>
         </div>
       )}
       <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>{t.wipByStage}</div>
@@ -1473,9 +1479,22 @@ function Flow({ flow }) {
           value={w.count}
           max={maxWip}
           color={bn && w.stage === bn.stage ? C.red : ageColor(w.avgAge || 0)}
-          suffix={w.avgAge != null ? ` · ${fmt(w.avgAge)}${t.dayUnit}` : ''}
+          suffix={`${w.avgAge != null ? ` · ${fmt(w.avgAge)}${t.dayUnit}` : ''}${w.stuck ? ` · ${fmt(w.stuck)} ${t.stuckLabel}` : ''}`}
         />
       ))}
+
+      {(flow.projectBottlenecks || []).length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>{t.projectBottlenecks}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {flow.projectBottlenecks.map((p) => (
+              <span key={p.project} style={{ fontSize: 12.5, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 9px' }}>
+                <strong>{p.project}</strong> → {p.stage} <span style={{ color: C.muted }}>({fmt(p.count)} · {fmt(p.avgAge)}{t.dayUnit})</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ fontSize: 13, color: C.muted, margin: '14px 0 6px' }}>{t.agingWip}</div>
       {isMobile ? (

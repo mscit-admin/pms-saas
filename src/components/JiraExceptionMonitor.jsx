@@ -1360,6 +1360,7 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
 // شاشة واحدة تجمع كل العناصر؛ كل عنصر (KPI/أداة) يظهر حسب صلاحية الدور.
 function DashboardScreen({ perms = [] }) {
   const { t, fmt } = useUI();
+  const isMobile = useIsMobile();
   const has = (k) => perms.includes(k);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -1405,9 +1406,9 @@ function DashboardScreen({ perms = [] }) {
   const maxStage = Math.max(1, ...stages.map((s) => s.avgDays || 0));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div>
       {showWindow && (
-        <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
           <span style={{ fontSize: 13, color: C.muted }}>{t.windowL}:</span>
           {[[30, t.d30], [90, t.d90], [180, t.d180]].map(([d, label]) => (
             <button key={d} onClick={() => setWindowDays(d)} style={windowDays === d ? { ...ghostBtn, background: C.green, color: '#fff', border: 0 } : ghostBtn}>{label}</button>
@@ -1415,48 +1416,44 @@ function DashboardScreen({ perms = [] }) {
         </div>
       )}
 
-      {showKpi && (
-        <Screen title={t.scrKpi} hint={t.hDashboard}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
-            {kpiVisible.map((k) => <StatCard key={k.perm} label={k.label} value={k.val(data.kpis)} color={k.color} />)}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'start' }}>
+        {showKpi && (
+          <div style={{ gridColumn: isMobile ? 'auto' : '1 / -1' }}>
+            <Screen title={t.scrKpi} hint={t.hDashboard}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+                {kpiVisible.map((k) => <StatCard key={k.perm} label={k.label} value={k.val(data.kpis)} color={k.color} />)}
+              </div>
+            </Screen>
           </div>
-        </Screen>
-      )}
+        )}
 
-      {showWorkload && (
-        <Screen title={t.workload} hint={t.hWorkload}>
-          {(data.workload || []).map((w) => (
-            <BarRow key={w.accountId || w.assignee} label={w.assignee} value={w.openCount} max={maxLoad}
-              color={w.overdue > 0 ? C.amber : C.green} suffix={w.overdue > 0 ? t.overdueSuffix(fmt(w.overdue)) : ''} />
-          ))}
-          {(data.workload || []).length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
-        </Screen>
-      )}
+        {showWorkload && (
+          <Screen title={t.workload} hint={t.hWorkload}>
+            {(data.workload || []).map((w) => (
+              <BarRow key={w.accountId || w.assignee} label={w.assignee} value={w.openCount} max={maxLoad}
+                color={w.overdue > 0 ? C.amber : C.green} suffix={w.overdue > 0 ? t.overdueSuffix(fmt(w.overdue)) : ''} />
+            ))}
+            {(data.workload || []).length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+          </Screen>
+        )}
 
-      {showWip && <Screen title={t.wipOverTime} hint={t.hWip}><WipChart data={data.wip} /></Screen>}
-      {showThroughput && <Screen title={t.throughput} hint={t.hThroughput}><Throughput data={data.throughput} /></Screen>}
-      {showTrend && <Screen title={t.trend} hint={t.hTrend}><TrendChart series={data.trend} /></Screen>}
+        {showWip && <Screen title={t.wipOverTime} hint={t.hWip}><WipChart data={data.wip} /></Screen>}
+        {showThroughput && <Screen title={t.throughput} hint={t.hThroughput}><Throughput data={data.throughput} /></Screen>}
+        {showTrend && <Screen title={t.trend} hint={t.hTrend}><TrendChart series={data.trend} /></Screen>}
 
-      {(showCyclePri || showStage) && (
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          {showCyclePri && (
-            <div style={{ flex: '1 1 340px' }}>
-              <Screen title={t.cycleByPriority} hint={t.hCycle}>
-                {byPriority.map((p) => <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix={t.dayUnit} />)}
-                {byPriority.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
-              </Screen>
-            </div>
-          )}
-          {showStage && (
-            <div style={{ flex: '1 1 340px' }}>
-              <Screen title={t.stageResidence} hint={t.hCycle}>
-                {stages.slice(0, 8).map((s) => <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix={t.dayUnit} />)}
-                {stages.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>{t.noStages}</div>}
-              </Screen>
-            </div>
-          )}
-        </div>
-      )}
+        {showCyclePri && (
+          <Screen title={t.cycleByPriority} hint={t.hCycle}>
+            {byPriority.map((p) => <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix={t.dayUnit} />)}
+            {byPriority.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+          </Screen>
+        )}
+        {showStage && (
+          <Screen title={t.stageResidence} hint={t.hCycle}>
+            {stages.slice(0, 8).map((s) => <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix={t.dayUnit} />)}
+            {stages.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>{t.noStages}</div>}
+          </Screen>
+        )}
+      </div>
     </div>
   );
 }

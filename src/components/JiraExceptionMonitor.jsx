@@ -1367,9 +1367,9 @@ function DashboardScreen({ perms = [], userId }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [windowDays, setWindowDays] = useState(90);
-  const [order, setOrder] = useState([]);
+  const [cols, setCols] = useState({ left: [], right: [] });
   const [dragKey, setDragKey] = useState(null);
-  const storeKey = `dash_order_${userId || 'me'}`;
+  const storeKey = `dash_cols_${userId || 'me'}`;
 
   useEffect(() => {
     setData(null);
@@ -1408,27 +1408,45 @@ function DashboardScreen({ perms = [], userId }) {
   ].filter(Boolean);
   const visKeyStr = visibleKeys.join(',');
 
-  // ترتيب البطاقات: المحفوظ للمستخدم + أي بطاقات جديدة مرئية
+  // توزيع البطاقات على عمودين: المحفوظ للمستخدم + أي بطاقات جديدة مرئية
   useEffect(() => {
-    let saved = [];
-    try { saved = JSON.parse(localStorage.getItem(storeKey) || '[]'); } catch { saved = []; }
     const keys = visKeyStr ? visKeyStr.split(',') : [];
-    const merged = [...saved.filter((k) => keys.includes(k)), ...keys.filter((k) => !saved.includes(k))];
-    setOrder(merged);
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(storeKey) || 'null'); } catch { saved = null; }
+    let left = [];
+    let right = [];
+    if (saved && Array.isArray(saved.left) && Array.isArray(saved.right)) {
+      left = saved.left.filter((k) => keys.includes(k));
+      right = saved.right.filter((k) => keys.includes(k));
+      const placed = new Set([...left, ...right]);
+      keys.filter((k) => !placed.has(k)).forEach((k) => (left.length <= right.length ? left : right).push(k));
+    } else {
+      keys.forEach((k, i) => (i % 2 === 0 ? left : right).push(k));
+    }
+    setCols({ left, right });
   }, [visKeyStr, storeKey]);
 
   const persist = (next) => { try { localStorage.setItem(storeKey, JSON.stringify(next)); } catch { /* ignore */ } };
-  const resetLayout = () => { try { localStorage.removeItem(storeKey); } catch { /* ignore */ } setOrder(visibleKeys); };
-  const onDragEnter = (k) => {
-    if (!dragKey || dragKey === k) return;
-    setOrder((prev) => {
-      const from = prev.indexOf(dragKey); const to = prev.indexOf(k);
-      if (from < 0 || to < 0) return prev;
-      const next = [...prev]; next.splice(from, 1); next.splice(to, 0, dragKey);
-      return next;
+  const resetLayout = () => {
+    try { localStorage.removeItem(storeKey); } catch { /* ignore */ }
+    const keys = visKeyStr ? visKeyStr.split(',') : [];
+    const left = []; const right = [];
+    keys.forEach((k, i) => (i % 2 === 0 ? left : right).push(k));
+    setCols({ left, right });
+  };
+  // نقل البطاقة المسحوبة إلى عمود — قبل بطاقة محدّدة أو في نهاية العمود (الفراغ)
+  const moveCard = (src, targetCol, beforeKey) => {
+    if (!src) return;
+    setCols((prev) => {
+      const left = prev.left.filter((k) => k !== src);
+      const right = prev.right.filter((k) => k !== src);
+      const dest = targetCol === 'left' ? left : right;
+      const idx = beforeKey ? dest.indexOf(beforeKey) : -1;
+      if (idx < 0) dest.push(src); else dest.splice(idx, 0, src);
+      return { left, right };
     });
   };
-  const onDragEnd = () => { setDragKey(null); persist(order); };
+  const onDragEnd = () => { setDragKey(null); setCols((c) => { persist(c); return c; }); };
 
   if (error) return <Screen title={t.scrDashboard} hint={t.hDashboard}><ErrorBox message={error} /></Screen>;
   if (!anyWidget) return <Screen title={t.scrDashboard} hint={t.hDashboard}><div style={{ color: C.muted, fontSize: 14, padding: 12 }}>{t.noKpi}</div></Screen>;
@@ -1492,34 +1510,46 @@ function DashboardScreen({ perms = [], userId }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'start' }}>
-        {order.filter((k) => nodes[k]).map((k) => {
-          const w = nodes[k];
-          return (
-            <div
-              key={k}
-              data-card
-              onDragEnter={() => onDragEnter(k)}
-              onDragOver={(e) => e.preventDefault()}
-              style={{ position: 'relative', gridColumn: w.full && !isMobile ? '1 / -1' : 'auto', opacity: dragKey === k ? 0.4 : 1, transition: 'opacity .12s' }}
-            >
+        {['left', 'right'].map((colId) => (
+          <div
+            key={colId}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => { if (dragKey) moveCard(dragKey, colId, null); }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 80 }}
+          >
+            {cols[colId].filter((k) => nodes[k]).map((k) => (
               <div
-                className="no-print"
-                draggable
-                title={t.dragHint}
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', k);
-                  const card = e.currentTarget.parentElement;
-                  if (card) { try { e.dataTransfer.setDragImage(card, 20, 20); } catch { /* ignore */ } }
-                  setDragKey(k);
-                }}
-                onDragEnd={onDragEnd}
-                style={gripStyle}
-              >⠿</div>
-              {w.node}
-            </div>
-          );
-        })}
+                key={k}
+                onDragEnter={() => { if (dragKey && dragKey !== k) moveCard(dragKey, colId, k); }}
+                onDragOver={(e) => e.preventDefault()}
+                style={{ position: 'relative', opacity: dragKey === k ? 0.4 : 1, transition: 'opacity .12s' }}
+              >
+                <div
+                  className="no-print"
+                  draggable
+                  title={t.dragHint}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', k);
+                    const card = e.currentTarget.parentElement;
+                    if (card) { try { e.dataTransfer.setDragImage(card, 20, 20); } catch { /* ignore */ } }
+                    setDragKey(k);
+                  }}
+                  onDragEnd={onDragEnd}
+                  style={gripStyle}
+                >⠿</div>
+                {nodes[k].node}
+              </div>
+            ))}
+            {/* منطقة إفلات في الفراغ أسفل العمود — لوضع البطاقة هنا */}
+            <div
+              onDragEnter={() => { if (dragKey) moveCard(dragKey, colId, null); }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => { if (dragKey) moveCard(dragKey, colId, null); }}
+              style={{ flex: 1, minHeight: 56, borderRadius: 8, border: dragKey ? `2px dashed ${C.border}` : '2px dashed transparent', transition: 'border-color .12s' }}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );

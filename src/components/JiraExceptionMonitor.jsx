@@ -428,23 +428,27 @@ export default function JiraExceptionMonitor() {
   const ADM_ICONS = { users: 'users', roles: 'shield', integration: 'link', ai: 'cpu', branding: 'image', settings: 'settings', logs: 'fileText' };
   const menu = useMemo(() => {
     const cats = [];
-    if (can('view_dashboard')) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', items: [
-      { id: 'dash_main', label: t.scrDashboard, icon: 'dashboard' },
-    ] });
+    // لوحة المعلومات: المؤشّرات + الشاشات التحليلية المختارة (كلٌّ مُقيَّد بصلاحيته)
+    const dashItems = [];
+    if (can('view_dashboard')) dashItems.push({ id: 'dash_main', label: t.scrDashboard, icon: 'dashboard' });
+    if (can('view_operational')) dashItems.push({ id: 'ops_workload', label: t.workload, icon: 'activity' });
+    if (can('view_managerial')) {
+      dashItems.push({ id: 'mgmt_wip', label: t.wipOverTime, icon: 'layers' });
+      dashItems.push({ id: 'mgmt_throughput', label: t.throughput, icon: 'zap' });
+      dashItems.push({ id: 'mgmt_trend', label: t.trend, icon: 'trendingDown' });
+      dashItems.push({ id: 'mgmt_cycle', label: t.scrCycle, icon: 'refresh' });
+    }
+    if (dashItems.length) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', items: dashItems });
+
     if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: 'grid', items: [
       { id: 'ops_exceptions', label: t.exceptions, icon: 'flag' },
       { id: 'ops_alltickets', label: t.allTickets, icon: 'list' },
-      { id: 'ops_workload', label: t.workload, icon: 'activity' },
     ] });
     if (can('view_managerial')) cats.push({ id: 'mgmt', label: t.navMgmt, icon: 'barChart', items: [
       { id: 'mgmt_performance', label: t.performance, icon: 'award' },
       { id: 'mgmt_scorecard', label: t.scorecard, icon: 'shield' },
       { id: 'mgmt_flow', label: t.flow, icon: 'shuffle' },
-      { id: 'mgmt_wip', label: t.wipOverTime, icon: 'layers' },
-      { id: 'mgmt_throughput', label: t.throughput, icon: 'zap' },
-      { id: 'mgmt_trend', label: t.trend, icon: 'trendingDown' },
       { id: 'mgmt_sla', label: t.sla, icon: 'clock' },
-      { id: 'mgmt_cycle', label: t.scrCycle, icon: 'refresh' },
     ] });
     if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: 'settings', items:
       adminSections(perms, lang).map((s) => ({ id: `adm:${s.id}`, label: s.label, icon: ADM_ICONS[s.id] || 'settings' })) });

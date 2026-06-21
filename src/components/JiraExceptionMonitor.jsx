@@ -1509,7 +1509,7 @@ function DashboardScreen({ perms = [], userId }) {
         <button onClick={resetLayout} style={{ ...ghostBtn, marginInlineStart: 'auto' }}>{t.resetLayout}</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0,1fr) minmax(0,1fr)', gap: 16, alignItems: 'start' }}>
         {['left', 'right'].map((colId) => (
           <div
             key={colId}

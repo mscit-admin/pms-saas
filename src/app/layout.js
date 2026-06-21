@@ -8,6 +8,13 @@ const cairo = Cairo({
   display: 'swap',
 });
 
+// إعدادات منفذ العرض — أساسية للاستجابة على الجوال (وإلا يُعرض بعرض سطح المكتب مصغّراً)
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 // التخطيط الجذري — عربي RTL. الأيقونة المخصّصة تُطبَّق إن رُفعت.
 export async function generateMetadata() {
   let icons;
@@ -28,6 +35,8 @@ export async function generateMetadata() {
 const THEME_CSS = `
 :root{--c-bg:#f4f5f6;--c-card:#ffffff;--c-border:#e2e6e9;--c-text:#1f272e;--c-muted:#6b7785;color-scheme:light;}
 [data-theme="dark"]{--c-bg:#0f141b;--c-card:#171f29;--c-border:#2a3642;--c-text:#e6edf3;--c-muted:#94a3b3;color-scheme:dark;}
+*{box-sizing:border-box;}
+html,body{max-width:100%;overflow-x:hidden;}
 input,select,textarea{background:var(--c-card);color:var(--c-text);}
 @media print{
   .no-print{display:none !important;}

@@ -27,6 +27,7 @@ const T = {
     roleName: 'اسم الدور', description: 'الوصف', permissions: 'الصلاحيات', system: 'نظام',
     port: 'رقم المنفذ', portHint: 'سيُعاد تشغيل الخدمة تلقائياً ويُحدَّث nginx لتطبيق المنفذ. حدّث الصفحة بعد لحظات.', saved: 'تم الحفظ — جارٍ إعادة التشغيل', portManual: 'حُفظ المنفذ. إعادة التشغيل التلقائي غير مُفعّلة — أعد تشغيل الخدمة يدوياً.',
     appName: 'اسم التطبيق', appSubtitle: 'العنوان الفرعي', savedShort: 'تم الحفظ',
+    depClearTitle: 'حالات إلغاء الاعتمادية', depClearHint: 'عند وصول التذكرة الحاجبة لإحدى هذه الحالات تُعتبر الاعتمادية ملغاة وتختفي من شاشة «اختناقات الاعتمادية». (حالة Done تُلغيها تلقائياً دائماً.)',
     appNameEn: 'اسم التطبيق (إنجليزي)', appSubtitleEn: 'العنوان الفرعي (إنجليزي)',
     rowsPerPage: 'عدد الصفوف في الصفحة',
     bgDim: 'خفوت صورة الخلفية', bgDimHint: 'كلما زادت النسبة، خفتت الصورة وزاد وضوح المحتوى.', refreshHint: 'حدّث الصفحة لرؤية الأثر.',
@@ -54,6 +55,7 @@ const T = {
     roleName: 'Role name', description: 'Description', permissions: 'Permissions', system: 'system',
     port: 'Port number', portHint: 'The service auto-restarts and nginx is updated to apply the port. Refresh the page in a moment.', saved: 'Saved — restarting', portManual: 'Port saved. Auto-restart not enabled — restart the service manually.',
     appName: 'App name', appSubtitle: 'Subtitle', savedShort: 'Saved',
+    depClearTitle: 'Dependency-cleared statuses', depClearHint: 'When the blocking ticket reaches one of these statuses, the dependency is treated as cleared and hidden from the Dependency bottlenecks screen. (Done always clears it.)',
     appNameEn: 'App name (English)', appSubtitleEn: 'Subtitle (English)',
     rowsPerPage: 'Rows per page',
     bgDim: 'Background dimming', bgDimHint: 'Higher = fainter image, clearer content.', refreshHint: 'Refresh the page to see the effect.',
@@ -351,6 +353,10 @@ function SettingsSection({ t }) {
   const [msg, setMsg] = useState('');
   const [nameMsg, setNameMsg] = useState('');
   const [err, setErr] = useState('');
+  // حالات إلغاء الاعتمادية
+  const [depAvailable, setDepAvailable] = useState([]);
+  const [depSelected, setDepSelected] = useState([]);
+  const [depMsg, setDepMsg] = useState('');
 
   useEffect(() => {
     api('/api/settings').then((d) => {
@@ -361,7 +367,16 @@ function SettingsSection({ t }) {
       setAppSubtitleEn(d.settings.app_subtitle_en || '');
       setRowsPerPage(d.settings.page_size != null ? Number(d.settings.page_size) : 25);
     }).catch((e) => setErr(e.message));
+    api('/api/integration/dep-statuses').then((d) => { setDepAvailable(d.available || []); setDepSelected(d.selected || []); }).catch(() => {});
   }, []);
+
+  async function saveDep() {
+    setDepMsg(''); setErr('');
+    try {
+      await api('/api/integration/dep-statuses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statuses: depSelected }) });
+      setDepMsg(t.savedShort);
+    } catch (e) { setErr(e.message); }
+  }
 
   async function saveName() {
     setNameMsg(''); setErr('');
@@ -406,6 +421,24 @@ function SettingsSection({ t }) {
           {msg && <span style={{ color: C.green, fontSize: 13 }}>{msg}</span>}
         </div>
         <p style={{ color: C.muted, fontSize: 12, marginBottom: 0 }}>{t.portHint}</p>
+      </div>
+
+      <div style={box}>
+        <h3 style={{ marginTop: 0 }}>{t.depClearTitle}</h3>
+        <p style={{ color: C.muted, fontSize: 12.5, marginTop: 0 }}>{t.depClearHint}</p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+          {depAvailable.length === 0 && <span style={{ color: C.muted, fontSize: 13 }}>—</span>}
+          {depAvailable.map((s) => {
+            const on = depSelected.includes(s);
+            return (
+              <button key={s} onClick={() => setDepSelected(on ? depSelected.filter((x) => x !== s) : [...depSelected, s])} style={on ? btn(C.blue) : ghost}>{s}</button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={saveDep} style={btn(C.green)}>{t.save}</button>
+          {depMsg && <span style={{ color: C.green, fontSize: 13 }}>{depMsg}</span>}
+        </div>
       </div>
       {err && <div style={{ color: C.red, fontSize: 13 }}>{err}</div>}
     </>

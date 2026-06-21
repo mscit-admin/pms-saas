@@ -1,5 +1,6 @@
 import { query } from './db.js';
 import { ruleConfig } from './config.js';
+import { getSetting } from './settings.js';
 
 // تحليلات اللوحة الإدارية + أعباء الفريق. تعتمد على tickets و ticket_history و sla_config.
 
@@ -427,6 +428,16 @@ export async function getFlow({ agingLimit = 50 } = {}) {
 
   // اختناقات الاعتمادية: تذاكر مفتوحة (حاجبة) تحجب تذاكر مفتوحة أخرى عبر روابط جيرا.
   // كلما زاد عدد المحجوبة وطال ركود الحاجبة، كان الاختناق أخطر.
+  // تُلغى الاعتمادية (تُخفى) عندما تصل الحاجبة لفئة Done، أو لإحدى الحالات المخصّصة في الإعدادات.
+  const clearedStatuses = ((await getSetting('dep_cleared_statuses', '')) || '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  const depParams = {};
+  let clearedFilter = '';
+  if (clearedStatuses.length) {
+    const ph = clearedStatuses.map((_, i) => `:dc${i}`);
+    clearedFilter = ` AND tb.status NOT IN (${ph.join(', ')})`;
+    clearedStatuses.forEach((s, i) => { depParams[`dc${i}`] = s; });
+  }
   const depRows = await query(
     `SELECT b.blocker_key,
         tb.summary AS blocker_summary, tb.status AS blocker_status,
@@ -437,10 +448,11 @@ export async function getFlow({ agingLimit = 50 } = {}) {
      FROM ticket_blocks b
      JOIN tickets tb ON tb.issue_key = b.blocker_key
      JOIN tickets td ON td.issue_key = b.blocked_key
-     WHERE tb.status_category <> 'done' AND td.status_category <> 'done'
+     WHERE tb.status_category <> 'done' AND td.status_category <> 'done'${clearedFilter}
      GROUP BY b.blocker_key, tb.summary, tb.status, tb.project_key, tb.assignee_name, tb.last_status_change_at
      ORDER BY blocking_count DESC, blocker_days DESC
-     LIMIT 20`
+     LIMIT 20`,
+    depParams
   );
   const dependencies = depRows.map((r) => ({
     key: r.blocker_key,

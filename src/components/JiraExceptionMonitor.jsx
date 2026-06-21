@@ -301,6 +301,7 @@ export default function JiraExceptionMonitor() {
   const [me, setMe] = useState(null);
   const [menuOpen, setMenuOpen] = useState(true);   // الشريط الجانبي (سطح المكتب)
   const [drawer, setDrawer] = useState(false);       // درج القائمة (الجوال)
+  const [collapsedCats, setCollapsedCats] = useState({}); // طي/فتح تصنيفات القائمة
   const [cardSignal] = useState({ v: 0, collapsed: false });
   const { logo, appBackground, appName, appSubtitle, appNameEn, appSubtitleEn, appBgDim, appBgShow, pageSize } = useBranding();
   const isMobile = useIsMobile();
@@ -368,29 +369,30 @@ export default function JiraExceptionMonitor() {
   const hasAdmin = can('manage_users') || can('manage_roles') || can('manage_integration')
     || can('manage_branding') || can('manage_settings') || can('view_audit');
 
-  // نموذج القائمة الجانبية: تصنيفات ← شاشات (ERPNext)
+  // نموذج القائمة الجانبية: تصنيفات ← شاشات (ERPNext) مع أيقونات
+  const ADM_ICONS = { users: '👥', roles: '🛡️', integration: '🔗', ai: '🤖', branding: '🎨', settings: '⚙️', logs: '📜' };
   const menu = useMemo(() => {
     const cats = [];
-    if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: '▦', items: [
-      { id: 'ops_overview', label: t.scrOverview },
-      { id: 'ops_exceptions', label: t.exceptions },
-      { id: 'ops_workload', label: t.workload },
+    if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: '🗂️', items: [
+      { id: 'ops_overview', label: t.scrOverview, icon: '🏠' },
+      { id: 'ops_exceptions', label: t.exceptions, icon: '🚩' },
+      { id: 'ops_workload', label: t.workload, icon: '⚖️' },
     ] });
-    if (can('view_managerial')) cats.push({ id: 'mgmt', label: t.navMgmt, icon: '▤', items: [
-      { id: 'mgmt_kpi', label: t.scrKpi },
-      { id: 'mgmt_performance', label: t.performance },
-      { id: 'mgmt_scorecard', label: t.scorecard },
-      { id: 'mgmt_flow', label: t.flow },
-      { id: 'mgmt_wip', label: t.wipOverTime },
-      { id: 'mgmt_throughput', label: t.throughput },
-      { id: 'mgmt_trend', label: t.trend },
-      { id: 'mgmt_sla', label: t.sla },
-      { id: 'mgmt_cycle', label: t.scrCycle },
+    if (can('view_managerial')) cats.push({ id: 'mgmt', label: t.navMgmt, icon: '📊', items: [
+      { id: 'mgmt_kpi', label: t.scrKpi, icon: '📈' },
+      { id: 'mgmt_performance', label: t.performance, icon: '🏅' },
+      { id: 'mgmt_scorecard', label: t.scorecard, icon: '🚦' },
+      { id: 'mgmt_flow', label: t.flow, icon: '🔀' },
+      { id: 'mgmt_wip', label: t.wipOverTime, icon: '📐' },
+      { id: 'mgmt_throughput', label: t.throughput, icon: '⚡' },
+      { id: 'mgmt_trend', label: t.trend, icon: '📉' },
+      { id: 'mgmt_sla', label: t.sla, icon: '⏰' },
+      { id: 'mgmt_cycle', label: t.scrCycle, icon: '🔄' },
     ] });
-    if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: '⚙', items:
-      adminSections(perms, lang).map((s) => ({ id: `adm:${s.id}`, label: s.label })) });
-    cats.push({ id: 'account', label: t.navAccount, icon: '◍', items: [
-      { id: 'acc:2fa', label: t.scrSecurity },
+    if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: '⚙️', items:
+      adminSections(perms, lang).map((s) => ({ id: `adm:${s.id}`, label: s.label, icon: ADM_ICONS[s.id] || '•' })) });
+    cats.push({ id: 'account', label: t.navAccount, icon: '👤', items: [
+      { id: 'acc:2fa', label: t.scrSecurity, icon: '🔐' },
     ] });
     return cats;
   }, [me, lang]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -446,32 +448,47 @@ export default function JiraExceptionMonitor() {
                 : <strong style={{ fontSize: 16 }}>{appTitle}</strong>}
             </div>
             <nav style={{ padding: 8, flex: 1 }}>
-              {menu.map((cat) => (
-                <div key={cat.id} style={{ marginBottom: 6 }}>
-                  <div style={{ padding: '8px 10px 4px', fontSize: 11, fontWeight: 700, letterSpacing: '.04em', color: C.muted, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span aria-hidden>{cat.icon}</span> {cat.label}
+              {menu.map((cat) => {
+                const catCollapsed = !!collapsedCats[cat.id];
+                return (
+                  <div key={cat.id} style={{ marginBottom: 6 }}>
+                    <button
+                      onClick={() => setCollapsedCats((s) => ({ ...s, [cat.id]: !s[cat.id] }))}
+                      title={cat.label}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '8px 10px', border: 0, background: 'transparent', cursor: 'pointer',
+                        fontSize: 11.5, fontWeight: 700, letterSpacing: '.04em', color: C.muted,
+                        textTransform: 'uppercase', textAlign: 'start',
+                      }}
+                    >
+                      <span aria-hidden style={{ fontSize: 14 }}>{cat.icon}</span>
+                      <span style={{ flex: 1 }}>{cat.label}</span>
+                      <span aria-hidden style={{ fontSize: 10, transition: 'transform .15s' }}>{catCollapsed ? '▸' : '▾'}</span>
+                    </button>
+                    {!catCollapsed && cat.items.map((it) => {
+                      const active = screen === it.id;
+                      return (
+                        <button
+                          key={it.id}
+                          onClick={() => go(it.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'start',
+                            padding: '8px 12px', marginBottom: 2, border: 0, borderRadius: 6, cursor: 'pointer',
+                            fontSize: 13.5, fontWeight: active ? 700 : 500,
+                            background: active ? C.green : 'transparent',
+                            color: active ? '#fff' : C.text,
+                            borderInlineStart: active ? `3px solid ${C.green}` : '3px solid transparent',
+                          }}
+                        >
+                          <span aria-hidden style={{ fontSize: 14, width: 18, textAlign: 'center', opacity: active ? 1 : 0.85 }}>{it.icon}</span>
+                          <span style={{ flex: 1 }}>{it.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  {cat.items.map((it) => {
-                    const active = screen === it.id;
-                    return (
-                      <button
-                        key={it.id}
-                        onClick={() => go(it.id)}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'start', padding: '8px 12px',
-                          marginBottom: 2, border: 0, borderRadius: 6, cursor: 'pointer', fontSize: 13.5,
-                          fontWeight: active ? 700 : 500,
-                          background: active ? C.green : 'transparent',
-                          color: active ? '#fff' : C.text,
-                          borderInlineStart: active ? `3px solid ${C.green}` : '3px solid transparent',
-                        }}
-                      >
-                        {it.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+                );
+              })}
             </nav>
           </aside>
         )}

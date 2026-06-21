@@ -101,6 +101,11 @@ const DICT = {
     thDue: 'الاستحقاق',
     thDays: 'أيام بالحالة',
     thReasons: 'الأسباب',
+    thType: 'نوع العمل',
+    fType: 'نوع العمل',
+    allTickets: 'كل التذاكر المفتوحة',
+    hAllTickets: 'كل التذاكر غير المنجَزة (للمتابعة مع الفريق) — ليست المُستثناة فقط. صنّفها حسب المسؤول أو المشروع أو النوع، واستخدم زر ⋯ للإجراء والمتابعة.',
+    noTickets: 'لا تذاكر مفتوحة',
     noExceptions: 'لا استثناءات 🎉',
     workload: 'أعباء الفريق — أداة توازن، لا محاسبة فردية',
     overdueSuffix: (n) => ` (${n} متأخر)`,
@@ -222,6 +227,11 @@ const DICT = {
     thDue: 'Due',
     thDays: 'Days in status',
     thReasons: 'Reasons',
+    thType: 'Work type',
+    fType: 'Work type',
+    allTickets: 'All open tickets',
+    hAllTickets: 'Every not-done ticket (for team follow-up) — not just exceptions. Slice by assignee, project, or type, and use the ⋯ button to act and follow up.',
+    noTickets: 'No open tickets',
     noExceptions: 'No exceptions 🎉',
     workload: 'Team workload — a balancing tool, not individual blame',
     overdueSuffix: (n) => ` (${n} overdue)`,
@@ -320,6 +330,7 @@ const ICON_PATHS = {
   image: 'M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z M21 15l-5-5L5 21',
   fileText: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8',
   lock: 'M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z M7 11V7a5 5 0 0110 0v4',
+  list: 'M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01',
 };
 function Icon({ name, size = 16 }) {
   const d = ICON_PATHS[name];
@@ -417,6 +428,7 @@ export default function JiraExceptionMonitor() {
     if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: 'grid', items: [
       { id: 'ops_overview', label: t.scrOverview, icon: 'home' },
       { id: 'ops_exceptions', label: t.exceptions, icon: 'flag' },
+      { id: 'ops_alltickets', label: t.allTickets, icon: 'list' },
       { id: 'ops_workload', label: t.workload, icon: 'activity' },
     ] });
     if (can('view_managerial')) cats.push({ id: 'mgmt', label: t.navMgmt, icon: 'barChart', items: [
@@ -810,12 +822,12 @@ function MultiSelect({ label, value, options, onChange, labels = {} }) {
 
 // تصدير صفوف إلى CSV وتنزيلها (مع BOM لدعم العربية في Excel)
 function downloadCsv(rows, t) {
-  const headers = [t.thKey, t.thSummary, t.fProject, t.thStatus, t.thPriority, t.thAssignee, t.thDue, t.thDays, t.thReasons];
+  const headers = [t.thKey, t.thSummary, t.thType, t.fProject, t.thStatus, t.thPriority, t.thAssignee, t.thDue, t.thDays, t.thReasons];
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [headers.map(esc).join(',')];
   for (const r of rows) {
     lines.push([
-      r.key, r.summary, r.project, r.status, r.priority, r.assignee || '',
+      r.key, r.summary, r.issueType || '', r.project, r.status, r.priority, r.assignee || '',
       r.dueDate || '', r.daysInStatus, r.reasonsAr ? r.reasonsAr.join(' | ') : r.reasons.join(' | '),
     ].map(esc).join(','));
   }
@@ -1286,6 +1298,7 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
         <div style={{ marginBottom: 6 }}>{it.labels.map((l) => <Chip key={l} color="#6b7280">{l}</Chip>)}</div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px', marginBottom: 6 }}>
+        <F label={t.thType}>{it.issueType || '—'}</F>
         <F label={t.fProject}>{it.project}</F>
         <F label={t.thStatus}>{it.status}</F>
         <F label={t.thPriority}>{it.priority}</F>
@@ -1319,16 +1332,18 @@ function OperationalTab({ screen = 'overview' }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [data, setData] = useState(null);
+  const [allData, setAllData] = useState(null);
   const [workload, setWorkload] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // تصنيف النتائج (متعدد الاختيار): مسؤول · مشروع · أولوية · حالة
+  // تصنيف النتائج (متعدد الاختيار): مسؤول · مشروع · أولوية · حالة · وسم · نوع
   const [fAssignee, setFAssignee] = useState([]);
   const [fProject, setFProject] = useState([]);
   const [fPriority, setFPriority] = useState([]);
   const [fStatus, setFStatus] = useState([]);
   const [fLabels, setFLabels] = useState([]);
+  const [fType, setFType] = useState([]);
 
   // ترقيم الصفحات (حجم الصفحة من إعدادات الإدارة)
   const [page, setPage] = useState(1);
@@ -1340,11 +1355,13 @@ function OperationalTab({ screen = 'overview' }) {
       const qs = new URLSearchParams();
       if (from) qs.set('from', from);
       if (to) qs.set('to', to);
-      const [exc, wl] = await Promise.all([
+      const [exc, all, wl] = await Promise.all([
         fetchJson(`/api/exceptions?${qs.toString()}`),
+        fetchJson(`/api/tickets/open?${qs.toString()}`),
         fetchJson('/api/workload'),
       ]);
       setData(exc);
+      setAllData(all);
       setWorkload(wl.items);
     } catch (e) {
       setError(e.message);
@@ -1355,7 +1372,8 @@ function OperationalTab({ screen = 'overview' }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const items = data?.items || [];
+  const isAll = screen === 'alltickets';
+  const items = (isAll ? allData?.items : data?.items) || [];
   const uniq = (sel) => Array.from(new Set(items.map(sel).filter(Boolean))).sort();
   const opts = useMemo(() => {
     const hasUnassigned = items.some((x) => !x.assignee);
@@ -1365,6 +1383,7 @@ function OperationalTab({ screen = 'overview' }) {
       projects: uniq((x) => x.project),
       priorities: uniq((x) => x.priority),
       statuses: uniq((x) => x.status),
+      types: uniq((x) => x.issueType),
       // كل الوسوم الفريدة عبر التذاكر
       labels: Array.from(new Set(items.flatMap((x) => x.labels || []))).sort(),
     };
@@ -1378,12 +1397,13 @@ function OperationalTab({ screen = 'overview' }) {
     (fPriority.length === 0 || fPriority.includes(x.priority)) &&
     (fStatus.length === 0 || fStatus.includes(x.status)) &&
     (fLabels.length === 0 || (x.labels || []).some((l) => fLabels.includes(l))) &&
+    (fType.length === 0 || fType.includes(x.issueType)) &&
     (!hideSnoozed || !x.followup?.snoozed) &&
     (!hideAcked || !x.followup?.acknowledged)
-  ), [items, fAssignee, fProject, fPriority, fStatus, fLabels, hideSnoozed, hideAcked]);
+  ), [items, fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked]);
 
   // أعد للصفحة الأولى عند تغيّر الفلاتر أو حجم الصفحة
-  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, fLabels, hideSnoozed, hideAcked, pageSize, items.length]);
+  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked, pageSize, items.length, screen]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -1394,7 +1414,7 @@ function OperationalTab({ screen = 'overview' }) {
 
   const counts = data?.counts || {};
   const maxLoad = Math.max(1, ...(workload || []).map((w) => w.openCount));
-  const anyFilter = fAssignee.length || fProject.length || fPriority.length || fStatus.length || fLabels.length;
+  const anyFilter = fAssignee.length || fProject.length || fPriority.length || fStatus.length || fLabels.length || fType.length;
 
   return (
     <>
@@ -1407,10 +1427,10 @@ function OperationalTab({ screen = 'overview' }) {
       </div>
       )}
 
-      {screen === 'exceptions' && (
+      {(screen === 'exceptions' || isAll) && (
       <Screen
-        title={`${t.exceptions} · ${t.showing(fmt(filtered.length), fmt(items.length))}`}
-        hint={t.hExceptions}
+        title={`${isAll ? t.allTickets : t.exceptions} · ${t.showing(fmt(filtered.length), fmt(items.length))}`}
+        hint={isAll ? t.hAllTickets : t.hExceptions}
         extra={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
             <span style={{ color: C.muted }}>{t.from}</span>
@@ -1428,11 +1448,14 @@ function OperationalTab({ screen = 'overview' }) {
           <MultiSelect label={t.fProject} value={fProject} options={opts.projects} onChange={setFProject} />
           <MultiSelect label={t.fPriority} value={fPriority} options={opts.priorities} onChange={setFPriority} />
           <MultiSelect label={t.fStatus} value={fStatus} options={opts.statuses} onChange={setFStatus} />
+          {opts.types.length > 0 && (
+            <MultiSelect label={t.fType} value={fType} options={opts.types} onChange={setFType} />
+          )}
           {opts.labels.length > 0 && (
             <MultiSelect label={t.fLabel} value={fLabels} options={opts.labels} onChange={setFLabels} />
           )}
           {anyFilter ? (
-            <button onClick={() => { setFAssignee([]); setFProject([]); setFPriority([]); setFStatus([]); setFLabels([]); }} style={ghostBtn}>{t.clear}</button>
+            <button onClick={() => { setFAssignee([]); setFProject([]); setFPriority([]); setFStatus([]); setFLabels([]); setFType([]); }} style={ghostBtn}>{t.clear}</button>
           ) : null}
           {canManage && (
             <>
@@ -1451,7 +1474,7 @@ function OperationalTab({ screen = 'overview' }) {
             {pageItems.map((it) => (
               <ExceptionCard key={it.id} it={it} canManage={canManage} canOpen={canOpen} onAction={setActionTicket} />
             ))}
-            {filtered.length === 0 && <div style={{ textAlign: 'center', color: C.muted, padding: 16 }}>{t.noExceptions}</div>}
+            {filtered.length === 0 && <div style={{ textAlign: 'center', color: C.muted, padding: 16 }}>{isAll ? t.noTickets : t.noExceptions}</div>}
           </div>
         ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -1460,6 +1483,7 @@ function OperationalTab({ screen = 'overview' }) {
               <tr>
                 <Th>{t.thKey}</Th>
                 <Th>{t.thSummary}</Th>
+                <Th>{t.thType}</Th>
                 <Th>{t.fProject}</Th>
                 <Th>{t.thStatus}</Th>
                 <Th>{t.thPriority}</Th>
@@ -1481,6 +1505,7 @@ function OperationalTab({ screen = 'overview' }) {
                       <div style={{ marginTop: 4 }}>{it.labels.map((l) => <Chip key={l} color="#6b7280">{l}</Chip>)}</div>
                     )}
                   </Td>
+                  <Td>{it.issueType ? <Chip color={C.blue}>{it.issueType}</Chip> : '—'}</Td>
                   <Td>{it.project}</Td>
                   <Td>{it.status}</Td>
                   <Td>{it.priority}</Td>
@@ -1508,7 +1533,7 @@ function OperationalTab({ screen = 'overview' }) {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><Td align="center">{t.noExceptions}</Td></tr>
+                <tr><Td align="center">{isAll ? t.noTickets : t.noExceptions}</Td></tr>
               )}
             </tbody>
           </table>

@@ -37,7 +37,8 @@ function flagsSelect() {
 }
 
 // قائمة الاستثناءات التشغيلية. فلتر اختياري بنطاق تاريخ على jira_created_at.
-export async function getExceptions({ from = null, to = null } = {}) {
+// all=true يُرجع كل التذاكر المفتوحة (للمتابعة) بدل المُستثناة فقط.
+export async function getExceptions({ from = null, to = null, all = false } = {}) {
   const params = {
     stagnantDays: ruleConfig.stagnantDays,
     reviewDays: ruleConfig.reviewDays,
@@ -45,11 +46,12 @@ export async function getExceptions({ from = null, to = null } = {}) {
   let dateFilter = '';
   if (from) { dateFilter += ' AND t.jira_created_at >= :from'; params.from = `${from} 00:00:00`; }
   if (to)   { dateFilter += ' AND t.jira_created_at <= :to';   params.to = `${to} 23:59:59`; }
+  const havingClause = all ? '' : 'HAVING is_stagnant OR is_review OR is_overdue OR is_unassigned';
 
   const rows = await query(
     `SELECT
         t.id, t.issue_key, t.project_key, t.summary, t.status, t.status_category,
-        t.priority, t.assignee_name, t.assignee_account_id, t.due_date, t.labels,
+        t.issue_type, t.priority, t.assignee_name, t.assignee_account_id, t.due_date, t.labels,
         t.jira_created_at, t.last_status_change_at,
         es.acknowledged, es.snooze_until, es.owner_user_id, es.root_cause, es.note,
         u.full_name AS owner_name, u.username AS owner_username,
@@ -59,7 +61,7 @@ export async function getExceptions({ from = null, to = null } = {}) {
      LEFT JOIN exception_status es ON es.issue_key = t.issue_key
      LEFT JOIN users u ON u.id = es.owner_user_id
      WHERE t.status_category <> 'done' ${dateFilter}
-     HAVING is_stagnant OR is_review OR is_overdue OR is_unassigned
+     ${havingClause}
      ORDER BY is_overdue DESC, days_in_status DESC`,
     params
   );
@@ -79,6 +81,7 @@ export async function getExceptions({ from = null, to = null } = {}) {
       status: r.status,
       priority: r.priority,
       assignee: r.assignee_name,
+      issueType: r.issue_type || null,
       labels: r.labels ? r.labels.split(',').filter(Boolean) : [],
       dueDate: r.due_date,
       createdAt: r.jira_created_at,

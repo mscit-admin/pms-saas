@@ -43,7 +43,7 @@ const DICT = {
     navDashboard: 'لوحة المعلومات', navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي',
     scrDashboard: 'المؤشرات', hDashboard: 'أهم مؤشرات الأداء في لقطة واحدة. تظهر المؤشرات أو تُخفى حسب صلاحيات دورك.', noKpi: 'لا توجد مؤشرات متاحة لدورك.',
     dragHint: 'اسحب البطاقات لإعادة ترتيبها', resetLayout: 'إعادة الترتيب الافتراضي',
-    scrOverview: 'نظرة عامة', scrKpi: 'المؤشرات العامة', scrCycle: 'زمن الدورة', scrSecurity: 'الأمان',
+    scrOverview: 'نظرة عامة', scrKpi: 'المؤشرات العامة', scrCycle: 'زمن الدورة', scrSecurity: 'إعدادات الحساب',
     menuShow: 'إظهار القائمة', menuHide: 'إخفاء القائمة',
     searchPlaceholder: 'بحث في الشاشات والتذاكر…', recent: 'عمليات البحث الأخيرة', screensGroup: 'الشاشات', ticketsGroup: 'التذاكر', noResults: 'لا نتائج', clearHistory: 'مسح',
     lastSync: 'آخر مزامنة',
@@ -172,7 +172,7 @@ const DICT = {
     navDashboard: 'Dashboard', navOps: 'Operations', navMgmt: 'Analytics', navAdmin: 'Administration', navAccount: 'My Account',
     scrDashboard: 'KPIs', hDashboard: 'Key performance indicators at a glance. Tiles show or hide based on your role permissions.', noKpi: 'No KPIs available for your role.',
     dragHint: 'Drag cards to rearrange', resetLayout: 'Reset layout',
-    scrOverview: 'Overview', scrKpi: 'KPIs', scrCycle: 'Cycle time', scrSecurity: 'Security',
+    scrOverview: 'Overview', scrKpi: 'KPIs', scrCycle: 'Cycle time', scrSecurity: 'Account settings',
     menuShow: 'Show menu', menuHide: 'Hide menu',
     searchPlaceholder: 'Search screens & tickets…', recent: 'Recent searches', screensGroup: 'Screens', ticketsGroup: 'Tickets', noResults: 'No results', clearHistory: 'Clear',
     lastSync: 'Last sync',
@@ -372,7 +372,10 @@ function CommandPalette({ open, onClose, menu, onNavigate, jiraBaseUrl, canTicke
 
   const screens = useMemo(() => {
     const out = [];
-    (menu || []).forEach((cat) => (cat.items || []).forEach((it) => out.push({ type: 'screen', id: it.id, label: it.label, sub: cat.label, icon: it.icon })));
+    (menu || []).forEach((cat) => {
+      if (cat.solo) { out.push({ type: 'screen', id: cat.targetId, label: cat.label, sub: cat.label, icon: cat.icon }); return; }
+      (cat.items || []).forEach((it) => out.push({ type: 'screen', id: it.id, label: it.label, sub: cat.label, icon: it.icon }));
+    });
     return out;
   }, [menu]);
 
@@ -569,10 +572,8 @@ export default function JiraExceptionMonitor() {
   const ADM_ICONS = { users: 'users', roles: 'shield', integration: 'link', ai: 'cpu', branding: 'image', settings: 'settings', logs: 'fileText' };
   const menu = useMemo(() => {
     const cats = [];
-    // لوحة المعلومات: شاشة واحدة تجمع كل العناصر (KPI + الأدوات)، كلٌّ حسب صلاحيته
-    if (can('view_dashboard')) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', items: [
-      { id: 'dash_main', label: t.scrDashboard, icon: 'dashboard' },
-    ] });
+    // لوحة المعلومات: مدخل واحد مباشر يفتح كل المحتوى (KPI + الأدوات) — بلا عنصر فرعي
+    if (can('view_dashboard')) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', solo: true, targetId: 'dash_main' });
 
     if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: 'grid', items: [
       { id: 'ops_exceptions', label: t.exceptions, icon: 'flag' },
@@ -592,7 +593,10 @@ export default function JiraExceptionMonitor() {
 
   // أول شاشة متاحة بمجرد معرفة الصلاحيات (مع رجوع لشاشة الأمان إن لم تتوفّر شاشات)
   useEffect(() => {
-    if (me && !screen) setScreen(menu[0]?.items[0]?.id || 'acc:2fa');
+    if (me && !screen) {
+      const first = menu[0];
+      setScreen((first?.solo ? first.targetId : first?.items?.[0]?.id) || 'acc:2fa');
+    }
   }, [me, menu]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function logout() {
@@ -644,6 +648,27 @@ export default function JiraExceptionMonitor() {
             </div>
             <nav style={{ padding: 8, flex: 1 }}>
               {menu.map((cat) => {
+                // مدخل مفرد (مثل لوحة المعلومات): زر تنقّل مباشر بلا عنوان/عناصر فرعية
+                if (cat.solo) {
+                  const active = screen === cat.targetId;
+                  return (
+                    <div key={cat.id} style={{ marginBottom: 6 }}>
+                      <button
+                        onClick={() => go(cat.targetId)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'start',
+                          padding: '9px 12px', marginBottom: 2, border: 0, borderRadius: 6, cursor: 'pointer',
+                          fontSize: 13.5, fontWeight: active ? 700 : 600,
+                          background: active ? C.green : 'transparent', color: active ? '#fff' : C.text,
+                          borderInlineStart: active ? `3px solid ${C.green}` : '3px solid transparent',
+                        }}
+                      >
+                        <span style={{ width: 18, display: 'inline-flex', justifyContent: 'center' }}><Icon name={cat.icon} size={16} /></span>
+                        <span style={{ flex: 1 }}>{cat.label}</span>
+                      </button>
+                    </div>
+                  );
+                }
                 const catCollapsed = !!collapsedCats[cat.id];
                 return (
                   <div key={cat.id} style={{ marginBottom: 6 }}>
@@ -755,7 +780,7 @@ export default function JiraExceptionMonitor() {
                           onClick={() => { go('acc:2fa'); setProfileOpen(false); }}
                           style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'start', padding: '10px 14px', border: 0, background: 'transparent', cursor: 'pointer', fontSize: 13.5, color: C.text }}
                         >
-                          <Icon name="lock" size={15} /> {t.scrSecurity}
+                          <Icon name="settings" size={15} /> {t.scrSecurity}
                         </button>
                         <button
                           onClick={logout}
@@ -1603,9 +1628,9 @@ function DashboardScreen({ perms = [], userId }) {
   };
   const onDragEnd = () => { setDragKey(null); setCols((c) => { persist(c); return c; }); };
 
-  if (error) return <Screen title={t.scrDashboard} hint={t.hDashboard}><ErrorBox message={error} /></Screen>;
-  if (!anyWidget) return <Screen title={t.scrDashboard} hint={t.hDashboard}><div style={{ color: C.muted, fontSize: 14, padding: 12 }}>{t.noKpi}</div></Screen>;
-  if (!data) return <Screen title={t.scrDashboard} hint={t.hDashboard}><Loading /></Screen>;
+  if (error) return <Screen title={t.navDashboard} hint={t.hDashboard}><ErrorBox message={error} /></Screen>;
+  if (!anyWidget) return <Screen title={t.navDashboard} hint={t.hDashboard}><div style={{ color: C.muted, fontSize: 14, padding: 12 }}>{t.noKpi}</div></Screen>;
+  if (!data) return <Screen title={t.navDashboard} hint={t.hDashboard}><Loading /></Screen>;
 
   const maxLoad = Math.max(1, ...((data.workload || []).map((w) => w.openCount)));
   const byPriority = data.cycle?.byPriority || [];

@@ -79,7 +79,7 @@ const DICT = {
     commaSep: 'افصل بفواصل',
     transition: 'نقل الحالة',
     linkDep: 'اعتمادية', relBlockedBy: 'هذه التذكرة تعتمد على تذكرة أخرى', relBlocks: 'تذاكر أخرى تعتمد على هذه التذكرة', otherKeyPh: 'مفتاح التذكرة الأخرى، مثل GR2-36', linkHint: 'يُنشئ رابط اعتمادية في جيرا. بعد المزامنة يظهر في «اختناقات الاعتمادية».',
-    linkCurrent: 'الاعتماديات الحالية', linkDependsOn: 'تعتمد على', linkRequiredBy: 'يعتمد عليها', removeWord: 'إلغاء', unlinkReasonPh: 'سبب الإلغاء (يُسجَّل للمراجعة)',
+    linkCurrent: 'الاعتماديات الحالية', linkDependsOn: 'تعتمد على', linkRequiredBy: 'يعتمد عليها', removeWord: 'إلغاء', unlinkReasonPh: 'سبب الإلغاء (إلزامي)', unlinkReasonReq: 'يجب كتابة سبب الإلغاء قبل إتمامه — يُسجَّل للمراجعة.',
     send: 'إرسال',
     apply: 'تطبيق',
     unassign: 'إلغاء الإسناد',
@@ -215,7 +215,7 @@ const DICT = {
     commaSep: 'comma-separated',
     transition: 'Transition',
     linkDep: 'Dependency', relBlockedBy: 'This ticket depends on another ticket', relBlocks: 'Other tickets depend on this ticket', otherKeyPh: 'Other ticket key, e.g. GR2-36', linkHint: 'Creates a dependency link in Jira. After a sync it appears in Dependency bottlenecks.',
-    linkCurrent: 'Current dependencies', linkDependsOn: 'depends on', linkRequiredBy: 'required by', removeWord: 'Remove', unlinkReasonPh: 'Cancellation reason (logged for review)',
+    linkCurrent: 'Current dependencies', linkDependsOn: 'depends on', linkRequiredBy: 'required by', removeWord: 'Remove', unlinkReasonPh: 'Cancellation reason (required)', unlinkReasonReq: 'A reason is required before cancelling — it is logged for review.',
     send: 'Send',
     apply: 'Apply',
     unassign: 'Unassign',
@@ -1512,7 +1512,8 @@ function TicketActions({ ticket, onClose, onDone }) {
         {links.length > 0 && (
           <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
             <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 6 }}>{t.linkCurrent}</div>
-            <input value={unlinkReason} onChange={(e) => setUnlinkReason(e.target.value)} placeholder={t.unlinkReasonPh} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
+            <input value={unlinkReason} onChange={(e) => setUnlinkReason(e.target.value)} placeholder={t.unlinkReasonPh} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: 4 }} />
+            <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>{t.unlinkReasonReq}</div>
             {links.map((l) => (
               <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <span style={{ flex: 1, fontSize: 12.5 }}>
@@ -1520,7 +1521,7 @@ function TicketActions({ ticket, onClose, onDone }) {
                   <KeyLink k={l.otherKey} />
                   {l.otherStatus && <span style={{ color: C.muted }}> · {l.otherStatus}</span>}
                 </span>
-                <button disabled={busy} onClick={() => removeLink(l)} style={{ ...ghostBtn, color: C.red, borderColor: C.red }}>{t.removeWord}</button>
+                <button disabled={busy || !unlinkReason.trim()} onClick={() => removeLink(l)} style={{ ...ghostBtn, color: C.red, borderColor: C.red, opacity: unlinkReason.trim() ? 1 : 0.5 }}>{t.removeWord}</button>
               </div>
             ))}
           </div>

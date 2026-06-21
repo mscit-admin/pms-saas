@@ -20,6 +20,8 @@ export const DELETE = handler(async (req, { params }) => {
   const me = await requirePermission('act_tickets');
   const { linkId, reason, otherKey, depends } = await req.json().catch(() => ({}));
   if (!linkId) return fail('معرّف الرابط مطلوب', 400);
+  const reasonText = String(reason || '').trim();
+  if (!reasonText) return fail('سبب الإلغاء إلزامي', 400);
   const other = String(otherKey || '').trim().toUpperCase();
 
   // اتجاه الحافة: depends=true ⇒ هذه التذكرة تعتمد على الأخرى (الأخرى حاجبة)
@@ -34,12 +36,12 @@ export const DELETE = handler(async (req, { params }) => {
 
   await deleteIssueLink(String(linkId));
   if (other) {
-    await logManualCancel({ blocker, blocked, status, project, linkId: String(linkId), actorName: me.fullName || me.username, reason: reason ? String(reason).slice(0, 512) : null });
+    await logManualCancel({ blocker, blocked, status, project, linkId: String(linkId), actorName: me.fullName || me.username, reason: reasonText.slice(0, 512) });
   }
   // أزِل الحافة من جدول العمل فوراً (لا تنتظر المزامنة)
   try { await query('DELETE FROM ticket_blocks WHERE link_id = :l', { l: String(linkId) }); } catch { /* تجاهل */ }
 
-  await logAudit({ action: 'ticket_unlink', actorId: me.id, actorName: me.username, targetType: 'ticket', targetId: params.key, detail: `link:${linkId}${reason ? ` · ${String(reason).slice(0, 120)}` : ''}`, ip: clientIp(req) });
+  await logAudit({ action: 'ticket_unlink', actorId: me.id, actorName: me.username, targetType: 'ticket', targetId: params.key, detail: `link:${linkId} · ${reasonText.slice(0, 120)}`, ip: clientIp(req) });
   return ok({ removed: true });
 });
 

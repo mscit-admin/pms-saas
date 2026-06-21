@@ -134,6 +134,7 @@ const DICT = {
     stuckLabel: 'عالق', maxAgeLabel: 'أقصى عمر', projectBottlenecks: 'اختناقات المشاريع',
     depBottlenecks: 'اختناقات الاعتمادية (تذاكر حاجبة)', depHint: 'تذاكر مفتوحة تحجب تذاكر أخرى — معالجتها تفكّ عدّة تذاكر دفعةً واحدة.',
     blocksCount: (n) => `يحجب ${n} ${n === 1 ? 'تذكرة' : 'تذاكر'}`, blockedList: 'المحجوبة', noDeps: 'لا اختناقات اعتمادية',
+    depEmptyHint: 'لإظهار الاختناقات: اربط التذاكر في جيرا بعلاقة «Blocks / is blocked by» (تذكرة تحجب أخرى)، ثم اضغط «مزامنة جيرا».',
     wipOverTime: 'تدفّق العمل عبر الزمن', wipOther: 'أخرى', wipEmpty: 'تتراكم لقطات التدفّق يومياً مع كل مزامنة.',
     throughput: 'الإنتاجية والتنبؤ', weeklyDone: 'منجزة أسبوعياً', avgWeekly: 'متوسط أسبوعي',
     weeksUnit: 'أسبوع', byDate: 'بحلول', atPace: 'بالوتيرة الحالية',
@@ -266,6 +267,7 @@ const DICT = {
     stuckLabel: 'stuck', maxAgeLabel: 'max age', projectBottlenecks: 'Project bottlenecks',
     depBottlenecks: 'Dependency bottlenecks (blocking tickets)', depHint: 'Open tickets blocking others — resolving one unblocks several at once.',
     blocksCount: (n) => `blocks ${n}`, blockedList: 'Blocked', noDeps: 'No dependency bottlenecks',
+    depEmptyHint: 'To populate this: link tickets in Jira with "Blocks / is blocked by" (one ticket blocks another), then press "Sync Jira".',
     wipOverTime: 'WIP over time', wipOther: 'Other', wipEmpty: 'Flow snapshots accumulate daily with each sync.',
     throughput: 'Throughput & forecast', weeklyDone: 'Resolved per week', avgWeekly: 'Weekly average',
     weeksUnit: 'weeks', byDate: 'by', atPace: 'At current pace',
@@ -591,6 +593,7 @@ export default function JiraExceptionMonitor() {
       { id: 'mgmt_performance', label: t.performance, icon: 'award' },
       { id: 'mgmt_scorecard', label: t.scorecard, icon: 'shield' },
       { id: 'mgmt_flow', label: t.flow, icon: 'shuffle' },
+      { id: 'mgmt_deps', label: t.depBottlenecks, icon: 'link' },
       { id: 'mgmt_sla', label: t.sla, icon: 'clock' },
     ] });
     if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: 'settings', items:
@@ -2116,6 +2119,12 @@ function ManagerialTab({ screen = 'performance' }) {
       </Screen>
       )}
 
+      {screen === 'deps' && (
+      <Screen title={t.depBottlenecks} hint={t.depHint}>
+        <DepBottlenecks flow={flow} />
+      </Screen>
+      )}
+
       {screen === 'wip' && (
       <Screen title={t.wipOverTime} hint={t.hWip}>
         <WipChart data={wip} />
@@ -2515,6 +2524,23 @@ function DepRow({ d, ageColor }) {
       )}
     </div>
   );
+}
+
+// شاشة مستقلّة لاختناقات الاعتمادية (نفس بيانات flow.dependencies) مع حالة فارغة موضِّحة.
+function DepBottlenecks({ flow }) {
+  const { t } = useUI();
+  if (!flow) return <Loading />;
+  const ageColor = (d) => (d > 14 ? C.red : d > 7 ? C.amber : C.green);
+  const deps = flow.dependencies || [];
+  if (deps.length === 0) {
+    return (
+      <div style={{ color: C.muted, fontSize: 14, padding: '8px 4px', lineHeight: 1.8 }}>
+        <div style={{ fontWeight: 600 }}>{t.noDeps}</div>
+        <div style={{ fontSize: 13, marginTop: 6 }}>{t.depEmptyHint}</div>
+      </div>
+    );
+  }
+  return <div>{deps.map((d) => <DepRow key={d.key} d={d} ageColor={ageColor} />)}</div>;
 }
 
 function Flow({ flow }) {

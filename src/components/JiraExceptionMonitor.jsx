@@ -694,12 +694,19 @@ async function postJson(url, body) {
 }
 
 // منطقة نص مع إكمال الإشارات @ من مستخدمي جيرا
+function initials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
 function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) {
   const ref = useRef(null);
   const debRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [sugg, setSugg] = useState([]);
   const [match, setMatch] = useState(null);
+  const [hover, setHover] = useState(-1);
 
   function search(q) {
     clearTimeout(debRef.current);
@@ -714,7 +721,7 @@ function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) 
     const caret = e.target.selectionStart;
     const upto = val.slice(0, caret);
     const m = upto.match(/@([^\s@]{0,40})$/);
-    if (m) { setMatch({ len: m[0].length, caret }); setOpen(true); search(m[1]); }
+    if (m) { setMatch({ len: m[0].length, caret }); setOpen(true); setHover(-1); search(m[1]); }
     else { setOpen(false); }
   }
   function pick(u) {
@@ -742,11 +749,14 @@ function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) 
         style={{ width: '100%', boxSizing: 'border-box', ...inputStyle }}
       />
       {open && sugg.length > 0 && (
-        <div style={{ position: 'absolute', zIndex: 60, top: '100%', insetInlineStart: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: '0 4px 14px rgba(0,0,0,.12)', minWidth: 200, maxHeight: 200, overflowY: 'auto' }}>
-          {sugg.map((u) => (
-            <div key={u.accountId} onMouseDown={(e) => { e.preventDefault(); pick(u); }}
-              style={{ padding: '6px 10px', cursor: 'pointer', fontSize: 13, borderBottom: `1px solid ${C.border}` }}>
-              {u.name}
+        <div style={{ position: 'absolute', zIndex: 60, top: 'calc(100% + 4px)', insetInlineStart: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 240, maxWidth: 320, maxHeight: 240, overflowY: 'auto', padding: 4 }}>
+          {sugg.map((u, i) => (
+            <div key={u.accountId}
+              onMouseEnter={() => setHover(i)}
+              onMouseDown={(e) => { e.preventDefault(); pick(u); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 9px', cursor: 'pointer', borderRadius: 6, background: hover === i ? (C.bg) : 'transparent', lineHeight: 1.2 }}>
+              <span style={{ flex: '0 0 auto', width: 26, height: 26, borderRadius: '50%', background: C.blue, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initials(u.name)}</span>
+              <span dir="auto" style={{ fontSize: 13, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</span>
             </div>
           ))}
         </div>

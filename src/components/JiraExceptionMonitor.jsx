@@ -2670,13 +2670,19 @@ function DepBottlenecks({ flow }) {
   return <div>{deps.map((d) => <DepRow key={d.key} d={d} ageColor={ageColor} />)}</div>;
 }
 
+const AGING_PAGE_SIZE = 5;
+
 function Flow({ flow }) {
   const { t, fmt, fmtDate } = useUI();
   const isMobile = useIsMobile();
+  const [agingPage, setAgingPage] = useState(1);
   if (!flow) return <Loading />;
   const ageColor = (d) => (d > 14 ? C.red : d > 7 ? C.amber : C.green);
   const maxWip = Math.max(1, ...(flow.wip || []).map((w) => w.count));
-  const aging = (flow.aging || []).slice(0, 20);
+  const agingAll = flow.aging || [];
+  const agingTotalPages = Math.max(1, Math.ceil(agingAll.length / AGING_PAGE_SIZE));
+  const agingSafePage = Math.min(agingPage, agingTotalPages);
+  const aging = agingAll.slice((agingSafePage - 1) * AGING_PAGE_SIZE, agingSafePage * AGING_PAGE_SIZE);
   const bn = flow.bottleneck;
   return (
     <div>
@@ -2759,6 +2765,13 @@ function Flow({ flow }) {
           </tbody>
         </table>
       </div>
+      )}
+      {agingAll.length > AGING_PAGE_SIZE && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+          <button onClick={() => setAgingPage((p) => Math.max(1, p - 1))} disabled={agingSafePage <= 1} style={ghostBtn}>‹ {t.prev}</button>
+          <span style={{ fontSize: 13, color: C.muted }}>{t.pageOf(agingSafePage, agingTotalPages)}</span>
+          <button onClick={() => setAgingPage((p) => Math.min(agingTotalPages, p + 1))} disabled={agingSafePage >= agingTotalPages} style={ghostBtn}>{t.next} ›</button>
+        </div>
       )}
     </div>
   );

@@ -128,6 +128,16 @@ const DICT = {
     dayUnit: ' يوم',
     loading: '… جارٍ التحميل',
     loadError: 'تعذّر التحميل: ',
+    hExceptions: 'التذاكر التي تحتاج تدخّلاً: متأخرة عن الاستحقاق، راكدة (>3 أيام)، مراجعة متطاولة (>يومين)، أو بلا مسؤول. استخدم الفلاتر للتصنيف، و«تصدير CSV» للنتائج، وزر ⋯ للإجراء والمتابعة.',
+    hWorkload: 'توزيع التذاكر المفتوحة على الفريق — لموازنة الأحمال لا للمحاسبة الفردية. الشريط الكهرماني يعني وجود متأخرات لدى الشخص.',
+    hPerformance: 'درجة 0–100 لكل مسؤول/مشروع من: الالتزام بالموعد (35٪)، زمن الدورة (30٪، الأسرع أعلى)، الموثوقية (20٪، عالقون أقل)، الإنتاجية (15٪). الدرجات نسبية ضمن فريقك وتُقرأ مع عمود «الحِمل». أخضر ≥75 · كهرماني ≥50 · أحمر أقل.',
+    hScorecard: 'صحة كل مشروع: أحمر «حرِج»، كهرماني «تحذير»، أخضر «سليم» — محسوبة من نسبة تجاوز SLA وكثافة الاستثناءات. مرتّبة الأسوأ أولاً. «التسليم بالموعد» = نسبة المنجَز قبل تاريخ استحقاقه.',
+    hFlow: 'أين يتكدّس العمل: عدد التذاكر المفتوحة في كل مرحلة ومتوسط عمرها فيها. المرحلة الحمراء = الاختناق (تكدّس + هرم). «عالق» = أقدم من عتبة الركود. «اختناقات المشاريع» = أسوأ مرحلة في كل مشروع.',
+    hWip: 'تطوّر توزيع العمل الجاري على المراحل يومياً (مساحات متراكمة). ارتفاع الكتلة = تكدّس متزايد؛ اتساع نطاق مرحلة بمرور الوقت = اختناق يتكوّن. تتراكم اللقطات يومياً.',
+    hThroughput: 'كم تذكرة تُنجَز أسبوعياً (آخر 12 أسبوعاً) ومتوسطها، ثم تقدير — بالوتيرة الحالية — متى تُستنزف المفتوحة والمتأخرة ومتجاوزات SLA.',
+    hTrend: 'تغيّر أعداد الاستثناءات خلال 30 يوماً. بدّل العرض بين مساحات/أعمدة/خطوط. الاتجاه الصاعد = تفاقم. يتراكم يومياً مع كل مزامنة.',
+    hSla: 'التذاكر المفتوحة مرتّبة حسب قرب أو تجاوز موعدها وفق SLA الأولوية (عالية 7 · متوسطة 14 · منخفضة 21 يوماً). «متجاوز» أحمر، «معرّض» كهرماني.',
+    hCycle: 'متوسط الزمن من إنشاء التذكرة حتى إنجازها حسب الأولوية، وزمن البقاء في كل مرحلة — أقصر أفضل، والأطول قد يشير لاختناق.',
     exc: { overdue: 'متأخر', stagnant: 'راكد', review: 'مراجعة', unassigned: 'بدون مسؤول' },
     slaState: { breached: 'متجاوز', at_risk: 'معرّض للخطر', on_track: 'ضمن المهلة' },
   },
@@ -231,6 +241,16 @@ const DICT = {
     dayUnit: ' d',
     loading: '… Loading',
     loadError: 'Failed to load: ',
+    hExceptions: 'Tickets needing intervention: overdue, stagnant (>3d), long review (>2d), or unassigned. Use the filters to slice, Export CSV for results, and the ⋯ button to act and follow up.',
+    hWorkload: 'Open tickets distributed across the team — a load-balancing tool, not individual blame. An amber bar means that person has overdue items.',
+    hPerformance: 'A 0–100 score per assignee/project from: on-time delivery (35%), cycle time (30%, faster is higher), reliability (20%, fewer stuck), throughput (15%). Scores are relative within your team and read alongside the “Load” column. Green ≥75 · amber ≥50 · red below.',
+    hScorecard: 'Each project’s health: red “critical”, amber “warning”, green “healthy” — from SLA-breach ratio and exception density. Sorted worst-first. “On-time” = share of work resolved before its due date.',
+    hFlow: 'Where work piles up: open ticket count per stage and its average age there. The red stage = the bottleneck (accumulation + ageing). “Stuck” = older than the stagnation threshold. “Project bottlenecks” = the worst stage per project.',
+    hWip: 'How open-work distribution across stages evolves daily (stacked area). Rising mass = growing accumulation; a widening band over time = a bottleneck forming. Snapshots accumulate daily.',
+    hThroughput: 'How many tickets are resolved per week (last 12) and the average, then an estimate — at the current pace — of when open, overdue, and SLA-breached backlogs will clear.',
+    hTrend: 'How exception counts change over 30 days. Toggle area/bars/lines. A rising trend = worsening. Accumulates daily with each sync.',
+    hSla: 'Open tickets ordered by how close they are to (or past) their deadline per priority SLA (High 7 · Medium 14 · Low 21 days). “Breached” red, “at risk” amber.',
+    hCycle: 'Average time from ticket creation to resolution by priority, plus time spent in each stage — shorter is better; longer may indicate a bottleneck.',
     exc: { overdue: 'Overdue', stagnant: 'Stagnant', review: 'Review', unassigned: 'Unassigned' },
     slaState: { breached: 'Breached', at_risk: 'At risk', on_track: 'On track' },
   },
@@ -433,13 +453,30 @@ function TabButton({ active, onClick, children }) {
 }
 
 // ------------------------------------------------------------------- shared UI
-function Card({ title, children, extra }) {
+function Card({ title, children, extra, hint }) {
+  const [showHint, setShowHint] = useState(false);
   return (
     <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 16 }}>
       {title && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0, fontSize: 16 }}>{title}</h2>
+          <h2 style={{ margin: 0, fontSize: 16, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {title}
+            {hint && (
+              <button
+                type="button"
+                onClick={() => setShowHint((v) => !v)}
+                title={hint}
+                aria-label="info"
+                style={{ width: 18, height: 18, lineHeight: '16px', textAlign: 'center', borderRadius: '50%', border: `1px solid ${C.border}`, background: showHint ? C.blue : 'transparent', color: showHint ? '#fff' : C.muted, fontSize: 12, cursor: 'pointer', padding: 0 }}
+              >ⓘ</button>
+            )}
+          </h2>
           {extra}
+        </div>
+      )}
+      {hint && showHint && (
+        <div style={{ background: `${C.blue}10`, border: `1px solid ${C.blue}33`, borderRadius: 6, padding: '8px 10px', marginBottom: 12, fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
+          {hint}
         </div>
       )}
       {children}
@@ -997,6 +1034,7 @@ function OperationalTab() {
 
       <Card
         title={`${t.exceptions} · ${t.showing(fmt(filtered.length), fmt(items.length))}`}
+        hint={t.hExceptions}
         extra={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
             <span style={{ color: C.muted }}>{t.from}</span>
@@ -1107,7 +1145,7 @@ function OperationalTab() {
         <TicketActions ticket={actionTicket} onClose={() => setActionTicket(null)} onDone={load} />
       )}
 
-      <Card title={t.workload}>
+      <Card title={t.workload} hint={t.hWorkload}>
         {(workload || []).map((w) => (
           <BarRow
             key={w.accountId || w.assignee}
@@ -1191,33 +1229,33 @@ function ManagerialTab() {
         <StatCard label={t.sAvgCycle} value={summary.avgCycleDays} color={C.purple} />
       </div>
 
-      <Card title={`${t.performance} · ${perf ? t.windowD(perf.windowDays) : ''}`}>
+      <Card title={`${t.performance} · ${perf ? t.windowD(perf.windowDays) : ''}`} hint={t.hPerformance}>
         <Performance data={perf} />
       </Card>
 
-      <Card title={t.scorecard}>
+      <Card title={t.scorecard} hint={t.hScorecard}>
         <Scorecard items={scorecard} />
       </Card>
 
-      <Card title={t.flow}>
+      <Card title={t.flow} hint={t.hFlow}>
         <Flow flow={flow} />
       </Card>
 
-      <Card title={t.wipOverTime}>
+      <Card title={t.wipOverTime} hint={t.hWip}>
         <WipChart data={wip} />
       </Card>
 
-      <Card title={t.throughput}>
+      <Card title={t.throughput} hint={t.hThroughput}>
         <Throughput data={throughput} />
       </Card>
 
-      <Card title={t.trend}>
+      <Card title={t.trend} hint={t.hTrend}>
         <TrendChart series={trend} />
       </Card>
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 340px' }}>
-          <Card title={t.sla}>
+          <Card title={t.sla} hint={t.hSla}>
             <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
               <StatCard label={t.slaState.breached} value={sla.summary.breached} color={C.red} />
               <StatCard label={t.slaState.at_risk} value={sla.summary.at_risk} color={C.amber} />
@@ -1274,13 +1312,13 @@ function ManagerialTab() {
         </div>
 
         <div style={{ flex: '1 1 340px' }}>
-          <Card title={t.cycleByPriority}>
+          <Card title={t.cycleByPriority} hint={t.hCycle}>
             {(cycle?.cycle?.byPriority || []).map((p) => (
               <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix={t.dayUnit} />
             ))}
           </Card>
 
-          <Card title={t.stageResidence}>
+          <Card title={t.stageResidence} hint={t.hCycle}>
             {(cycle?.stages || []).slice(0, 8).map((s) => (
               <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix={t.dayUnit} />
             ))}

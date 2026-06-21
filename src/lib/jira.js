@@ -140,6 +140,11 @@ export async function createIssueLink({ type = 'Blocks', inwardKey, outwardKey }
   });
 }
 
+// حذف رابط بين تذكرتين بمعرّفه (issueLink id).
+export async function deleteIssueLink(linkId) {
+  return jiraRequest('DELETE', `/rest/api/3/issueLink/${encodeURIComponent(linkId)}`);
+}
+
 // بحث مستخدمي جيرا (للإشارات @) — حسب نص الاستعلام.
 export async function searchUsers(q) {
   const data = await jiraRequest('GET', `/rest/api/3/user/search?query=${encodeURIComponent(q || '')}&maxResults=10`);

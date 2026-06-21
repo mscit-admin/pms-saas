@@ -32,6 +32,7 @@ export const PERMISSIONS = [
   { key: 'manage_branding', labelAr: 'إدارة الهوية (شعار/خلفية/أيقونة)', labelEn: 'Manage branding' },
   { key: 'manage_integration', labelAr: 'إدارة الربط بجيرا', labelEn: 'Manage Jira integration' },
   { key: 'view_audit', labelAr: 'عرض سجلّات الدخول والتدقيق', labelEn: 'View login & audit logs' },
+  { key: 'view_dependency_log', labelAr: 'عرض سجلّ الاعتماديات المُلغاة', labelEn: 'View cancelled-dependency log' },
   { key: 'reset_2fa', labelAr: 'إعادة ضبط التحقق الثنائي', labelEn: 'Reset 2FA' },
 ];
 

@@ -4,6 +4,7 @@ import { mapIssueToRow, extractStatusChanges, extractBlocks } from './normalize.
 import { snapshotExceptions } from './exceptions.js';
 import { snapshotWip } from './analytics.js';
 import { detectAndAlert } from './alerts.js';
+import { processClearedDependencies } from './dependencies.js';
 
 // محرّك السحب: يجلب التذاكر من جيرا، يحدّث جدول tickets (upsert)،
 // ويُدرج تغيّرات الحالة الجديدة في ticket_history (idempotent عبر change_id).
@@ -83,7 +84,7 @@ async function persistIssue(issue) {
     await conn.execute('DELETE FROM ticket_blocks WHERE source_key = :k', { k: issue.key });
     for (const e of blocks) {
       await conn.execute(
-        'INSERT IGNORE INTO ticket_blocks (source_key, blocker_key, blocked_key) VALUES (:source_key, :blocker_key, :blocked_key)',
+        'INSERT IGNORE INTO ticket_blocks (source_key, blocker_key, blocked_key, link_id) VALUES (:source_key, :blocker_key, :blocked_key, :link_id)',
         e
       );
     }
@@ -111,6 +112,13 @@ export async function runSync({ jql } = {}) {
         historyInserted += await persistIssue(issue);
         issuesProcessed += 1;
       }
+    }
+
+    // معالجة الاعتماديات المُلغاة: تسجيل + حذف روابط جيرا للحاجبات التي بلغت حالة إلغاء
+    try {
+      await processClearedDependencies();
+    } catch (e) {
+      console.error('[deps]', e.message);
     }
 
     // لقطات يومية: عدد الاستثناءات + توزيع WIP على الحالات (للاتجاه والتدفّق)

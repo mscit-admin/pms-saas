@@ -136,6 +136,7 @@ const DICT = {
     depBottlenecks: 'اختناقات الاعتمادية (تذاكر حاجبة)', depHint: 'تذاكر مفتوحة تحجب تذاكر أخرى — معالجتها تفكّ عدّة تذاكر دفعةً واحدة.',
     blocksCount: (n) => `يحجب ${n} ${n === 1 ? 'تذكرة' : 'تذاكر'}`, blockedList: 'المحجوبة', noDeps: 'لا اختناقات اعتمادية',
     depEmptyHint: 'لإظهار الاختناقات: اربط التذاكر في جيرا بعلاقة «Blocks / is blocked by» (تذكرة تحجب أخرى)، ثم اضغط «مزامنة جيرا».',
+    depLog: 'سجلّ الاعتماديات المُلغاة', depLogHint: 'الاعتماديات التي أُلغيت تلقائياً بعد بلوغ التذكرة الحاجبة حالة الإلغاء — للمراجعة.', dlBlocker: 'كانت تحجب', dlBlocked: 'التذكرة المتوقّفة', dlClearStatus: 'الحالة عند الإلغاء', dlWhen: 'تاريخ الإلغاء', dlRemoved: 'حُذف الرابط', dlKept: 'باقٍ', noDepLog: 'لا سجلّات بعد',
     wipOverTime: 'تدفّق العمل عبر الزمن', wipOther: 'أخرى', wipEmpty: 'تتراكم لقطات التدفّق يومياً مع كل مزامنة.',
     throughput: 'الإنتاجية والتنبؤ', weeklyDone: 'منجزة أسبوعياً', avgWeekly: 'متوسط أسبوعي',
     weeksUnit: 'أسبوع', byDate: 'بحلول', atPace: 'بالوتيرة الحالية',
@@ -270,6 +271,7 @@ const DICT = {
     depBottlenecks: 'Dependency bottlenecks (blocking tickets)', depHint: 'Open tickets blocking others — resolving one unblocks several at once.',
     blocksCount: (n) => `blocks ${n}`, blockedList: 'Blocked', noDeps: 'No dependency bottlenecks',
     depEmptyHint: 'To populate this: link tickets in Jira with "Blocks / is blocked by" (one ticket blocks another), then press "Sync Jira".',
+    depLog: 'Cancelled-dependency log', depLogHint: 'Dependencies that were auto-cleared after the blocking ticket reached a clearing status — for review.', dlBlocker: 'Was blocking', dlBlocked: 'Blocked ticket', dlClearStatus: 'Status on clear', dlWhen: 'Cleared at', dlRemoved: 'Link removed', dlKept: 'Kept', noDepLog: 'No records yet',
     wipOverTime: 'WIP over time', wipOther: 'Other', wipEmpty: 'Flow snapshots accumulate daily with each sync.',
     throughput: 'Throughput & forecast', weeklyDone: 'Resolved per week', avgWeekly: 'Weekly average',
     weeksUnit: 'weeks', byDate: 'by', atPace: 'At current pace',
@@ -591,13 +593,18 @@ export default function JiraExceptionMonitor() {
       { id: 'ops_exceptions', label: t.exceptions, icon: 'flag' },
       { id: 'ops_alltickets', label: t.allTickets, icon: 'list' },
     ] });
-    if (can('view_managerial')) cats.push({ id: 'mgmt', label: t.navMgmt, icon: 'barChart', items: [
-      { id: 'mgmt_performance', label: t.performance, icon: 'award' },
-      { id: 'mgmt_scorecard', label: t.scorecard, icon: 'shield' },
-      { id: 'mgmt_flow', label: t.flow, icon: 'shuffle' },
-      { id: 'mgmt_deps', label: t.depBottlenecks, icon: 'link' },
-      { id: 'mgmt_sla', label: t.sla, icon: 'clock' },
-    ] });
+    const mgmtItems = [];
+    if (can('view_managerial')) {
+      mgmtItems.push(
+        { id: 'mgmt_performance', label: t.performance, icon: 'award' },
+        { id: 'mgmt_scorecard', label: t.scorecard, icon: 'shield' },
+        { id: 'mgmt_flow', label: t.flow, icon: 'shuffle' },
+        { id: 'mgmt_deps', label: t.depBottlenecks, icon: 'link' },
+        { id: 'mgmt_sla', label: t.sla, icon: 'clock' },
+      );
+    }
+    if (can('view_dependency_log')) mgmtItems.push({ id: 'mgmt_deplog', label: t.depLog, icon: 'fileText' });
+    if (mgmtItems.length) cats.push({ id: 'mgmt', label: t.navMgmt, icon: 'barChart', items: mgmtItems });
     if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: 'settings', items:
       adminSections(perms, lang).map((s) => ({ id: `adm:${s.id}`, label: s.label, icon: ADM_ICONS[s.id] || 'settings' })) });
     // «حسابي» انتقل إلى قائمة منسدلة في ترويسة الملف الشخصي (وليس في الشريط الجانبي)
@@ -640,6 +647,7 @@ export default function JiraExceptionMonitor() {
   const renderScreen = () => {
     if (!screen) return <Loading />;
     if (screen === 'dash_main') return <DashboardScreen key={`dash-${reloadKey}`} perms={perms} userId={me?.id} />;
+    if (screen === 'mgmt_deplog') return <DependencyLog key={`dl-${reloadKey}`} />;
     if (screen.startsWith('ops_')) return <OperationalTab key={`op-${reloadKey}`} screen={screen.slice(4)} />;
     if (screen.startsWith('mgmt_')) return <ManagerialTab key={`mg-${reloadKey}`} screen={screen.slice(5)} />;
     if (screen.includes(':')) return <AdminPanel key={`ad-${reloadKey}`} lang={lang} perms={perms} section={screen.split(':')[1]} />;
@@ -2542,6 +2550,55 @@ function DepRow({ d, ageColor }) {
         </div>
       )}
     </div>
+  );
+}
+
+// سجلّ الاعتماديات المُلغاة (للمراجعة) — صلاحية مخصّصة.
+function DependencyLog() {
+  const { t, fmtDateTime } = useUI();
+  const isMobile = useIsMobile();
+  const [items, setItems] = useState(null);
+  const [err, setErr] = useState('');
+  useEffect(() => { fetchJson('/api/analytics/dependency-log').then((d) => setItems(d.items)).catch((e) => setErr(e.message)); }, []);
+  if (err) return <Screen title={t.depLog} hint={t.depLogHint}><ErrorBox message={err} /></Screen>;
+  if (!items) return <Screen title={t.depLog} hint={t.depLogHint}><Loading /></Screen>;
+  return (
+    <Screen title={t.depLog} hint={t.depLogHint}>
+      {items.length === 0 ? (
+        <div style={{ color: C.muted, fontSize: 13, padding: 8 }}>{t.noDepLog}</div>
+      ) : isMobile ? (
+        items.map((r, i) => (
+          <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><KeyLink k={r.blocker} /> → <KeyLink k={r.blocked} /></span>
+              <Chip color={r.removed ? C.green : '#8a96a3'}>{r.removed ? t.dlRemoved : t.dlKept}</Chip>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{r.project} · {r.status} · {fmtDateTime(r.clearedAt)}</div>
+          </div>
+        ))
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+            <thead><tr>
+              <Th>{t.dlBlocker}</Th><Th>{t.dlBlocked}</Th><Th>{t.fProject}</Th>
+              <Th>{t.dlClearStatus}</Th><Th>{t.dlWhen}</Th><Th align="center">{t.dlRemoved}</Th>
+            </tr></thead>
+            <tbody>
+              {items.map((r, i) => (
+                <tr key={i}>
+                  <Td><KeyLink k={r.blocker} /></Td>
+                  <Td><KeyLink k={r.blocked} /></Td>
+                  <Td>{r.project}</Td>
+                  <Td>{r.status}</Td>
+                  <Td>{fmtDateTime(r.clearedAt)}</Td>
+                  <Td align="center"><Chip color={r.removed ? C.green : '#8a96a3'}>{r.removed ? t.dlRemoved : t.dlKept}</Chip></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Screen>
   );
 }
 

@@ -98,20 +98,20 @@ export function extractBlocks(issue) {
   const src = issue.key;
   const links = issue.fields?.issuelinks || [];
   const edges = [];
-  const add = (blocker, blocked) => {
-    if (blocker && blocked && blocker !== blocked) edges.push({ source_key: src, blocker_key: blocker, blocked_key: blocked });
+  const add = (blocker, blocked, linkId) => {
+    if (blocker && blocked && blocker !== blocked) edges.push({ source_key: src, blocker_key: blocker, blocked_key: blocked, link_id: linkId != null ? String(linkId) : null });
   };
   for (const link of links) {
     const type = link.type || {};
     if (link.outwardIssue?.key) {
       const r = relSide(type.outward);
-      if (r === 'blocker') add(src, link.outwardIssue.key);
-      else if (r === 'blocked') add(link.outwardIssue.key, src);
+      if (r === 'blocker') add(src, link.outwardIssue.key, link.id);
+      else if (r === 'blocked') add(link.outwardIssue.key, src, link.id);
     }
     if (link.inwardIssue?.key) {
       const r = relSide(type.inward);
-      if (r === 'blocker') add(src, link.inwardIssue.key);
-      else if (r === 'blocked') add(link.inwardIssue.key, src);
+      if (r === 'blocker') add(src, link.inwardIssue.key, link.id);
+      else if (r === 'blocked') add(link.inwardIssue.key, src, link.id);
     }
   }
   // إزالة التكرار

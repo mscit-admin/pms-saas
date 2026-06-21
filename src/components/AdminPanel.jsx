@@ -28,6 +28,7 @@ const T = {
     port: 'رقم المنفذ', portHint: 'سيُعاد تشغيل الخدمة تلقائياً ويُحدَّث nginx لتطبيق المنفذ. حدّث الصفحة بعد لحظات.', saved: 'تم الحفظ — جارٍ إعادة التشغيل', portManual: 'حُفظ المنفذ. إعادة التشغيل التلقائي غير مُفعّلة — أعد تشغيل الخدمة يدوياً.',
     appName: 'اسم التطبيق', appSubtitle: 'العنوان الفرعي', savedShort: 'تم الحفظ',
     depClearTitle: 'حالات إلغاء الاعتمادية', depClearHint: 'عند وصول التذكرة الحاجبة لإحدى هذه الحالات تُعتبر الاعتمادية ملغاة وتختفي من شاشة «اختناقات الاعتمادية». (حالة Done تُلغيها تلقائياً دائماً.)',
+    depAutoRemove: 'عند الإلغاء: احذف رابط جيرا تلقائياً وسجّله في سجلّ المراجعة',
     appNameEn: 'اسم التطبيق (إنجليزي)', appSubtitleEn: 'العنوان الفرعي (إنجليزي)',
     rowsPerPage: 'عدد الصفوف في الصفحة',
     bgDim: 'خفوت صورة الخلفية', bgDimHint: 'كلما زادت النسبة، خفتت الصورة وزاد وضوح المحتوى.', refreshHint: 'حدّث الصفحة لرؤية الأثر.',
@@ -56,6 +57,7 @@ const T = {
     port: 'Port number', portHint: 'The service auto-restarts and nginx is updated to apply the port. Refresh the page in a moment.', saved: 'Saved — restarting', portManual: 'Port saved. Auto-restart not enabled — restart the service manually.',
     appName: 'App name', appSubtitle: 'Subtitle', savedShort: 'Saved',
     depClearTitle: 'Dependency-cleared statuses', depClearHint: 'When the blocking ticket reaches one of these statuses, the dependency is treated as cleared and hidden from the Dependency bottlenecks screen. (Done always clears it.)',
+    depAutoRemove: 'On clear: delete the Jira link automatically and record it in the review log',
     appNameEn: 'App name (English)', appSubtitleEn: 'Subtitle (English)',
     rowsPerPage: 'Rows per page',
     bgDim: 'Background dimming', bgDimHint: 'Higher = fainter image, clearer content.', refreshHint: 'Refresh the page to see the effect.',
@@ -356,6 +358,7 @@ function SettingsSection({ t }) {
   // حالات إلغاء الاعتمادية
   const [depAvailable, setDepAvailable] = useState([]);
   const [depSelected, setDepSelected] = useState([]);
+  const [depAutoRemove, setDepAutoRemove] = useState(false);
   const [depMsg, setDepMsg] = useState('');
 
   useEffect(() => {
@@ -367,13 +370,13 @@ function SettingsSection({ t }) {
       setAppSubtitleEn(d.settings.app_subtitle_en || '');
       setRowsPerPage(d.settings.page_size != null ? Number(d.settings.page_size) : 25);
     }).catch((e) => setErr(e.message));
-    api('/api/integration/dep-statuses').then((d) => { setDepAvailable(d.available || []); setDepSelected(d.selected || []); }).catch(() => {});
+    api('/api/integration/dep-statuses').then((d) => { setDepAvailable(d.available || []); setDepSelected(d.selected || []); setDepAutoRemove(!!d.autoRemove); }).catch(() => {});
   }, []);
 
   async function saveDep() {
     setDepMsg(''); setErr('');
     try {
-      await api('/api/integration/dep-statuses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statuses: depSelected }) });
+      await api('/api/integration/dep-statuses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statuses: depSelected, autoRemove: depAutoRemove }) });
       setDepMsg(t.savedShort);
     } catch (e) { setErr(e.message); }
   }
@@ -435,6 +438,10 @@ function SettingsSection({ t }) {
             );
           })}
         </div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 10 }}>
+          <input type="checkbox" checked={depAutoRemove} onChange={(e) => setDepAutoRemove(e.target.checked)} />
+          {t.depAutoRemove}
+        </label>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={saveDep} style={btn(C.green)}>{t.save}</button>
           {depMsg && <span style={{ color: C.green, fontSize: 13 }}>{depMsg}</span>}

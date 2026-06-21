@@ -39,7 +39,7 @@ const DICT = {
     tabAdmin: 'الإدارة',
     account: 'حسابي',
     logout: 'خروج',
-    refresh: 'تحديث',
+    refresh: 'تحديث', collapseAll: 'طي الكل', expandAll: 'فتح الكل',
     lastSync: 'آخر مزامنة',
     never: 'لا يوجد',
     cOverdue: 'متأخر عن الاستحقاق',
@@ -155,7 +155,7 @@ const DICT = {
     tabAdmin: 'Admin',
     account: 'Account',
     logout: 'Log out',
-    refresh: 'Refresh',
+    refresh: 'Refresh', collapseAll: 'Collapse all', expandAll: 'Expand all',
     lastSync: 'Last sync',
     never: 'never',
     cOverdue: 'Overdue',
@@ -293,6 +293,8 @@ export default function JiraExceptionMonitor() {
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
   const [me, setMe] = useState(null);
+  const [cardSignal, setCardSignal] = useState({ v: 0, collapsed: false });
+  const toggleAll = (collapsed) => setCardSignal((s) => ({ v: s.v + 1, collapsed }));
   const { logo, appBackground, appName, appSubtitle, appNameEn, appSubtitleEn, appBgDim, appBgShow, pageSize } = useBranding();
   const isMobile = useIsMobile();
 
@@ -377,7 +379,7 @@ export default function JiraExceptionMonitor() {
     k === 'operational' ? t.tabOperational : k === 'managerial' ? t.tabManagerial : hasAdmin ? t.tabAdmin : t.account;
 
   return (
-    <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms, pageSize }}>
+    <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms, pageSize, cardSignal }}>
       <div style={{ minHeight: '100vh', background: C.bg, color: C.text, ...backgroundStyle(appBgShow ? appBackground : null, appBgDim) }}>
         <header
           className="no-print"
@@ -412,6 +414,8 @@ export default function JiraExceptionMonitor() {
                 {tabLabel(k)}
               </TabButton>
             ))}
+            <button onClick={() => toggleAll(true)} title={t.collapseAll} style={ghostBtn}>▸</button>
+            <button onClick={() => toggleAll(false)} title={t.expandAll} style={ghostBtn}>▾</button>
             <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻ {t.refresh}</button>
             <button onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')} title="theme" style={ghostBtn}>
               {theme === 'dark' ? '☀︎' : '☾'}
@@ -461,13 +465,24 @@ function TabButton({ active, onClick, children }) {
 
 // ------------------------------------------------------------------- shared UI
 function Card({ title, children, extra, hint }) {
+  const ui = useUI();
   const [showHint, setShowHint] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  // مزامنة مع زر «طي/فتح الكل»
+  const sig = ui?.cardSignal;
+  useEffect(() => { if (sig) setCollapsed(sig.collapsed); }, [sig?.v]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 16 }}>
       {title && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: collapsed ? 0 : 12, gap: 8, flexWrap: 'wrap' }}>
           <h2 style={{ margin: 0, fontSize: 16, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            {title}
+            <button
+              type="button"
+              onClick={() => setCollapsed((v) => !v)}
+              aria-label="toggle"
+              style={{ width: 20, height: 20, border: `1px solid ${C.border}`, borderRadius: 4, background: 'transparent', color: C.muted, cursor: 'pointer', padding: 0, fontSize: 11 }}
+            >{collapsed ? '▸' : '▾'}</button>
+            <span onClick={() => setCollapsed((v) => !v)} style={{ cursor: 'pointer' }}>{title}</span>
             {hint && (
               <button
                 type="button"
@@ -478,15 +493,15 @@ function Card({ title, children, extra, hint }) {
               >ⓘ</button>
             )}
           </h2>
-          {extra}
+          {!collapsed && extra}
         </div>
       )}
-      {hint && showHint && (
+      {!collapsed && hint && showHint && (
         <div style={{ background: `${C.blue}10`, border: `1px solid ${C.blue}33`, borderRadius: 6, padding: '8px 10px', marginBottom: 12, fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
           {hint}
         </div>
       )}
-      {children}
+      {!collapsed && children}
     </section>
   );
 }
@@ -1561,27 +1576,46 @@ function Performance({ data }) {
       )}
 
       <div style={{ fontSize: 13, fontWeight: 600, margin: '14px 0 6px' }}>{t.perfTeams}</div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-          <thead><tr>
-            <Th>{t.fProject}</Th><Th align="center">{t.score}</Th><Th align="center">{t.colResolved}</Th>
-            <Th align="center">{t.onTime}</Th><Th align="center">{t.colCycle}</Th><Th align="center">{t.colPredict}</Th>
-          </tr></thead>
-          <tbody>
-            {(data.teams || []).map((x) => (
-              <tr key={x.project}>
-                <Td><strong>{x.project}</strong></Td>
-                <Td align="center"><ScorePill value={x.overall} /></Td>
-                <Td align="center">{fmt(x.resolved)}</Td>
-                <Td align="center">{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</Td>
-                <Td align="center">{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)} ${t.dayUnit}`}</Td>
-                <Td align="center"><ScorePill value={x.scores.predictability} /></Td>
-              </tr>
-            ))}
-            {(!data.teams || data.teams.length === 0) && <tr><Td align="center">—</Td></tr>}
-          </tbody>
-        </table>
-      </div>
+      {isMobile ? (
+        <>
+          {(data.teams || []).map((x) => (
+            <div key={x.project} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong>{x.project}</strong><ScorePill value={x.overall} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px', marginTop: 4 }}>
+                <F label={t.colResolved}>{fmt(x.resolved)}</F>
+                <F label={t.onTime}>{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</F>
+                <F label={t.colCycle}>{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)}${t.dayUnit}`}</F>
+                <F label={t.colPredict}><ScorePill value={x.scores.predictability} /></F>
+              </div>
+            </div>
+          ))}
+          {(!data.teams || data.teams.length === 0) && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+        </>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+            <thead><tr>
+              <Th>{t.fProject}</Th><Th align="center">{t.score}</Th><Th align="center">{t.colResolved}</Th>
+              <Th align="center">{t.onTime}</Th><Th align="center">{t.colCycle}</Th><Th align="center">{t.colPredict}</Th>
+            </tr></thead>
+            <tbody>
+              {(data.teams || []).map((x) => (
+                <tr key={x.project}>
+                  <Td><strong>{x.project}</strong></Td>
+                  <Td align="center"><ScorePill value={x.overall} /></Td>
+                  <Td align="center">{fmt(x.resolved)}</Td>
+                  <Td align="center">{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</Td>
+                  <Td align="center">{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)} ${t.dayUnit}`}</Td>
+                  <Td align="center"><ScorePill value={x.scores.predictability} /></Td>
+                </tr>
+              ))}
+              {(!data.teams || data.teams.length === 0) && <tr><Td align="center">—</Td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -79,7 +79,7 @@ const DICT = {
     commaSep: 'افصل بفواصل',
     transition: 'نقل الحالة',
     linkDep: 'اعتمادية', relBlockedBy: 'هذه التذكرة تعتمد على تذكرة أخرى', relBlocks: 'تذاكر أخرى تعتمد على هذه التذكرة', otherKeyPh: 'مفتاح التذكرة الأخرى، مثل GR2-36', linkHint: 'يُنشئ رابط اعتمادية في جيرا. بعد المزامنة يظهر في «اختناقات الاعتمادية».',
-    linkCurrent: 'الاعتماديات الحالية', linkDependsOn: 'تعتمد على', linkRequiredBy: 'يعتمد عليها', removeWord: 'إلغاء',
+    linkCurrent: 'الاعتماديات الحالية', linkDependsOn: 'تعتمد على', linkRequiredBy: 'يعتمد عليها', removeWord: 'إلغاء', unlinkReasonPh: 'سبب الإلغاء (يُسجَّل للمراجعة)',
     send: 'إرسال',
     apply: 'تطبيق',
     unassign: 'إلغاء الإسناد',
@@ -137,7 +137,7 @@ const DICT = {
     depBottlenecks: 'اختناقات الاعتمادية (تذاكر حاجبة)', depHint: 'تذاكر مفتوحة تحجب تذاكر أخرى — معالجتها تفكّ عدّة تذاكر دفعةً واحدة.',
     blocksCount: (n) => `يحجب ${n} ${n === 1 ? 'تذكرة' : 'تذاكر'}`, blockedList: 'المحجوبة', noDeps: 'لا اختناقات اعتمادية',
     depEmptyHint: 'لإظهار الاختناقات: اربط التذاكر في جيرا بعلاقة «Blocks / is blocked by» (تذكرة تحجب أخرى)، ثم اضغط «مزامنة جيرا».',
-    depLog: 'سجلّ الاعتماديات المُلغاة', depLogHint: 'الاعتماديات التي أُلغيت تلقائياً بعد بلوغ التذكرة الحاجبة حالة الإلغاء — للمراجعة.', dlBlocker: 'كانت تحجب', dlBlocked: 'التذكرة المتوقّفة', dlClearStatus: 'الحالة عند الإلغاء', dlWhen: 'تاريخ الإلغاء', dlRemoved: 'حُذف الرابط', dlKept: 'باقٍ', noDepLog: 'لا سجلّات بعد',
+    depLog: 'سجلّ الاعتماديات المُلغاة', depLogHint: 'كل اعتمادية أُلغيت (تلقائياً أو يدوياً) — مع المنفّذ والتاريخ والسبب، للمراجعة.', dlBlocker: 'كانت تحجب', dlBlocked: 'التذكرة المتوقّفة', dlClearStatus: 'الحالة عند الإلغاء', dlWhen: 'تاريخ الإلغاء', dlRemoved: 'حُذف الرابط', dlKept: 'باقٍ', noDepLog: 'لا سجلّات بعد', dlActor: 'من ألغى', dlReason: 'السبب', dlSource: 'المصدر', srcAuto: 'تلقائي', srcManual: 'يدوي',
     wipOverTime: 'تدفّق العمل عبر الزمن', wipOther: 'أخرى', wipEmpty: 'تتراكم لقطات التدفّق يومياً مع كل مزامنة.',
     throughput: 'الإنتاجية والتنبؤ', weeklyDone: 'منجزة أسبوعياً', avgWeekly: 'متوسط أسبوعي',
     weeksUnit: 'أسبوع', byDate: 'بحلول', atPace: 'بالوتيرة الحالية',
@@ -215,7 +215,7 @@ const DICT = {
     commaSep: 'comma-separated',
     transition: 'Transition',
     linkDep: 'Dependency', relBlockedBy: 'This ticket depends on another ticket', relBlocks: 'Other tickets depend on this ticket', otherKeyPh: 'Other ticket key, e.g. GR2-36', linkHint: 'Creates a dependency link in Jira. After a sync it appears in Dependency bottlenecks.',
-    linkCurrent: 'Current dependencies', linkDependsOn: 'depends on', linkRequiredBy: 'required by', removeWord: 'Remove',
+    linkCurrent: 'Current dependencies', linkDependsOn: 'depends on', linkRequiredBy: 'required by', removeWord: 'Remove', unlinkReasonPh: 'Cancellation reason (logged for review)',
     send: 'Send',
     apply: 'Apply',
     unassign: 'Unassign',
@@ -273,7 +273,7 @@ const DICT = {
     depBottlenecks: 'Dependency bottlenecks (blocking tickets)', depHint: 'Open tickets blocking others — resolving one unblocks several at once.',
     blocksCount: (n) => `blocks ${n}`, blockedList: 'Blocked', noDeps: 'No dependency bottlenecks',
     depEmptyHint: 'To populate this: link tickets in Jira with "Blocks / is blocked by" (one ticket blocks another), then press "Sync Jira".',
-    depLog: 'Cancelled-dependency log', depLogHint: 'Dependencies that were auto-cleared after the blocking ticket reached a clearing status — for review.', dlBlocker: 'Was blocking', dlBlocked: 'Blocked ticket', dlClearStatus: 'Status on clear', dlWhen: 'Cleared at', dlRemoved: 'Link removed', dlKept: 'Kept', noDepLog: 'No records yet',
+    depLog: 'Cancelled-dependency log', depLogHint: 'Every dependency cleared (auto or manual) — with who, when and why, for review.', dlBlocker: 'Was blocking', dlBlocked: 'Blocked ticket', dlClearStatus: 'Status on clear', dlWhen: 'Cleared at', dlRemoved: 'Link removed', dlKept: 'Kept', noDepLog: 'No records yet', dlActor: 'By', dlReason: 'Reason', dlSource: 'Source', srcAuto: 'Auto', srcManual: 'Manual',
     wipOverTime: 'WIP over time', wipOther: 'Other', wipEmpty: 'Flow snapshots accumulate daily with each sync.',
     throughput: 'Throughput & forecast', weeklyDone: 'Resolved per week', avgWeekly: 'Weekly average',
     weeksUnit: 'weeks', byDate: 'by', atPace: 'At current pace',
@@ -1332,6 +1332,7 @@ function TicketActions({ ticket, onClose, onDone }) {
   const [linkRelation, setLinkRelation] = useState('blocked_by');
   const [linkOther, setLinkOther] = useState('');
   const [links, setLinks] = useState([]);
+  const [unlinkReason, setUnlinkReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -1400,10 +1401,11 @@ function TicketActions({ ticket, onClose, onDone }) {
   }
 
   const refetchLinks = () => fetchJson(`/api/tickets/${ticket.key}/link`).then((d) => setLinks(d.links || [])).catch(() => {});
-  const removeLink = (linkId) => run(async () => {
-    const res = await fetch(`/api/tickets/${ticket.key}/link`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ linkId }) });
+  const removeLink = (l) => run(async () => {
+    const res = await fetch(`/api/tickets/${ticket.key}/link`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ linkId: l.id, otherKey: l.otherKey, depends: l.depends, reason: unlinkReason.trim() }) });
     const j = await res.json();
     if (!j.ok) throw new Error(j.error || 'error');
+    setUnlinkReason('');
     await refetchLinks();
   });
 
@@ -1510,6 +1512,7 @@ function TicketActions({ ticket, onClose, onDone }) {
         {links.length > 0 && (
           <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
             <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 6 }}>{t.linkCurrent}</div>
+            <input value={unlinkReason} onChange={(e) => setUnlinkReason(e.target.value)} placeholder={t.unlinkReasonPh} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', marginBottom: 8 }} />
             {links.map((l) => (
               <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <span style={{ flex: 1, fontSize: 12.5 }}>
@@ -1517,7 +1520,7 @@ function TicketActions({ ticket, onClose, onDone }) {
                   <KeyLink k={l.otherKey} />
                   {l.otherStatus && <span style={{ color: C.muted }}> · {l.otherStatus}</span>}
                 </span>
-                <button disabled={busy} onClick={() => removeLink(l.id)} style={{ ...ghostBtn, color: C.red, borderColor: C.red }}>{t.removeWord}</button>
+                <button disabled={busy} onClick={() => removeLink(l)} style={{ ...ghostBtn, color: C.red, borderColor: C.red }}>{t.removeWord}</button>
               </div>
             ))}
           </div>
@@ -2599,27 +2602,28 @@ function DependencyLog() {
           <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><KeyLink k={r.blocker} /> → <KeyLink k={r.blocked} /></span>
-              <Chip color={r.removed ? C.green : '#8a96a3'}>{r.removed ? t.dlRemoved : t.dlKept}</Chip>
+              <Chip color={r.source === 'manual' ? C.blue : '#8a96a3'}>{r.source === 'manual' ? t.srcManual : t.srcAuto}</Chip>
             </div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{r.project} · {r.status} · {fmtDateTime(r.clearedAt)}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{r.project} · {r.status || '—'} · {fmtDateTime(r.clearedAt)}{r.actor ? ` · ${r.actor}` : ''}</div>
+            {r.reason && <div style={{ fontSize: 12, marginTop: 4 }}>{t.dlReason}: {r.reason}</div>}
           </div>
         ))
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 680 }}>
             <thead><tr>
-              <Th>{t.dlBlocker}</Th><Th>{t.dlBlocked}</Th><Th>{t.fProject}</Th>
-              <Th>{t.dlClearStatus}</Th><Th>{t.dlWhen}</Th><Th align="center">{t.dlRemoved}</Th>
+              <Th>{t.dlBlocker}</Th><Th>{t.dlBlocked}</Th><Th align="center">{t.dlSource}</Th>
+              <Th>{t.dlActor}</Th><Th>{t.dlWhen}</Th><Th>{t.dlReason}</Th>
             </tr></thead>
             <tbody>
               {items.map((r, i) => (
                 <tr key={i}>
                   <Td><KeyLink k={r.blocker} /></Td>
                   <Td><KeyLink k={r.blocked} /></Td>
-                  <Td>{r.project}</Td>
-                  <Td>{r.status}</Td>
+                  <Td align="center"><Chip color={r.source === 'manual' ? C.blue : '#8a96a3'}>{r.source === 'manual' ? t.srcManual : t.srcAuto}</Chip></Td>
+                  <Td>{r.actor || '—'}</Td>
                   <Td>{fmtDateTime(r.clearedAt)}</Td>
-                  <Td align="center"><Chip color={r.removed ? C.green : '#8a96a3'}>{r.removed ? t.dlRemoved : t.dlKept}</Chip></Td>
+                  <Td>{r.reason || '—'}</Td>
                 </tr>
               ))}
             </tbody>

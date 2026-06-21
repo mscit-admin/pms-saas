@@ -36,10 +36,10 @@ export async function processClearedDependencies() {
   const deletedLinks = new Set();
 
   for (const r of rows) {
-    // 1) سجّل القيد للمراجعة (idempotent عبر المفتاح الفريد)
+    // 1) سجّل القيد للمراجعة (idempotent عبر المفتاح الفريد) — مصدره النظام (تلقائي)
     const res = await query(
-      `INSERT IGNORE INTO dependency_log (blocker_key, blocked_key, blocker_status, project_key, link_id, removed, cleared_at)
-       VALUES (:blocker_key, :blocked_key, :blocker_status, :project_key, :link_id, 1, :cleared_at)`,
+      `INSERT IGNORE INTO dependency_log (blocker_key, blocked_key, blocker_status, project_key, link_id, removed, source, cleared_at)
+       VALUES (:blocker_key, :blocked_key, :blocker_status, :project_key, :link_id, 1, 'auto', :cleared_at)`,
       {
         blocker_key: r.blocker_key, blocked_key: r.blocked_key,
         blocker_status: r.blocker_status, project_key: r.project_key,
@@ -68,11 +68,22 @@ export async function processClearedDependencies() {
   return { logged, removed };
 }
 
+// تسجيل إلغاء يدوي (مع المنفّذ والسبب) — يُحدّث القيد إن وُجد.
+export async function logManualCancel({ blocker, blocked, status = null, project = null, linkId = null, actorName, reason = null }) {
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  await query(
+    `INSERT INTO dependency_log (blocker_key, blocked_key, blocker_status, project_key, link_id, removed, source, actor_name, reason, cleared_at)
+     VALUES (:blocker, :blocked, :status, :project, :linkId, 1, 'manual', :actorName, :reason, :now)
+     ON DUPLICATE KEY UPDATE removed = 1, source = 'manual', actor_name = VALUES(actor_name), reason = VALUES(reason), cleared_at = VALUES(cleared_at)`,
+    { blocker, blocked, status, project, linkId, actorName, reason, now }
+  );
+}
+
 // قائمة سجلّ الاعتماديات المُلغاة (للمراجعة).
 export async function listDependencyLog(limit = 100) {
   const n = Math.max(1, Math.min(500, parseInt(limit, 10) || 100));
   const rows = await query(
-    `SELECT blocker_key, blocked_key, blocker_status, project_key, removed, cleared_at
+    `SELECT blocker_key, blocked_key, blocker_status, project_key, removed, source, actor_name, reason, cleared_at
      FROM dependency_log ORDER BY cleared_at DESC, id DESC LIMIT ${n}`
   );
   return rows.map((r) => ({
@@ -81,6 +92,9 @@ export async function listDependencyLog(limit = 100) {
     status: r.blocker_status,
     project: r.project_key,
     removed: !!r.removed,
+    source: r.source || 'auto',
+    actor: r.actor_name || null,
+    reason: r.reason || null,
     clearedAt: r.cleared_at,
   }));
 }

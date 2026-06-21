@@ -40,6 +40,7 @@ const DICT = {
     account: 'حسابي',
     logout: 'خروج',
     refresh: 'تحديث', collapseAll: 'طي الكل', expandAll: 'فتح الكل',
+    syncNow: 'مزامنة جيرا', syncStarted: 'بدأت المزامنة في الخلفية… حدّث بعد قليل', syncBusy: 'المزامنة قيد التشغيل بالفعل', syncFail: 'تعذّرت المزامنة',
     navDashboard: 'لوحة المعلومات', navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي',
     scrDashboard: 'المؤشرات', hDashboard: 'أهم مؤشرات الأداء في لقطة واحدة. تظهر المؤشرات أو تُخفى حسب صلاحيات دورك.', noKpi: 'لا توجد مؤشرات متاحة لدورك.',
     dragHint: 'اسحب البطاقات لإعادة ترتيبها', resetLayout: 'إعادة الترتيب الافتراضي',
@@ -171,6 +172,7 @@ const DICT = {
     account: 'Account',
     logout: 'Log out',
     refresh: 'Refresh', collapseAll: 'Collapse all', expandAll: 'Expand all',
+    syncNow: 'Sync Jira', syncStarted: 'Sync started in background… refresh shortly', syncBusy: 'A sync is already running', syncFail: 'Sync failed',
     navDashboard: 'Dashboard', navOps: 'Operations', navMgmt: 'Analytics', navAdmin: 'Administration', navAccount: 'My Account',
     scrDashboard: 'KPIs', hDashboard: 'Key performance indicators at a glance. Tiles show or hide based on your role permissions.', noKpi: 'No KPIs available for your role.',
     dragHint: 'Drag cards to rearrange', resetLayout: 'Reset layout',
@@ -496,6 +498,8 @@ export default function JiraExceptionMonitor() {
   const [collapsedCats, setCollapsedCats] = useState({}); // طي/فتح تصنيفات القائمة
   const [profileOpen, setProfileOpen] = useState(false);  // قائمة الملف الشخصي المنسدلة
   const [paletteOpen, setPaletteOpen] = useState(false);  // لوحة البحث (Ctrl/⌘+K)
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
   const [cardSignal] = useState({ v: 0, collapsed: false });
   const { logo, appBackground, appName, appSubtitle, appNameEn, appSubtitleEn, appBgDim, appBgShow, pageSize } = useBranding();
   const isMobile = useIsMobile();
@@ -606,6 +610,24 @@ export default function JiraExceptionMonitor() {
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.href = '/login';
+  }
+
+  // تشغيل مزامنة جيرا من التطبيق (تعمل في الخلفية)
+  async function syncNow() {
+    if (syncing) return;
+    setSyncing(true); setSyncMsg('');
+    try {
+      const res = await fetch('/api/sync/run', { method: 'POST' });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error || 'error');
+      setSyncMsg(j.data?.alreadyRunning ? t.syncBusy : t.syncStarted);
+      // حدّث البيانات بعد مهلة لإتاحة وقت للمزامنة
+      setTimeout(() => { setReloadKey((k) => k + 1); setSyncMsg(''); }, 20000);
+    } catch (e) {
+      setSyncMsg(`${t.syncFail}: ${e.message}`);
+    } finally {
+      setSyncing(false);
+    }
   }
 
   const go = (id) => { setScreen(id); if (isMobile) setDrawer(false); };
@@ -749,6 +771,11 @@ export default function JiraExceptionMonitor() {
               {!isMobile && <kbd style={{ fontSize: 11, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 5px' }}>Ctrl K</kbd>}
             </button>
             <nav style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {can('trigger_sync') && (
+                <button onClick={syncNow} disabled={syncing} title={t.syncNow} style={{ ...ghostBtn, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: syncing ? 0.6 : 1 }}>
+                  <Icon name="refresh" size={14} /> {!isMobile && t.syncNow}
+                </button>
+              )}
               <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻</button>
               <button onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')} title="theme" style={ghostBtn}>
                 {theme === 'dark' ? '☀︎' : '☾'}
@@ -799,6 +826,12 @@ export default function JiraExceptionMonitor() {
               )}
             </nav>
           </header>
+
+          {syncMsg && (
+            <div className="no-print" style={{ background: `${C.blue}12`, borderBottom: `1px solid ${C.border}`, color: C.text, fontSize: 13, padding: '8px 20px' }}>
+              {syncMsg}
+            </div>
+          )}
 
           <main style={{ padding: isMobile ? 12 : 20, flex: 1 }}>
             {renderScreen()}
@@ -2456,6 +2489,34 @@ function Throughput({ data }) {
 }
 
 // تدفّق العمل: WIP حسب المرحلة (أعمدة) + جدول أقدم العالقين
+// صفّ اختناق اعتمادية: التذكرة الحاجبة — بالنقر تظهر التذاكر المتوقّفة بسببها.
+function DepRow({ d, ageColor }) {
+  const { t, fmt } = useUI();
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border: `1px solid ${C.border}`, borderInlineStart: `3px solid ${C.red}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+      <div onClick={() => setOpen((v) => !v)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', cursor: 'pointer' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span aria-hidden style={{ fontSize: 11, color: C.muted, width: 12 }}>{open ? '▾' : '▸'}</span>
+          <KeyLink k={d.key} />
+          <Chip color={C.red}>{t.blocksCount(fmt(d.blockingCount))}</Chip>
+        </span>
+        <span style={{ fontSize: 12, color: ageColor(d.daysInStatus), fontWeight: 700 }}>{fmt(d.daysInStatus)} {t.dayUnit}</span>
+      </div>
+      <div onClick={() => setOpen((v) => !v)} style={{ fontSize: 13, margin: '4px 0', cursor: 'pointer' }}>{d.summary}</div>
+      <div style={{ fontSize: 12, color: C.muted }}>{d.project} · {d.status} · {d.assignee || '—'}</div>
+      {open && (
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{t.blockedList} ({fmt(d.blockedKeys.length)}):</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+            {d.blockedKeys.map((k) => <KeyLink key={k} k={k} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Flow({ flow }) {
   const { t, fmt, fmtDate } = useUI();
   const isMobile = useIsMobile();
@@ -2507,24 +2568,7 @@ function Flow({ flow }) {
         <div style={{ marginTop: 14 }}>
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 2 }}>{t.depBottlenecks}</div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>{t.depHint}</div>
-          {flow.dependencies.map((d) => (
-            <div key={d.key} style={{ border: `1px solid ${C.border}`, borderInlineStart: `3px solid ${C.red}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <KeyLink k={d.key} />
-                  <Chip color={C.red}>{t.blocksCount(fmt(d.blockingCount))}</Chip>
-                </span>
-                <span style={{ fontSize: 12, color: ageColor(d.daysInStatus), fontWeight: 700 }}>{fmt(d.daysInStatus)} {t.dayUnit}</span>
-              </div>
-              <div style={{ fontSize: 13, margin: '4px 0' }}>{d.summary}</div>
-              <div style={{ fontSize: 12, color: C.muted }}>
-                {d.project} · {d.status} · {d.assignee || '—'}
-              </div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                {t.blockedList}: {d.blockedKeys.map((k) => <KeyLink key={k} k={k} />).reduce((acc, el, i) => i === 0 ? [el] : [...acc, <span key={`s${i}`}> · </span>, el], [])}
-              </div>
-            </div>
-          ))}
+          {flow.dependencies.map((d) => <DepRow key={d.key} d={d} ageColor={ageColor} />)}
         </div>
       )}
 

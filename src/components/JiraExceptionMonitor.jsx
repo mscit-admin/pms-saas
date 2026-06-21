@@ -334,6 +334,7 @@ const ICON_PATHS = {
   lock: 'M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z M7 11V7a5 5 0 0110 0v4',
   list: 'M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01',
   dashboard: 'M3 3h8v8H3z M13 3h8v5h-8z M13 12h8v9h-8z M3 13h8v8H3z',
+  logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9',
 };
 function Icon({ name, size = 16 }) {
   const d = ICON_PATHS[name];
@@ -357,6 +358,7 @@ export default function JiraExceptionMonitor() {
   const [menuOpen, setMenuOpen] = useState(true);   // الشريط الجانبي (سطح المكتب)
   const [drawer, setDrawer] = useState(false);       // درج القائمة (الجوال)
   const [collapsedCats, setCollapsedCats] = useState({}); // طي/فتح تصنيفات القائمة
+  const [profileOpen, setProfileOpen] = useState(false);  // قائمة الملف الشخصي المنسدلة
   const [cardSignal] = useState({ v: 0, collapsed: false });
   const { logo, appBackground, appName, appSubtitle, appNameEn, appSubtitleEn, appBgDim, appBgShow, pageSize } = useBranding();
   const isMobile = useIsMobile();
@@ -452,15 +454,13 @@ export default function JiraExceptionMonitor() {
     ] });
     if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: 'settings', items:
       adminSections(perms, lang).map((s) => ({ id: `adm:${s.id}`, label: s.label, icon: ADM_ICONS[s.id] || 'settings' })) });
-    cats.push({ id: 'account', label: t.navAccount, icon: 'user', items: [
-      { id: 'acc:2fa', label: t.scrSecurity, icon: 'lock' },
-    ] });
+    // «حسابي» انتقل إلى قائمة منسدلة في ترويسة الملف الشخصي (وليس في الشريط الجانبي)
     return cats;
   }, [me, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // أول شاشة متاحة بمجرد معرفة الصلاحيات
+  // أول شاشة متاحة بمجرد معرفة الصلاحيات (مع رجوع لشاشة الأمان إن لم تتوفّر شاشات)
   useEffect(() => {
-    if (me && !screen && menu.length) setScreen(menu[0].items[0]?.id || null);
+    if (me && !screen) setScreen(menu[0]?.items[0]?.id || 'acc:2fa');
   }, [me, menu]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function logout() {
@@ -588,10 +588,40 @@ export default function JiraExceptionMonitor() {
                 {t.other}
               </button>
               {me && (
-                <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', fontSize: 13, color: C.muted }}>
-                  <span>{me.username}</span>
-                  <button onClick={logout} style={ghostBtn}>{t.logout}</button>
-                </span>
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => setProfileOpen((v) => !v)}
+                    title={t.navAccount}
+                    style={{ display: 'inline-flex', gap: 8, alignItems: 'center', padding: '4px 8px', border: `1px solid ${C.border}`, background: profileOpen ? C.bg : C.card, borderRadius: 20, cursor: 'pointer', fontSize: 13, color: C.text }}
+                  >
+                    <span style={{ width: 26, height: 26, borderRadius: '50%', background: C.blue, color: '#fff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{initials(me.fullName || me.username)}</span>
+                    {!isMobile && <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me.username}</span>}
+                    <span aria-hidden style={{ fontSize: 9, color: C.muted }}>▾</span>
+                  </button>
+                  {profileOpen && (
+                    <>
+                      <div onClick={() => setProfileOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                      <div style={{ position: 'absolute', insetInlineEnd: 0, top: 'calc(100% + 6px)', zIndex: 50, minWidth: 220, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: '0 10px 28px rgba(0,0,0,.18)', overflow: 'hidden' }}>
+                        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
+                          <div style={{ fontWeight: 700, fontSize: 14 }}>{me.fullName || me.username}</div>
+                          <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{me.email || me.username}</div>
+                        </div>
+                        <button
+                          onClick={() => { go('acc:2fa'); setProfileOpen(false); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'start', padding: '10px 14px', border: 0, background: 'transparent', cursor: 'pointer', fontSize: 13.5, color: C.text }}
+                        >
+                          <Icon name="lock" size={15} /> {t.scrSecurity}
+                        </button>
+                        <button
+                          onClick={logout}
+                          style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'start', padding: '10px 14px', border: 0, borderTop: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 13.5, color: C.red }}
+                        >
+                          <Icon name="logout" size={15} /> {t.logout}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </nav>
           </header>

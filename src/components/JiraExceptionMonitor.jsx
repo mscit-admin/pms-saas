@@ -432,13 +432,11 @@ export default function JiraExceptionMonitor() {
       { id: 'dash_main', label: t.scrDashboard, icon: 'dashboard' },
     ] });
     if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: 'grid', items: [
-      { id: 'ops_overview', label: t.scrOverview, icon: 'home' },
       { id: 'ops_exceptions', label: t.exceptions, icon: 'flag' },
       { id: 'ops_alltickets', label: t.allTickets, icon: 'list' },
       { id: 'ops_workload', label: t.workload, icon: 'activity' },
     ] });
     if (can('view_managerial')) cats.push({ id: 'mgmt', label: t.navMgmt, icon: 'barChart', items: [
-      { id: 'mgmt_kpi', label: t.scrKpi, icon: 'trendingUp' },
       { id: 'mgmt_performance', label: t.performance, icon: 'award' },
       { id: 'mgmt_scorecard', label: t.scorecard, icon: 'shield' },
       { id: 'mgmt_flow', label: t.flow, icon: 'shuffle' },
@@ -1370,7 +1368,7 @@ function DashboardScreen({ perms = [] }) {
 }
 
 // ------------------------------------------------------------------- العملياتي
-function OperationalTab({ screen = 'overview' }) {
+function OperationalTab({ screen = 'exceptions' }) {
   const { t, fmt, fmtDate, perms, pageSize } = useUI();
   const isMobile = useIsMobile();
   const canAct = (perms || []).includes('act_tickets');
@@ -1462,21 +1460,11 @@ function OperationalTab({ screen = 'overview' }) {
   if (loading && !data) return <Loading />;
   if (error) return <ErrorBox message={error} />;
 
-  const counts = data?.counts || {};
   const maxLoad = Math.max(1, ...(workload || []).map((w) => w.openCount));
   const anyFilter = fAssignee.length || fProject.length || fPriority.length || fStatus.length || fLabels.length || fType.length;
 
   return (
     <>
-      {screen === 'overview' && (
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <StatCard label={t.cOverdue} value={counts.overdue} color={C.red} />
-        <StatCard label={t.cStagnant} value={counts.stagnant} color={C.amber} />
-        <StatCard label={t.cReview} value={counts.review} color={C.blue} />
-        <StatCard label={t.cUnassigned} value={counts.unassigned} color={C.purple} />
-      </div>
-      )}
-
       {(screen === 'exceptions' || isAll) && (
       <Screen
         title={`${isAll ? t.allTickets : t.exceptions} · ${t.showing(fmt(filtered.length), fmt(items.length))}`}
@@ -1624,7 +1612,7 @@ function OperationalTab({ screen = 'overview' }) {
 }
 
 // ------------------------------------------------------------------- الإداري
-function ManagerialTab({ screen = 'kpi' }) {
+function ManagerialTab({ screen = 'performance' }) {
   const { t, pageSize } = useUI();
   const isMobile = useIsMobile();
   const [summary, setSummary] = useState(null);
@@ -1692,16 +1680,6 @@ function ManagerialTab({ screen = 'kpi' }) {
         ))}
         <button onClick={() => window.print()} style={{ ...ghostBtn, marginInlineStart: 'auto' }}>{t.printReport}</button>
       </div>
-
-      {screen === 'kpi' && (
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <StatCard label={t.sTotal} value={summary.totalTickets} color={C.blue} />
-        <StatCard label={t.sOpen} value={summary.openTickets} color={C.amber} />
-        <StatCard label={t.sDone} value={summary.doneTickets} color={C.green} />
-        <StatCard label={t.sBreached} value={summary.slaBreached} color={C.red} />
-        <StatCard label={t.sAvgCycle} value={summary.avgCycleDays} color={C.purple} />
-      </div>
-      )}
 
       {screen === 'performance' && (
       <Screen title={`${t.performance} · ${perf ? t.windowD(perf.windowDays) : ''}`} hint={t.hPerformance}>

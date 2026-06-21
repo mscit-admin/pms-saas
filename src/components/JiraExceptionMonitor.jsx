@@ -469,9 +469,9 @@ function Card({ title, children, extra, hint }) {
   const [showHint, setShowHint] = useState(false);
   // كل البطاقات مطويّة افتراضياً — تُفتح بالنقر على الأيقونة
   const [collapsed, setCollapsed] = useState(true);
-  // مزامنة مع زر «طي/فتح الكل»
+  // مزامنة مع زر «طي/فتح الكل» — فقط بعد نقر المستخدم (v>0)، حتى لا يُلغى الطي الافتراضي
   const sig = ui?.cardSignal;
-  useEffect(() => { if (sig) setCollapsed(sig.collapsed); }, [sig?.v]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (sig && sig.v > 0) setCollapsed(sig.collapsed); }, [sig?.v]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, marginBottom: 16 }}>
       {title && (

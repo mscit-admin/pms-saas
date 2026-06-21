@@ -40,7 +40,8 @@ const DICT = {
     account: 'حسابي',
     logout: 'خروج',
     refresh: 'تحديث', collapseAll: 'طي الكل', expandAll: 'فتح الكل',
-    navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي',
+    navDashboard: 'لوحة المعلومات', navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي',
+    scrDashboard: 'المؤشرات', hDashboard: 'أهم مؤشرات الأداء في لقطة واحدة. تظهر المؤشرات أو تُخفى حسب صلاحيات دورك.', noKpi: 'لا توجد مؤشرات متاحة لدورك.',
     scrOverview: 'نظرة عامة', scrKpi: 'المؤشرات العامة', scrCycle: 'زمن الدورة', scrSecurity: 'الأمان',
     menuShow: 'إظهار القائمة', menuHide: 'إخفاء القائمة',
     lastSync: 'آخر مزامنة',
@@ -166,7 +167,8 @@ const DICT = {
     account: 'Account',
     logout: 'Log out',
     refresh: 'Refresh', collapseAll: 'Collapse all', expandAll: 'Expand all',
-    navOps: 'Operations', navMgmt: 'Analytics', navAdmin: 'Administration', navAccount: 'My Account',
+    navDashboard: 'Dashboard', navOps: 'Operations', navMgmt: 'Analytics', navAdmin: 'Administration', navAccount: 'My Account',
+    scrDashboard: 'KPIs', hDashboard: 'Key performance indicators at a glance. Tiles show or hide based on your role permissions.', noKpi: 'No KPIs available for your role.',
     scrOverview: 'Overview', scrKpi: 'KPIs', scrCycle: 'Cycle time', scrSecurity: 'Security',
     menuShow: 'Show menu', menuHide: 'Hide menu',
     lastSync: 'Last sync',
@@ -331,6 +333,7 @@ const ICON_PATHS = {
   fileText: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8',
   lock: 'M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z M7 11V7a5 5 0 0110 0v4',
   list: 'M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01',
+  dashboard: 'M3 3h8v8H3z M13 3h8v5h-8z M13 12h8v9h-8z M3 13h8v8H3z',
 };
 function Icon({ name, size = 16 }) {
   const d = ICON_PATHS[name];
@@ -425,6 +428,9 @@ export default function JiraExceptionMonitor() {
   const ADM_ICONS = { users: 'users', roles: 'shield', integration: 'link', ai: 'cpu', branding: 'image', settings: 'settings', logs: 'fileText' };
   const menu = useMemo(() => {
     const cats = [];
+    if (can('view_dashboard')) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', items: [
+      { id: 'dash_main', label: t.scrDashboard, icon: 'dashboard' },
+    ] });
     if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: 'grid', items: [
       { id: 'ops_overview', label: t.scrOverview, icon: 'home' },
       { id: 'ops_exceptions', label: t.exceptions, icon: 'flag' },
@@ -464,6 +470,7 @@ export default function JiraExceptionMonitor() {
 
   const renderScreen = () => {
     if (!screen) return <Loading />;
+    if (screen === 'dash_main') return <DashboardScreen key={`dash-${reloadKey}`} perms={perms} />;
     if (screen.startsWith('ops_')) return <OperationalTab key={`op-${reloadKey}`} screen={screen.slice(4)} />;
     if (screen.startsWith('mgmt_')) return <ManagerialTab key={`mg-${reloadKey}`} screen={screen.slice(5)} />;
     if (screen.includes(':')) return <AdminPanel key={`ad-${reloadKey}`} lang={lang} perms={perms} section={screen.split(':')[1]} />;
@@ -1316,6 +1323,49 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ------------------------------------------------------------------- لوحة المعلومات (KPI)
+// كل بطاقة مؤشّر مرتبطة بصلاحية؛ تظهر فقط لمن يملكها (تُدار من شاشة الأدوار).
+function DashboardScreen({ perms = [] }) {
+  const { t, fmt } = useUI();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchJson('/api/analytics/kpis').then(setData).catch((e) => setError(e.message));
+  }, []);
+
+  const KPIS = [
+    { perm: 'kpi_total', label: t.sTotal, color: C.blue, val: (d) => d.total },
+    { perm: 'kpi_open', label: t.sOpen, color: C.amber, val: (d) => d.open },
+    { perm: 'kpi_done', label: t.sDone, color: C.green, val: (d) => d.done },
+    { perm: 'kpi_overdue', label: t.cOverdue, color: C.red, val: (d) => d.overdue },
+    { perm: 'kpi_unassigned', label: t.cUnassigned, color: C.purple, val: (d) => d.unassigned },
+    { perm: 'kpi_stagnant', label: t.cStagnant, color: C.amber, val: (d) => d.stagnant },
+    { perm: 'kpi_review', label: t.cReview, color: C.blue, val: (d) => d.review },
+    { perm: 'kpi_sla_breached', label: t.sBreached, color: C.red, val: (d) => d.slaBreached },
+    { perm: 'kpi_avg_cycle', label: t.sAvgCycle, color: C.purple, val: (d) => d.avgCycle },
+  ];
+  const visible = KPIS.filter((k) => perms.includes(k.perm));
+
+  return (
+    <Screen title={t.scrDashboard} hint={t.hDashboard}>
+      {error ? (
+        <ErrorBox message={error} />
+      ) : visible.length === 0 ? (
+        <div style={{ color: C.muted, fontSize: 14, padding: 12 }}>{t.noKpi}</div>
+      ) : !data ? (
+        <Loading />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
+          {visible.map((k) => (
+            <StatCard key={k.perm} label={k.label} value={k.val(data)} color={k.color} />
+          ))}
+        </div>
+      )}
+    </Screen>
   );
 }
 

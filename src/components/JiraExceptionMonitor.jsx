@@ -866,19 +866,31 @@ function Card({ title, children, extra, hint }) {
 }
 
 // شاشة بنمط ERPNext: ترويسة (عنوان + تلميح + إجراءات) ثم المحتوى — تُفتح من القائمة الجانبية
-function Screen({ title, hint, extra, children }) {
+function Screen({ title, hint, extra, children, collapsible = false }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const canCollapse = collapsible && !!title;
   return (
     <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
       {(title || extra) && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 14, borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 18 }}>{title}</h2>
-            {hint && <p style={{ margin: '5px 0 0', color: C.muted, fontSize: 12.5, lineHeight: 1.5, maxWidth: 720 }}>{hint}</p>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: collapsed ? 0 : 14, borderBottom: collapsed ? 'none' : `1px solid ${C.border}`, paddingBottom: collapsed ? 0 : 12 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {canCollapse && (
+                <button
+                  type="button"
+                  onClick={() => setCollapsed((v) => !v)}
+                  aria-label="toggle"
+                  style={{ width: 22, height: 22, flexShrink: 0, border: `1px solid ${C.border}`, borderRadius: 5, background: collapsed ? C.blue : 'transparent', color: collapsed ? '#fff' : C.muted, cursor: 'pointer', padding: 0, fontSize: 11 }}
+                >{collapsed ? '▸' : '▾'}</button>
+              )}
+              <span onClick={canCollapse ? () => setCollapsed((v) => !v) : undefined} style={{ cursor: canCollapse ? 'pointer' : 'default' }}>{title}</span>
+            </h2>
+            {hint && !collapsed && <p style={{ margin: '5px 0 0', color: C.muted, fontSize: 12.5, lineHeight: 1.5, maxWidth: 720 }}>{hint}</p>}
           </div>
-          {extra && <div className="no-print" style={{ flexShrink: 0 }}>{extra}</div>}
+          {extra && !collapsed && <div className="no-print" style={{ flexShrink: 0 }}>{extra}</div>}
         </div>
       )}
-      {children}
+      {!collapsed && children}
     </section>
   );
 }
@@ -1641,14 +1653,14 @@ function DashboardScreen({ perms = [], userId }) {
   // عقدة كل بطاقة حسب مفتاحها
   const nodes = {
     kpi: { full: true, node: (
-      <Screen title={t.scrKpi} hint={t.hDashboard}>
+      <Screen collapsible title={t.scrKpi} hint={t.hDashboard}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
           {kpiVisible.map((k) => <StatCard key={k.perm} label={k.label} value={k.val(data.kpis)} color={k.color} />)}
         </div>
       </Screen>
     ) },
     workload: { node: (
-      <Screen title={t.workload} hint={t.hWorkload}>
+      <Screen collapsible title={t.workload} hint={t.hWorkload}>
         {(data.workload || []).map((w) => (
           <BarRow key={w.accountId || w.assignee} label={w.assignee} value={w.openCount} max={maxLoad}
             color={w.overdue > 0 ? C.amber : C.green} suffix={w.overdue > 0 ? t.overdueSuffix(fmt(w.overdue)) : ''} />
@@ -1656,17 +1668,17 @@ function DashboardScreen({ perms = [], userId }) {
         {(data.workload || []).length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
       </Screen>
     ) },
-    wip: { node: <Screen title={t.wipOverTime} hint={t.hWip}><WipChart data={data.wip} /></Screen> },
-    throughput: { node: <Screen title={t.throughput} hint={t.hThroughput}><Throughput data={data.throughput} /></Screen> },
-    trend: { node: <Screen title={t.trend} hint={t.hTrend}><TrendChart series={data.trend} /></Screen> },
+    wip: { node: <Screen collapsible title={t.wipOverTime} hint={t.hWip}><WipChart data={data.wip} /></Screen> },
+    throughput: { node: <Screen collapsible title={t.throughput} hint={t.hThroughput}><Throughput data={data.throughput} /></Screen> },
+    trend: { node: <Screen collapsible title={t.trend} hint={t.hTrend}><TrendChart series={data.trend} /></Screen> },
     cycle_priority: { node: (
-      <Screen title={t.cycleByPriority} hint={t.hCycle}>
+      <Screen collapsible title={t.cycleByPriority} hint={t.hCycle}>
         {byPriority.map((p) => <BarRow key={p.priority} label={p.priority} value={p.avgDays || 0} max={maxCycle} color={C.purple} suffix={t.dayUnit} />)}
         {byPriority.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
       </Screen>
     ) },
     stage: { node: (
-      <Screen title={t.stageResidence} hint={t.hCycle}>
+      <Screen collapsible title={t.stageResidence} hint={t.hCycle}>
         {stages.slice(0, 8).map((s) => <BarRow key={s.stage} label={s.stage} value={s.avgDays || 0} max={maxStage} color={C.blue} suffix={t.dayUnit} />)}
         {stages.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>{t.noStages}</div>}
       </Screen>

@@ -678,6 +678,68 @@ async function postJson(url, body) {
   return j.data;
 }
 
+// منطقة نص مع إكمال الإشارات @ من مستخدمي جيرا
+function MentionTextarea({ value, onChange, onMention, rows = 4, placeholder }) {
+  const ref = useRef(null);
+  const debRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [sugg, setSugg] = useState([]);
+  const [match, setMatch] = useState(null);
+
+  function search(q) {
+    clearTimeout(debRef.current);
+    debRef.current = setTimeout(async () => {
+      try { const d = await fetchJson(`/api/jira/users?q=${encodeURIComponent(q)}`); setSugg(d.users || []); }
+      catch { setSugg([]); }
+    }, 200);
+  }
+  function handleChange(e) {
+    const val = e.target.value;
+    onChange(val);
+    const caret = e.target.selectionStart;
+    const upto = val.slice(0, caret);
+    const m = upto.match(/@([^\s@]{0,40})$/);
+    if (m) { setMatch({ len: m[0].length, caret }); setOpen(true); search(m[1]); }
+    else { setOpen(false); }
+  }
+  function pick(u) {
+    const ta = ref.current;
+    const caret = match.caret;
+    const val = ta.value;
+    const before = val.slice(0, caret).slice(0, -match.len);
+    const after = val.slice(caret);
+    const insert = `@${u.name} `;
+    const newVal = before + insert + after;
+    onChange(newVal);
+    onMention && onMention({ accountId: u.accountId, display: u.name });
+    setOpen(false);
+    requestAnimationFrame(() => { ta.focus(); const p = (before + insert).length; ta.setSelectionRange(p, p); });
+  }
+  return (
+    <div style={{ position: 'relative' }}>
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={handleChange}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        rows={rows}
+        placeholder={placeholder}
+        style={{ width: '100%', boxSizing: 'border-box', ...inputStyle }}
+      />
+      {open && sugg.length > 0 && (
+        <div style={{ position: 'absolute', zIndex: 60, top: '100%', insetInlineStart: 0, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: '0 4px 14px rgba(0,0,0,.12)', minWidth: 200, maxHeight: 200, overflowY: 'auto' }}>
+          {sugg.map((u) => (
+            <div key={u.accountId} onMouseDown={(e) => { e.preventDefault(); pick(u); }}
+              style={{ padding: '6px 10px', cursor: 'pointer', fontSize: 13, borderBottom: `1px solid ${C.border}` }}>
+              {u.name}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // سجل التذكرة الكامل (مباشر من جيرا): المهام الفرعية + التعليقات + سجل التغييرات
 function HistorySection({ ticketKey }) {
   const { t, fmt, fmtDateTime, jiraBaseUrl } = useUI();
@@ -754,6 +816,7 @@ function TicketActions({ ticket, onClose, onDone }) {
   const [fu, setFu] = useState({ acknowledged: false, note: '', snoozeUntil: '', ownerUserId: '', rootCause: '' });
   const [userOpts, setUserOpts] = useState([]);
   const [commentText, setCommentText] = useState('');
+  const [mentions, setMentions] = useState([]);
   const [assignees, setAssignees] = useState([]);
   const [accountId, setAccountId] = useState('');
   const [transitions, setTransitions] = useState([]);
@@ -894,8 +957,10 @@ function TicketActions({ ticket, onClose, onDone }) {
             style={{ ...ghostBtn, color: C.purple }}
           >{aiBusy ? t.aiThinking : t.aiSuggest}</button>
         </div>
-        <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={4} style={{ width: '100%', boxSizing: 'border-box', ...inputStyle, marginTop: 6, marginBottom: 6 }} />
-        <button disabled={busy || !commentText.trim()} onClick={() => run(async () => { await postJson(`/api/tickets/${ticket.key}/comment`, { body: commentText }); setCommentText(''); })} style={ghostBtn}>{t.send}</button>
+        <div style={{ marginTop: 6, marginBottom: 6 }}>
+          <MentionTextarea value={commentText} onChange={setCommentText} onMention={(m) => setMentions((ms) => (ms.find((x) => x.accountId === m.accountId) ? ms : [...ms, m]))} rows={4} placeholder="@" />
+        </div>
+        <button disabled={busy || !commentText.trim()} onClick={() => run(async () => { await postJson(`/api/tickets/${ticket.key}/comment`, { body: commentText, mentions }); setCommentText(''); setMentions([]); })} style={ghostBtn}>{t.send}</button>
         </>)}
 
         {/* إسناد */}

@@ -1,4 +1,5 @@
 import { getJiraSettings, assertJira } from './jira-settings.js';
+import { textToAdf } from './adf.js';
 
 // عميل Jira Cloud — Basic Auth (email + API Token). الإعدادات من قاعدة البيانات
 // (قابلة للتعديل من الواجهة) مع متغيرات البيئة كبديل. لا يُستدعى من المتصفح.
@@ -121,15 +122,19 @@ export async function assignIssue(idOrKey, accountId) {
   });
 }
 
-// إضافة تعليق (نلفّ النص في صيغة ADF التي تتطلبها v3)
-export async function addComment(idOrKey, text) {
+// إضافة تعليق (يدعم الإشارات @ عبر بناء ADF مع عقد mention)
+export async function addComment(idOrKey, text, mentions = []) {
   return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/comment`, {
-    body: {
-      type: 'doc',
-      version: 1,
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: String(text) }] }],
-    },
+    body: textToAdf(text, mentions),
   });
+}
+
+// بحث مستخدمي جيرا (للإشارات @) — حسب نص الاستعلام.
+export async function searchUsers(q) {
+  const data = await jiraRequest('GET', `/rest/api/3/user/search?query=${encodeURIComponent(q || '')}&maxResults=10`);
+  return (data || [])
+    .filter((u) => u.accountType !== 'app' && u.active !== false)
+    .map((u) => ({ accountId: u.accountId, name: u.displayName }));
 }
 
 // بيانات تعديل حقول التذكرة (editmeta) — لمعرفة الحقول وقيمها المسموحة

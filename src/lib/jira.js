@@ -27,6 +27,7 @@ const FIELDS = [
   'resolutiondate',
   'issuetype',
   'project',
+  'labels',
 ];
 
 async function jiraRequest(method, path, body) {

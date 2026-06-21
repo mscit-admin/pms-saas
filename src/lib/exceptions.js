@@ -49,7 +49,7 @@ export async function getExceptions({ from = null, to = null } = {}) {
   const rows = await query(
     `SELECT
         t.id, t.issue_key, t.project_key, t.summary, t.status, t.status_category,
-        t.priority, t.assignee_name, t.assignee_account_id, t.due_date,
+        t.priority, t.assignee_name, t.assignee_account_id, t.due_date, t.labels,
         t.jira_created_at, t.last_status_change_at,
         es.acknowledged, es.snooze_until, es.owner_user_id, es.root_cause, es.note,
         u.full_name AS owner_name, u.username AS owner_username,
@@ -79,6 +79,7 @@ export async function getExceptions({ from = null, to = null } = {}) {
       status: r.status,
       priority: r.priority,
       assignee: r.assignee_name,
+      labels: r.labels ? r.labels.split(',').filter(Boolean) : [],
       dueDate: r.due_date,
       createdAt: r.jira_created_at,
       daysInStatus: r.days_in_status,

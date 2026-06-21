@@ -49,6 +49,8 @@ export function mapIssueToRow(issue, syncedAt) {
     assignee_name: f.assignee?.displayName || null,
     reporter_account_id: f.reporter?.accountId || null,
     reporter_name: f.reporter?.displayName || null,
+    // وسوم جيرا (labels): لا تحوي مسافات أو فواصل، فنخزّنها كسلسلة مفصولة بفواصل
+    labels: Array.isArray(f.labels) && f.labels.length ? f.labels.join(',').slice(0, 1024) : null,
     jira_created_at: toMysqlDateTime(f.created),
     jira_updated_at: toMysqlDateTime(f.updated),
     due_date: toMysqlDate(f.duedate),

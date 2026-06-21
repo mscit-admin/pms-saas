@@ -11,11 +11,11 @@ import { detectAndAlert } from './alerts.js';
 const UPSERT_TICKET = `
   INSERT INTO tickets (
     id, issue_key, project_key, summary, issue_type, status, status_category,
-    priority, assignee_account_id, assignee_name, reporter_account_id, reporter_name,
+    priority, assignee_account_id, assignee_name, reporter_account_id, reporter_name, labels,
     jira_created_at, jira_updated_at, due_date, resolved_at, last_status_change_at, synced_at
   ) VALUES (
     :id, :issue_key, :project_key, :summary, :issue_type, :status, :status_category,
-    :priority, :assignee_account_id, :assignee_name, :reporter_account_id, :reporter_name,
+    :priority, :assignee_account_id, :assignee_name, :reporter_account_id, :reporter_name, :labels,
     :jira_created_at, :jira_updated_at, :due_date, :resolved_at, :last_status_change_at, :synced_at
   )
   ON DUPLICATE KEY UPDATE
@@ -30,6 +30,7 @@ const UPSERT_TICKET = `
     assignee_name = VALUES(assignee_name),
     reporter_account_id = VALUES(reporter_account_id),
     reporter_name = VALUES(reporter_name),
+    labels = VALUES(labels),
     jira_created_at = VALUES(jira_created_at),
     jira_updated_at = VALUES(jira_updated_at),
     due_date = VALUES(due_date),

@@ -58,6 +58,8 @@ const DICT = {
     fProject: 'المشروع',
     fPriority: 'الأهمية',
     fStatus: 'الحالة',
+    fLabel: 'الوسم',
+    noLabel: 'بدون وسم',
     showing: (x, y) => `عرض ${x} من ${y}`,
     exportCsv: 'تصدير CSV',
     perPage: 'لكل صفحة',
@@ -177,6 +179,8 @@ const DICT = {
     fProject: 'Project',
     fPriority: 'Priority',
     fStatus: 'Status',
+    fLabel: 'Labels',
+    noLabel: 'No label',
     showing: (x, y) => `Showing ${x} of ${y}`,
     exportCsv: 'Export CSV',
     perPage: 'per page',
@@ -1278,6 +1282,9 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
         {canOpen && <button onClick={() => onAction(it)} style={ghostBtn}>{t.act}</button>}
       </div>
       <div style={{ fontSize: 13, margin: '6px 0', fontWeight: 600 }}>{it.summary}</div>
+      {(it.labels || []).length > 0 && (
+        <div style={{ marginBottom: 6 }}>{it.labels.map((l) => <Chip key={l} color="#6b7280">{l}</Chip>)}</div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px', marginBottom: 6 }}>
         <F label={t.fProject}>{it.project}</F>
         <F label={t.thStatus}>{it.status}</F>
@@ -1321,6 +1328,7 @@ function OperationalTab({ screen = 'overview' }) {
   const [fProject, setFProject] = useState([]);
   const [fPriority, setFPriority] = useState([]);
   const [fStatus, setFStatus] = useState([]);
+  const [fLabels, setFLabels] = useState([]);
 
   // ترقيم الصفحات (حجم الصفحة من إعدادات الإدارة)
   const [page, setPage] = useState(1);
@@ -1357,6 +1365,8 @@ function OperationalTab({ screen = 'overview' }) {
       projects: uniq((x) => x.project),
       priorities: uniq((x) => x.priority),
       statuses: uniq((x) => x.status),
+      // كل الوسوم الفريدة عبر التذاكر
+      labels: Array.from(new Set(items.flatMap((x) => x.labels || []))).sort(),
     };
   }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1367,12 +1377,13 @@ function OperationalTab({ screen = 'overview' }) {
     (fProject.length === 0 || fProject.includes(x.project)) &&
     (fPriority.length === 0 || fPriority.includes(x.priority)) &&
     (fStatus.length === 0 || fStatus.includes(x.status)) &&
+    (fLabels.length === 0 || (x.labels || []).some((l) => fLabels.includes(l))) &&
     (!hideSnoozed || !x.followup?.snoozed) &&
     (!hideAcked || !x.followup?.acknowledged)
-  ), [items, fAssignee, fProject, fPriority, fStatus, hideSnoozed, hideAcked]);
+  ), [items, fAssignee, fProject, fPriority, fStatus, fLabels, hideSnoozed, hideAcked]);
 
   // أعد للصفحة الأولى عند تغيّر الفلاتر أو حجم الصفحة
-  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, hideSnoozed, hideAcked, pageSize, items.length]);
+  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, fLabels, hideSnoozed, hideAcked, pageSize, items.length]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -1383,7 +1394,7 @@ function OperationalTab({ screen = 'overview' }) {
 
   const counts = data?.counts || {};
   const maxLoad = Math.max(1, ...(workload || []).map((w) => w.openCount));
-  const anyFilter = fAssignee.length || fProject.length || fPriority.length || fStatus.length;
+  const anyFilter = fAssignee.length || fProject.length || fPriority.length || fStatus.length || fLabels.length;
 
   return (
     <>
@@ -1417,8 +1428,11 @@ function OperationalTab({ screen = 'overview' }) {
           <MultiSelect label={t.fProject} value={fProject} options={opts.projects} onChange={setFProject} />
           <MultiSelect label={t.fPriority} value={fPriority} options={opts.priorities} onChange={setFPriority} />
           <MultiSelect label={t.fStatus} value={fStatus} options={opts.statuses} onChange={setFStatus} />
+          {opts.labels.length > 0 && (
+            <MultiSelect label={t.fLabel} value={fLabels} options={opts.labels} onChange={setFLabels} />
+          )}
           {anyFilter ? (
-            <button onClick={() => { setFAssignee([]); setFProject([]); setFPriority([]); setFStatus([]); }} style={ghostBtn}>{t.clear}</button>
+            <button onClick={() => { setFAssignee([]); setFProject([]); setFPriority([]); setFStatus([]); setFLabels([]); }} style={ghostBtn}>{t.clear}</button>
           ) : null}
           {canManage && (
             <>
@@ -1461,7 +1475,12 @@ function OperationalTab({ screen = 'overview' }) {
               {pageItems.map((it) => (
                 <tr key={it.id}>
                   <Td><KeyLink k={it.key} /></Td>
-                  <Td>{it.summary}</Td>
+                  <Td>
+                    {it.summary}
+                    {(it.labels || []).length > 0 && (
+                      <div style={{ marginTop: 4 }}>{it.labels.map((l) => <Chip key={l} color="#6b7280">{l}</Chip>)}</div>
+                    )}
+                  </Td>
                   <Td>{it.project}</Td>
                   <Td>{it.status}</Td>
                   <Td>{it.priority}</Td>

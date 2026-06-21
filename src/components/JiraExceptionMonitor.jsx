@@ -79,6 +79,7 @@ const DICT = {
     commaSep: 'افصل بفواصل',
     transition: 'نقل الحالة',
     linkDep: 'اعتمادية', relBlockedBy: 'هذه التذكرة تعتمد على تذكرة أخرى', relBlocks: 'تذاكر أخرى تعتمد على هذه التذكرة', otherKeyPh: 'مفتاح التذكرة الأخرى، مثل GR2-36', linkHint: 'يُنشئ رابط اعتمادية في جيرا. بعد المزامنة يظهر في «اختناقات الاعتمادية».',
+    linkCurrent: 'الاعتماديات الحالية', linkDependsOn: 'تعتمد على', linkRequiredBy: 'يعتمد عليها', removeWord: 'إلغاء',
     send: 'إرسال',
     apply: 'تطبيق',
     unassign: 'إلغاء الإسناد',
@@ -214,6 +215,7 @@ const DICT = {
     commaSep: 'comma-separated',
     transition: 'Transition',
     linkDep: 'Dependency', relBlockedBy: 'This ticket depends on another ticket', relBlocks: 'Other tickets depend on this ticket', otherKeyPh: 'Other ticket key, e.g. GR2-36', linkHint: 'Creates a dependency link in Jira. After a sync it appears in Dependency bottlenecks.',
+    linkCurrent: 'Current dependencies', linkDependsOn: 'depends on', linkRequiredBy: 'required by', removeWord: 'Remove',
     send: 'Send',
     apply: 'Apply',
     unassign: 'Unassign',
@@ -1329,6 +1331,7 @@ function TicketActions({ ticket, onClose, onDone }) {
   const [editValues, setEditValues] = useState({});
   const [linkRelation, setLinkRelation] = useState('blocked_by');
   const [linkOther, setLinkOther] = useState('');
+  const [links, setLinks] = useState([]);
   const [busy, setBusy] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -1364,6 +1367,7 @@ function TicketActions({ ticket, onClose, onDone }) {
       fetchJson(`/api/tickets/${ticket.key}/assign`).then((d) => setAssignees(d.assignees)).catch(() => {});
       fetchJson(`/api/tickets/${ticket.key}/transition`).then((d) => setTransitions(d.transitions)).catch(() => {});
       fetchJson(`/api/tickets/${ticket.key}/fields`).then((d) => setEditFields(d.fields)).catch(() => {});
+      fetchJson(`/api/tickets/${ticket.key}/link`).then((d) => setLinks(d.links || [])).catch(() => {});
     }
   }, [ticket, canAct, canManage]);
 
@@ -1394,6 +1398,14 @@ function TicketActions({ ticket, onClose, onDone }) {
     catch (e) { setErr(e.message); }
     finally { setBusy(false); }
   }
+
+  const refetchLinks = () => fetchJson(`/api/tickets/${ticket.key}/link`).then((d) => setLinks(d.links || [])).catch(() => {});
+  const removeLink = (linkId) => run(async () => {
+    const res = await fetch(`/api/tickets/${ticket.key}/link`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ linkId }) });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || 'error');
+    await refetchLinks();
+  });
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1491,9 +1503,25 @@ function TicketActions({ ticket, onClose, onDone }) {
         </select>
         <div style={{ display: 'flex', gap: 6 }}>
           <input value={linkOther} onChange={(e) => setLinkOther(e.target.value)} placeholder={t.otherKeyPh} style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }} />
-          <button disabled={busy || !linkOther.trim()} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/link`, { relation: linkRelation, otherKey: linkOther.trim() }).then(() => setLinkOther('')))} style={ghostBtn}>{t.apply}</button>
+          <button disabled={busy || !linkOther.trim()} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/link`, { relation: linkRelation, otherKey: linkOther.trim() }).then(() => { setLinkOther(''); return refetchLinks(); }))} style={ghostBtn}>{t.apply}</button>
         </div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.6 }}>{t.linkHint}</div>
+
+        {links.length > 0 && (
+          <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+            <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 6 }}>{t.linkCurrent}</div>
+            {links.map((l) => (
+              <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ flex: 1, fontSize: 12.5 }}>
+                  <span style={{ color: C.muted }}>{l.depends ? t.linkDependsOn : t.linkRequiredBy} </span>
+                  <KeyLink k={l.otherKey} />
+                  {l.otherStatus && <span style={{ color: C.muted }}> · {l.otherStatus}</span>}
+                </span>
+                <button disabled={busy} onClick={() => removeLink(l.id)} style={{ ...ghostBtn, color: C.red, borderColor: C.red }}>{t.removeWord}</button>
+              </div>
+            ))}
+          </div>
+        )}
         </>)}
 
         {/* تعديل الحقول (لتلبية شروط الانتقالات مثل labels) */}

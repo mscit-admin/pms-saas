@@ -145,6 +145,11 @@ export async function deleteIssueLink(linkId) {
   return jiraRequest('DELETE', `/rest/api/3/issueLink/${encodeURIComponent(linkId)}`);
 }
 
+// جلب روابط تذكرة (issuelinks) فقط — لعرض/حذف الاعتماديات الحالية.
+export async function getIssueLinks(idOrKey) {
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}?fields=issuelinks`);
+}
+
 // بحث مستخدمي جيرا (للإشارات @) — حسب نص الاستعلام.
 export async function searchUsers(q) {
   const data = await jiraRequest('GET', `/rest/api/3/user/search?query=${encodeURIComponent(q || '')}&maxResults=10`);

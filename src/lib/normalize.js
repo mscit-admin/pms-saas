@@ -94,6 +94,30 @@ function relSide(phrase) {
   if (p.includes('block') || p.includes('depended on by') || p.includes('dependency of')) return 'blocker'; // هذه التذكرة تحجب
   return null;
 }
+// يصف روابط الاعتمادية لتذكرة من منظورها — للعرض والحذف.
+// depends=true: هذه التذكرة تعتمد على otherKey (محجوبة بها). depends=false: يعتمد عليها الآخر.
+export function describeLinks(issue) {
+  const links = issue.fields?.issuelinks || [];
+  const out = [];
+  const handle = (link, other, phrase) => {
+    const r = relSide(phrase);
+    if (!r || !other?.key) return;
+    out.push({
+      id: String(link.id),
+      depends: r === 'blocked',
+      otherKey: other.key,
+      otherSummary: other.fields?.summary || '',
+      otherStatus: other.fields?.status?.name || '',
+    });
+  };
+  for (const link of links) {
+    const type = link.type || {};
+    if (link.outwardIssue) handle(link, link.outwardIssue, type.outward);
+    if (link.inwardIssue) handle(link, link.inwardIssue, type.inward);
+  }
+  return out;
+}
+
 export function extractBlocks(issue) {
   const src = issue.key;
   const links = issue.fields?.issuelinks || [];

@@ -354,6 +354,7 @@ const ICON_PATHS = {
   dashboard: 'M3 3h8v8H3z M13 3h8v5h-8z M13 12h8v9h-8z M3 13h8v8H3z',
   logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9',
   search: 'M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.35-4.35',
+  briefcase: 'M4 7h16a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2z M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2 M2 12h20',
 };
 function Icon({ name, size = 16 }) {
   const d = ICON_PATHS[name];
@@ -585,7 +586,7 @@ export default function JiraExceptionMonitor() {
     || can('manage_branding') || can('manage_settings') || can('view_audit');
 
   // نموذج القائمة الجانبية: تصنيفات ← شاشات (ERPNext) مع أيقونات خطّية
-  const ADM_ICONS = { users: 'users', roles: 'shield', integration: 'link', ai: 'cpu', branding: 'image', settings: 'settings', logs: 'fileText' };
+  const ADM_ICONS = { users: 'users', roles: 'shield', companies: 'briefcase', integration: 'link', ai: 'cpu', branding: 'image', settings: 'settings', logs: 'fileText' };
   const menu = useMemo(() => {
     const cats = [];
     // لوحة المعلومات: مدخل واحد مباشر يفتح كل المحتوى (KPI + الأدوات) — بلا عنصر فرعي

@@ -13,7 +13,10 @@ const C = {
 const T = {
   ar: {
     secUsers: 'المستخدمون', secRoles: 'الأدوار والصلاحيات', secSettings: 'الإعدادات', sec2fa: 'التحقق الثنائي',
-    secBranding: 'الهوية', secIntegration: 'الربط بجيرا', secLogs: 'السجلّات', secAi: 'الذكاء الاصطناعي',
+    secBranding: 'الهوية', secIntegration: 'الربط بجيرا', secLogs: 'السجلّات', secAi: 'الذكاء الاصطناعي', secCompanies: 'الشركات والمشاريع',
+    coName: 'اسم الشركة', addCompany: 'إضافة شركة', projName: 'اسم المشروع', projJira: 'مفتاح مشروع جيرا', addProject: 'إضافة مشروع',
+    noCompanies: 'لا شركات بعد — أضِف شركة لتبدأ بتقييد الوصول حسب المشروع.', assignTitle: 'إسناد مستخدم لمشاريع', pickUser: 'اختر مستخدماً', assignSave: 'حفظ الإسناد', assignHint: 'يرى المستخدم بيانات المشاريع المُحدَّدة فقط. ملاحظة: ما لم يُعرَّف أي مشروع، يرى الجميع كل البيانات.',
+    projectsCol: 'المشاريع', confirmDelCo: 'حذف الشركة وكل مشاريعها وإسناداتها؟', confirmDelProj: 'حذف المشروع وإسناداته؟',
     aiEnabled: 'تفعيل اقتراح التعليقات', aiProvider: 'المزوّد', aiBaseUrl: 'الرابط (Base URL)', aiModel: 'النموذج', aiKeyL: 'مفتاح API', aiAnthropic: 'Anthropic (Claude)', aiOpenai: 'متوافق مع OpenAI',
     loginLogs: 'سجلّ الدخول', auditLogs: 'سجلّ التدقيق', time: 'الوقت', actor: 'المنفّذ', actionC: 'الإجراء', target: 'الهدف', ipC: 'IP', detailC: 'تفاصيل', noLogs: 'لا سجلّات', from2: 'من', to2: 'إلى',
     al: { login_success: 'دخول ناجح', login_failed: 'محاولة فاشلة', logout: 'خروج', user_create: 'إنشاء مستخدم', user_update: 'تعديل مستخدم', user_delete: 'حذف مستخدم', reset_2fa: 'إعادة ضبط 2FA', role_create: 'إنشاء دور', role_update: 'تعديل دور', role_delete: 'حذف دور', settings_update: 'تعديل إعدادات', integration_update: 'تعديل الربط', branding_upload: 'رفع هوية', branding_remove: 'إزالة هوية', ticket_assign: 'إسناد تذكرة', ticket_comment: 'تعليق', ticket_transition: 'نقل حالة', ticket_fields: 'تعديل حقول', followup_update: 'متابعة' },
@@ -42,7 +45,10 @@ const T = {
   },
   en: {
     secUsers: 'Users', secRoles: 'Roles & permissions', secSettings: 'Settings', sec2fa: 'Two-factor',
-    secBranding: 'Branding', secIntegration: 'Jira connection', secLogs: 'Logs', secAi: 'AI',
+    secBranding: 'Branding', secIntegration: 'Jira connection', secLogs: 'Logs', secAi: 'AI', secCompanies: 'Companies & projects',
+    coName: 'Company name', addCompany: 'Add company', projName: 'Project name', projJira: 'Jira project key', addProject: 'Add project',
+    noCompanies: 'No companies yet — add one to start restricting access per project.', assignTitle: 'Assign a user to projects', pickUser: 'Pick a user', assignSave: 'Save assignment', assignHint: 'The user only sees data for the selected projects. Note: until any project is defined, everyone sees all data.',
+    projectsCol: 'Projects', confirmDelCo: 'Delete the company with all its projects and assignments?', confirmDelProj: 'Delete the project and its assignments?',
     aiEnabled: 'Enable comment suggestions', aiProvider: 'Provider', aiBaseUrl: 'Base URL', aiModel: 'Model', aiKeyL: 'API key', aiAnthropic: 'Anthropic (Claude)', aiOpenai: 'OpenAI-compatible',
     loginLogs: 'Login log', auditLogs: 'Audit log', time: 'Time', actor: 'Actor', actionC: 'Action', target: 'Target', ipC: 'IP', detailC: 'Detail', noLogs: 'No entries', from2: 'From', to2: 'To',
     al: { login_success: 'Login OK', login_failed: 'Login failed', logout: 'Logout', user_create: 'Create user', user_update: 'Update user', user_delete: 'Delete user', reset_2fa: 'Reset 2FA', role_create: 'Create role', role_update: 'Update role', role_delete: 'Delete role', settings_update: 'Update settings', integration_update: 'Update integration', branding_upload: 'Branding upload', branding_remove: 'Branding remove', ticket_assign: 'Assign ticket', ticket_comment: 'Comment', ticket_transition: 'Transition', ticket_fields: 'Edit fields', followup_update: 'Follow-up' },
@@ -85,7 +91,7 @@ const ghost = { background: C.card, border: `1px solid ${C.border}`, borderRadiu
 const cell = { padding: '7px 9px', borderBottom: `1px solid ${C.border}`, fontSize: 13, textAlign: 'start' };
 
 const SECTION_LABELS = (t) => ({
-  users: t.secUsers, roles: t.secRoles, integration: t.secIntegration, ai: t.secAi,
+  users: t.secUsers, roles: t.secRoles, companies: t.secCompanies, integration: t.secIntegration, ai: t.secAi,
   branding: t.secBranding, settings: t.secSettings, logs: t.secLogs, '2fa': t.sec2fa,
 });
 
@@ -97,6 +103,7 @@ export function adminSections(perms = [], lang = 'ar') {
   return [
     can('manage_users') && 'users',
     can('manage_roles') && 'roles',
+    can('manage_companies') && 'companies',
     can('manage_integration') && 'integration',
     can('manage_integration') && 'ai',
     can('manage_branding') && 'branding',
@@ -111,6 +118,7 @@ export default function AdminPanel({ lang = 'ar', perms = [], section }) {
   const sections = [
     can('manage_users') && 'users',
     can('manage_roles') && 'roles',
+    can('manage_companies') && 'companies',
     can('manage_integration') && 'integration',
     can('manage_integration') && 'ai',
     can('manage_branding') && 'branding',
@@ -135,12 +143,120 @@ export default function AdminPanel({ lang = 'ar', perms = [], section }) {
       )}
       {sec === 'users' && <UsersSection t={t} />}
       {sec === 'roles' && <RolesSection t={t} />}
+      {sec === 'companies' && <CompaniesSection t={t} />}
       {sec === 'integration' && <IntegrationSection t={t} />}
       {sec === 'ai' && <AiSection t={t} />}
       {sec === 'branding' && <BrandingSection t={t} />}
       {sec === 'settings' && <SettingsSection t={t} />}
       {sec === 'logs' && <LogsSection t={t} />}
       {sec === '2fa' && <TwoFactorSection t={t} />}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------- Companies & projects
+function CompaniesSection({ t }) {
+  const [companies, setCompanies] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [coName, setCoName] = useState('');
+  const [proj, setProj] = useState({}); // { [companyId]: { name, jiraKey } }
+  const [userId, setUserId] = useState('');
+  const [assigned, setAssigned] = useState([]);
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+
+  const load = useCallback(async () => {
+    const d = await api('/api/companies');
+    setCompanies(d.companies || []); setUsers(d.users || []);
+  }, []);
+  useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
+
+  const run = async (fn) => { setErr(''); setMsg(''); try { await fn(); } catch (e) { setErr(e.message); } };
+
+  const addCompany = () => run(async () => {
+    await api('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: coName.trim() }) });
+    setCoName(''); await load();
+  });
+  const delCompany = (c) => { if (!confirm(t.confirmDelCo)) return; run(async () => { await api(`/api/companies/${c.id}`, { method: 'DELETE' }); await load(); }); };
+  const addProject = (c) => run(async () => {
+    const p = proj[c.id] || {};
+    await api('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ companyId: c.id, name: (p.name || '').trim(), jiraKey: (p.jiraKey || '').trim() }) });
+    setProj((s) => ({ ...s, [c.id]: { name: '', jiraKey: '' } })); await load();
+  });
+  const delProject = (p) => { if (!confirm(t.confirmDelProj)) return; run(async () => { await api(`/api/projects/${p.id}`, { method: 'DELETE' }); await load(); }); };
+
+  const pickUser = (id) => run(async () => {
+    setUserId(id); setAssigned([]);
+    if (id) { const d = await api(`/api/companies/assign?userId=${id}`); setAssigned(d.projectIds || []); }
+  });
+  const toggleProj = (pid) => setAssigned((a) => (a.includes(pid) ? a.filter((x) => x !== pid) : [...a, pid]));
+  const saveAssign = () => run(async () => {
+    await api('/api/companies/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, projectIds: assigned }) });
+    setMsg(t.savedShort);
+  });
+
+  const hasProjects = companies.some((c) => c.projects.length > 0);
+
+  return (
+    <div>
+      {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 10 }}>{err}</div>}
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <input value={coName} onChange={(e) => setCoName(e.target.value)} placeholder={t.coName} style={inp} />
+        <button disabled={!coName.trim()} onClick={addCompany} style={btn(C.green)}>{t.addCompany}</button>
+      </div>
+
+      {companies.length === 0 && <div style={{ color: C.muted, fontSize: 13, marginBottom: 14 }}>{t.noCompanies}</div>}
+
+      {companies.map((c) => (
+        <div key={c.id} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <strong>{c.name}</strong>
+            <button onClick={() => delCompany(c)} style={ghost}>{t.del}</button>
+          </div>
+          {c.projects.map((p) => (
+            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
+              <span>{p.name} <span style={{ color: C.muted }}>· {p.jiraKey}</span></span>
+              <button onClick={() => delProject(p)} style={{ ...ghost, color: C.red }}>{t.del}</button>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            <input value={proj[c.id]?.name || ''} onChange={(e) => setProj((s) => ({ ...s, [c.id]: { ...s[c.id], name: e.target.value } }))} placeholder={t.projName} style={{ ...inp, flex: 1, minWidth: 120 }} />
+            <input value={proj[c.id]?.jiraKey || ''} onChange={(e) => setProj((s) => ({ ...s, [c.id]: { ...s[c.id], jiraKey: e.target.value } }))} placeholder={t.projJira} style={{ ...inp, width: 150 }} />
+            <button onClick={() => addProject(c)} style={ghost}>{t.addProject}</button>
+          </div>
+        </div>
+      ))}
+
+      {hasProjects && (
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, marginTop: 8 }}>
+          <h4 style={{ margin: '0 0 4px' }}>{t.assignTitle}</h4>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>{t.assignHint}</div>
+          <select value={userId} onChange={(e) => pickUser(e.target.value)} style={{ ...inp, marginBottom: 10 }}>
+            <option value="">{t.pickUser}</option>
+            {users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.username})</option>)}
+          </select>
+          {userId && (
+            <div>
+              {companies.filter((c) => c.projects.length > 0).map((c) => (
+                <div key={c.id} style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{c.name}</div>
+                  {c.projects.map((p) => (
+                    <label key={p.id} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginInlineEnd: 14, fontSize: 13 }}>
+                      <input type="checkbox" checked={assigned.includes(p.id)} onChange={() => toggleProj(p.id)} />
+                      {p.name} <span style={{ color: C.muted }}>({p.jiraKey})</span>
+                    </label>
+                  ))}
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 6 }}>
+                <button onClick={saveAssign} style={btn(C.green)}>{t.assignSave}</button>
+                {msg && <span style={{ color: C.green, fontSize: 13 }}>{msg}</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

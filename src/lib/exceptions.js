@@ -1,5 +1,6 @@
 import { query } from './db.js';
 import { ruleConfig } from './config.js';
+import { scopeAnd } from './companies.js';
 
 // محرّك قواعد الاستثناء — نفس منطق الواجهة:
 //   • راكد   (stagnant)   : قيد التنفيذ ولم تتغيّر حالته منذ > 3 أيام
@@ -38,12 +39,14 @@ function flagsSelect() {
 
 // قائمة الاستثناءات التشغيلية. فلتر اختياري بنطاق تاريخ على jira_created_at.
 // all=true يُرجع كل التذاكر المفتوحة (للمتابعة) بدل المُستثناة فقط.
-export async function getExceptions({ from = null, to = null, all = false } = {}) {
+export async function getExceptions({ from = null, to = null, all = false, scope = null } = {}) {
+  const sc = scopeAnd(scope, 't');
   const params = {
     stagnantDays: ruleConfig.stagnantDays,
     reviewDays: ruleConfig.reviewDays,
+    ...sc.params,
   };
-  let dateFilter = '';
+  let dateFilter = sc.sql;
   if (from) { dateFilter += ' AND t.jira_created_at >= :from'; params.from = `${from} 00:00:00`; }
   if (to)   { dateFilter += ' AND t.jira_created_at <= :to';   params.to = `${to} 23:59:59`; }
   const havingClause = all ? '' : 'HAVING is_stagnant OR is_review OR is_overdue OR is_unassigned';
@@ -102,7 +105,8 @@ export async function getExceptions({ from = null, to = null, all = false } = {}
 }
 
 // عدّاد كل نوع استثناء (للبطاقات العلوية في الواجهة)
-export async function getExceptionCounts() {
+export async function getExceptionCounts({ scope = null } = {}) {
+  const sc = scopeAnd(scope, 't');
   const rows = await query(
     `SELECT
         SUM(t.status_category = 'indeterminate'
@@ -112,8 +116,8 @@ export async function getExceptionCounts() {
         SUM(t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE) AS overdue,
         SUM(t.assignee_account_id IS NULL) AS unassigned
      FROM tickets t
-     WHERE t.status_category <> 'done'`,
-    { stagnantDays: ruleConfig.stagnantDays, reviewDays: ruleConfig.reviewDays }
+     WHERE t.status_category <> 'done'${sc.sql}`,
+    { stagnantDays: ruleConfig.stagnantDays, reviewDays: ruleConfig.reviewDays, ...sc.params }
   );
   const r = rows[0] || {};
   return {

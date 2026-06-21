@@ -1,15 +1,17 @@
 import { handler, ok } from '@/lib/http';
 import { requirePermission } from '@/lib/auth';
 import { getSlaForecast } from '@/lib/analytics';
+import { getUserScope } from '@/lib/companies';
 
 export const dynamic = 'force-dynamic';
 
 // تنبؤ SLA: التذاكر المفتوحة مرتّبة حسب قرب/تجاوز الموعد النهائي.
 export const GET = handler(async (req) => {
-  await requirePermission('view_managerial');
+  const me = await requirePermission('view_managerial');
+  const scope = await getUserScope(me.id);
   const url = new URL(req.url);
   const atRiskDays = parseInt(url.searchParams.get('atRiskDays') || '2', 10);
-  const items = await getSlaForecast({ atRiskDays });
+  const items = await getSlaForecast({ atRiskDays, scope });
 
   const summary = items.reduce(
     (acc, x) => {

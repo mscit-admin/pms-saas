@@ -1,6 +1,7 @@
 import { query } from './db.js';
 import { ruleConfig } from './config.js';
 import { getSetting } from './settings.js';
+import { scopeAnd } from './companies.js';
 
 // تحليلات اللوحة الإدارية + أعباء الفريق. تعتمد على tickets و ticket_history و sla_config.
 
@@ -8,7 +9,8 @@ import { getSetting } from './settings.js';
 // أعباء الفريق — أداة توازن ومساءلة بنّاءة، لا محاسبة فردية.
 // لكل مُسنَد إليه: المفتوحة، قيد التنفيذ، الاستثناءات، والمتأخرة.
 // ---------------------------------------------------------------------
-export async function getTeamWorkload() {
+export async function getTeamWorkload({ scope = null } = {}) {
+  const sc = scopeAnd(scope, 't');
   const rows = await query(
     `SELECT
         COALESCE(t.assignee_name, 'بدون مسؤول') AS assignee,
@@ -19,10 +21,10 @@ export async function getTeamWorkload() {
         SUM(t.status_category = 'indeterminate'
             AND TIMESTAMPDIFF(DAY, t.last_status_change_at, UTC_TIMESTAMP()) > :stagnantDays) AS stagnant
      FROM tickets t
-     WHERE t.status_category <> 'done'
+     WHERE t.status_category <> 'done'${sc.sql}
      GROUP BY t.assignee_name, t.assignee_account_id
      ORDER BY open_count DESC`,
-    { stagnantDays: ruleConfig.stagnantDays }
+    { stagnantDays: ruleConfig.stagnantDays, ...sc.params }
   );
   return rows.map((r) => ({
     assignee: r.assignee,
@@ -65,7 +67,8 @@ export async function getTrend({ days = 30 } = {}) {
 //   at_risk   : باقٍ ≤ 2 يوم
 //   on_track  : غير ذلك
 // ---------------------------------------------------------------------
-export async function getSlaForecast({ atRiskDays = 2 } = {}) {
+export async function getSlaForecast({ atRiskDays = 2, scope = null } = {}) {
+  const sc = scopeAnd(scope, 't');
   const rows = await query(
     `SELECT
         t.issue_key, t.summary, t.priority, t.assignee_name, t.status,
@@ -76,8 +79,9 @@ export async function getSlaForecast({ atRiskDays = 2 } = {}) {
           DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY)) AS days_remaining
      FROM tickets t
      JOIN sla_config s ON s.priority = t.priority
-     WHERE t.status_category <> 'done'
+     WHERE t.status_category <> 'done'${sc.sql}
      ORDER BY days_remaining ASC`,
+    sc.params
   );
   return rows.map((r) => {
     const remaining = Number(r.days_remaining);
@@ -101,7 +105,8 @@ export async function getSlaForecast({ atRiskDays = 2 } = {}) {
 // ---------------------------------------------------------------------
 // زمن الدورة — متوسط (الإنشاء → الإنجاز) للتذاكر المُنجَزة، إجمالاً وحسب الأولوية.
 // ---------------------------------------------------------------------
-export async function getCycleTime({ days = 90 } = {}) {
+export async function getCycleTime({ days = 90, scope = null } = {}) {
+  const sc = scopeAnd(scope, '');
   const overall = await query(
     `SELECT
         COUNT(*) AS resolved_count,
@@ -110,8 +115,8 @@ export async function getCycleTime({ days = 90 } = {}) {
         MAX(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS max_days
      FROM tickets
      WHERE status_category = 'done' AND resolved_at IS NOT NULL
-       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)`,
-    { days }
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)${sc.sql}`,
+    { days, ...sc.params }
   );
 
   const byPriority = await query(
@@ -120,9 +125,9 @@ export async function getCycleTime({ days = 90 } = {}) {
         AVG(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS avg_days
      FROM tickets
      WHERE status_category = 'done' AND resolved_at IS NOT NULL
-       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)${sc.sql}
      GROUP BY priority`,
-    { days }
+    { days, ...sc.params }
   );
 
   const o = overall[0] || {};
@@ -145,7 +150,8 @@ export async function getCycleTime({ days = 90 } = {}) {
 // زمن البقاء في كل مرحلة — من ticket_history باستخدام دالة النافذة LEAD.
 // مدة المرحلة = الفرق بين تغيّر الحالة والتغيّر التالي (MySQL 8+).
 // ---------------------------------------------------------------------
-export async function getStageResidence({ days = 90 } = {}) {
+export async function getStageResidence({ days = 90, scope = null } = {}) {
+  const sc = scopeAnd(scope, 't');
   const rows = await query(
     `SELECT to_status AS stage,
         COUNT(*) AS transitions,
@@ -159,12 +165,13 @@ export async function getStageResidence({ days = 90 } = {}) {
             LEAD(h.changed_at) OVER (PARTITION BY h.issue_id ORDER BY h.changed_at)
           ) AS hours_in_stage
         FROM ticket_history h
-        WHERE h.changed_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+        JOIN tickets t ON t.id = h.issue_id
+        WHERE h.changed_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)${sc.sql}
      ) x
      WHERE x.hours_in_stage IS NOT NULL
      GROUP BY to_status
      ORDER BY avg_days DESC`,
-    { days }
+    { days, ...sc.params }
   );
   return rows.map((r) => ({
     stage: r.stage,
@@ -191,8 +198,9 @@ function scaler(values, invert = false) {
   };
 }
 
-export async function getPerformance({ days = 90 } = {}) {
+export async function getPerformance({ days = 90, scope = null } = {}) {
   const stuckDays = ruleConfig.stagnantDays;
+  const sc = scopeAnd(scope, '');
 
   // ---- المسؤولون ----
   const aDone = await query(
@@ -203,17 +211,17 @@ export async function getPerformance({ days = 90 } = {}) {
         SUM(due_date IS NOT NULL AND DATE(resolved_at) <= due_date) AS on_time
      FROM tickets
      WHERE status_category = 'done' AND resolved_at IS NOT NULL AND assignee_account_id IS NOT NULL
-       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)${sc.sql}
      GROUP BY assignee_account_id, assignee_name`,
-    { days }
+    { days, ...sc.params }
   );
   const aOpen = await query(
     `SELECT assignee_account_id AS id, COUNT(*) AS open_count,
         SUM(status_category = 'indeterminate' AND TIMESTAMPDIFF(DAY, last_status_change_at, UTC_TIMESTAMP()) > :stuckDays) AS stuck,
         SUM(due_date IS NOT NULL AND due_date < CURRENT_DATE) AS overdue
-     FROM tickets WHERE status_category <> 'done' AND assignee_account_id IS NOT NULL
+     FROM tickets WHERE status_category <> 'done' AND assignee_account_id IS NOT NULL${sc.sql}
      GROUP BY assignee_account_id`,
-    { stuckDays }
+    { stuckDays, ...sc.params }
   );
   const openById = new Map(aOpen.map((r) => [r.id, r]));
 
@@ -252,9 +260,9 @@ export async function getPerformance({ days = 90 } = {}) {
         SUM(due_date IS NOT NULL AND DATE(resolved_at) <= due_date) AS on_time
      FROM tickets
      WHERE status_category = 'done' AND resolved_at IS NOT NULL
-       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)${sc.sql}
      GROUP BY project_key`,
-    { days }
+    { days, ...sc.params }
   );
   const tRaw = tDone.map((r) => {
     const withDue = Number(r.with_due || 0);
@@ -333,14 +341,16 @@ export async function getWipOverTime({ days = 30, top = 6 } = {}) {
 // ---------------------------------------------------------------------
 // الإنتاجية والتنبؤ: المنجَز أسبوعياً + تقدير متى يُستنزف المتراكم بالوتيرة الحالية.
 // ---------------------------------------------------------------------
-export async function getThroughput({ weeks = 12 } = {}) {
+export async function getThroughput({ weeks = 12, scope = null } = {}) {
+  const sc = scopeAnd(scope, '');
+  const sct = scopeAnd(scope, 't');
   const rows = await query(
     `SELECT DATE_SUB(DATE(resolved_at), INTERVAL WEEKDAY(resolved_at) DAY) AS wk, COUNT(*) AS cnt
      FROM tickets
      WHERE status_category = 'done' AND resolved_at IS NOT NULL
-       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :weeks WEEK)
+       AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :weeks WEEK)${sc.sql}
      GROUP BY wk ORDER BY wk ASC`,
-    { weeks }
+    { weeks, ...sc.params }
   );
   const fmtWk = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
   const series = rows.map((r) => ({ week: fmtWk(r.wk), count: Number(r.cnt) }));
@@ -358,11 +368,13 @@ export async function getThroughput({ weeks = 12 } = {}) {
   const totals = await query(
     `SELECT SUM(status_category <> 'done') AS open_count,
         SUM(due_date IS NOT NULL AND due_date < CURRENT_DATE AND status_category <> 'done') AS overdue
-     FROM tickets`
+     FROM tickets WHERE 1=1${sc.sql}`,
+    sc.params
   );
   const breachedRows = await query(
     `SELECT COUNT(*) AS breached FROM tickets t JOIN sla_config s ON s.priority = t.priority
-     WHERE t.status_category <> 'done' AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP()`
+     WHERE t.status_category <> 'done' AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP()${sct.sql}`,
+    sct.params
   );
   const open = Number(totals[0]?.open_count || 0);
   const overdue = Number(totals[0]?.overdue || 0);
@@ -387,34 +399,37 @@ export async function getThroughput({ weeks = 12 } = {}) {
 // تدفّق العمل والاختناقات: توزيع WIP الحالي على المراحل + أقدم العناصر العالقة.
 // (CFD حقيقي يحتاج لقطات يومية؛ هنا نعرض الحالة الراهنة وأين يتراكم العمل ويهرم.)
 // ---------------------------------------------------------------------
-export async function getFlow({ agingLimit = 50 } = {}) {
+export async function getFlow({ agingLimit = 50, scope = null } = {}) {
   const stuckDays = ruleConfig.stagnantDays;
+  const sc = scopeAnd(scope, 't');
   const wipRows = await query(
     `SELECT t.status AS stage, t.status_category AS category,
         COUNT(*) AS count,
         AVG(TIMESTAMPDIFF(HOUR, t.last_status_change_at, UTC_TIMESTAMP())) / 24 AS avg_age,
         MAX(TIMESTAMPDIFF(HOUR, t.last_status_change_at, UTC_TIMESTAMP())) / 24 AS max_age,
         SUM(TIMESTAMPDIFF(DAY, t.last_status_change_at, UTC_TIMESTAMP()) > :stuckDays) AS stuck
-     FROM tickets t WHERE t.status_category <> 'done'
+     FROM tickets t WHERE t.status_category <> 'done'${sc.sql}
      GROUP BY t.status, t.status_category
      ORDER BY count DESC`,
-    { stuckDays }
+    { stuckDays, ...sc.params }
   );
 
   const aging = await query(
     `SELECT t.issue_key, t.summary, t.project_key, t.status, t.priority, t.assignee_name,
         TIMESTAMPDIFF(DAY, t.last_status_change_at, UTC_TIMESTAMP()) AS days_in_status
-     FROM tickets t WHERE t.status_category <> 'done'
+     FROM tickets t WHERE t.status_category <> 'done'${sc.sql}
      ORDER BY t.last_status_change_at ASC
-     LIMIT ${Math.max(1, Math.min(200, parseInt(agingLimit, 10) || 50))}`
+     LIMIT ${Math.max(1, Math.min(200, parseInt(agingLimit, 10) || 50))}`,
+    sc.params
   );
 
   // اختناق كل مشروع: المرحلة الأعلى (العدد × متوسط العمر) داخل المشروع
   const projRows = await query(
     `SELECT t.project_key AS p, t.status AS stage, COUNT(*) AS count,
         AVG(TIMESTAMPDIFF(HOUR, t.last_status_change_at, UTC_TIMESTAMP())) / 24 AS avg_age
-     FROM tickets t WHERE t.status_category <> 'done'
-     GROUP BY t.project_key, t.status`
+     FROM tickets t WHERE t.status_category <> 'done'${sc.sql}
+     GROUP BY t.project_key, t.status`,
+    sc.params
   );
   const projMap = new Map();
   for (const r of projRows) {
@@ -431,7 +446,8 @@ export async function getFlow({ agingLimit = 50 } = {}) {
   // تُلغى الاعتمادية (تُخفى) عندما تصل الحاجبة لفئة Done، أو لإحدى الحالات المخصّصة في الإعدادات.
   const clearedStatuses = ((await getSetting('dep_cleared_statuses', '')) || '')
     .split(',').map((s) => s.trim()).filter(Boolean);
-  const depParams = {};
+  const scDep = scopeAnd(scope, 'tb');
+  const depParams = { ...scDep.params };
   let clearedFilter = '';
   if (clearedStatuses.length) {
     const ph = clearedStatuses.map((_, i) => `:dc${i}`);
@@ -448,7 +464,7 @@ export async function getFlow({ agingLimit = 50 } = {}) {
      FROM ticket_blocks b
      JOIN tickets tb ON tb.issue_key = b.blocker_key
      JOIN tickets td ON td.issue_key = b.blocked_key
-     WHERE tb.status_category <> 'done' AND td.status_category <> 'done'${clearedFilter}
+     WHERE tb.status_category <> 'done' AND td.status_category <> 'done'${clearedFilter}${scDep.sql}
      GROUP BY b.blocker_key, tb.summary, tb.status, tb.project_key, tb.assignee_name, tb.last_status_change_at
      ORDER BY blocking_count DESC, blocker_days DESC
      LIMIT 20`,
@@ -504,7 +520,9 @@ export async function getFlow({ agingLimit = 50 } = {}) {
 // ---------------------------------------------------------------------
 // بطاقة صحة المشاريع (RAG) + نسبة التسليم في الموعد — لكل مشروع.
 // ---------------------------------------------------------------------
-export async function getProjectScorecard() {
+export async function getProjectScorecard({ scope = null } = {}) {
+  const sc = scopeAnd(scope, 't');
+  const scn = scopeAnd(scope, '');
   const openRows = await query(
     `SELECT t.project_key AS p,
         COUNT(*) AS open_count,
@@ -514,16 +532,17 @@ export async function getProjectScorecard() {
             AND TIMESTAMPDIFF(DAY, t.last_status_change_at, UTC_TIMESTAMP()) > :reviewDays) AS review,
         SUM(t.due_date IS NOT NULL AND t.due_date < CURRENT_DATE) AS overdue,
         SUM(t.assignee_account_id IS NULL) AS unassigned
-     FROM tickets t WHERE t.status_category <> 'done' GROUP BY t.project_key`,
-    { stagnantDays: ruleConfig.stagnantDays, reviewDays: ruleConfig.reviewDays }
+     FROM tickets t WHERE t.status_category <> 'done'${sc.sql} GROUP BY t.project_key`,
+    { stagnantDays: ruleConfig.stagnantDays, reviewDays: ruleConfig.reviewDays, ...sc.params }
   );
 
   const breachedRows = await query(
     `SELECT t.project_key AS p, COUNT(*) AS breached
      FROM tickets t JOIN sla_config s ON s.priority = t.priority
      WHERE t.status_category <> 'done'
-       AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP()
-     GROUP BY t.project_key`
+       AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP()${sc.sql}
+     GROUP BY t.project_key`,
+    sc.params
   );
 
   const doneRows = await query(
@@ -532,8 +551,9 @@ export async function getProjectScorecard() {
         AVG(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS avg_days,
         SUM(due_date IS NOT NULL) AS with_due,
         SUM(due_date IS NOT NULL AND DATE(resolved_at) <= due_date) AS on_time
-     FROM tickets WHERE status_category = 'done' AND resolved_at IS NOT NULL
-     GROUP BY project_key`
+     FROM tickets WHERE status_category = 'done' AND resolved_at IS NOT NULL${scn.sql}
+     GROUP BY project_key`,
+    scn.params
   );
 
   const map = new Map();
@@ -574,7 +594,9 @@ export async function getProjectScorecard() {
 // ---------------------------------------------------------------------
 // الملخص التنفيذي — أرقام أعلى المستوى للوحة الإدارية.
 // ---------------------------------------------------------------------
-export async function getExecutiveSummary() {
+export async function getExecutiveSummary({ scope = null } = {}) {
+  const scn = scopeAnd(scope, '');
+  const sc = scopeAnd(scope, 't');
   const totals = await query(
     `SELECT
         COUNT(*) AS total,
@@ -582,17 +604,19 @@ export async function getExecutiveSummary() {
         SUM(status_category = 'done') AS done_count,
         SUM(due_date IS NOT NULL AND due_date < CURRENT_DATE AND status_category <> 'done') AS overdue,
         SUM(assignee_account_id IS NULL AND status_category <> 'done') AS unassigned
-     FROM tickets`
+     FROM tickets WHERE 1=1${scn.sql}`,
+    scn.params
   );
 
   const breached = await query(
     `SELECT COUNT(*) AS breached
      FROM tickets t JOIN sla_config s ON s.priority = t.priority
      WHERE t.status_category <> 'done'
-       AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP()`
+       AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP()${sc.sql}`,
+    sc.params
   );
 
-  const cycle = await getCycleTime();
+  const cycle = await getCycleTime({ scope });
   const t = totals[0] || {};
   return {
     totalTickets: Number(t.total || 0),

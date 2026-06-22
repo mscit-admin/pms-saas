@@ -41,7 +41,7 @@ const DICT = {
     logout: 'خروج',
     refresh: 'تحديث', collapseAll: 'طي الكل', expandAll: 'فتح الكل',
     syncNow: 'مزامنة جيرا', syncStarted: 'بدأت المزامنة في الخلفية… حدّث بعد قليل', syncBusy: 'المزامنة قيد التشغيل بالفعل', syncFail: 'تعذّرت المزامنة',
-    navDashboard: 'لوحة المعلومات', navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي', projectTickets: 'عرض تذاكر المشروع',
+    navDashboard: 'لوحة المعلومات', navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي', projectTickets: 'تذاكر المشروع',
     scrDashboard: 'المؤشرات', hDashboard: 'أهم مؤشرات الأداء في لقطة واحدة. تظهر المؤشرات أو تُخفى حسب صلاحيات دورك.', noKpi: 'لا توجد مؤشرات متاحة لدورك.',
     dragHint: 'اسحب البطاقات لإعادة ترتيبها', resetLayout: 'إعادة الترتيب الافتراضي',
     scrOverview: 'نظرة عامة', scrKpi: 'المؤشرات العامة', scrCycle: 'زمن الدورة', scrSecurity: 'إعدادات الحساب',

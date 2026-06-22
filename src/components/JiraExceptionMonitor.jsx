@@ -787,10 +787,12 @@ export default function JiraExceptionMonitor() {
                 title={sidebarVisible ? t.menuHide : t.menuShow}
                 style={{ ...ghostBtn, fontSize: 18, lineHeight: 1, padding: '4px 10px' }}
               >☰</button>
-              <span className="pms-tip" style={{ color: C.muted, fontSize: 12, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span className="pms-tip" style={{ display: 'inline-flex', alignItems: 'center', cursor: 'default', padding: '2px 0' }} aria-label={`${t.lastSync}: ${fmtDateTime(meta?.lastSyncAt)}`}>
                 <span className="pms-live-dot" />
-                {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
-                <span className="pms-tip-box">{t.lastSyncTip}</span>
+                <span className="pms-tip-box">
+                  <strong>{t.lastSync}:</strong> {fmtDateTime(meta?.lastSyncAt)}
+                  <div style={{ opacity: 0.8, marginTop: 4 }}>{t.lastSyncTip}</div>
+                </span>
               </span>
             </div>
 

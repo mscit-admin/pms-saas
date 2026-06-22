@@ -54,7 +54,7 @@ export async function getExceptions({ from = null, to = null, all = false, scope
   const rows = await query(
     `SELECT
         t.id, t.issue_key, t.project_key, t.summary, t.status, t.status_category,
-        t.issue_type, t.priority, t.assignee_name, t.assignee_account_id, t.due_date, t.labels,
+        t.issue_type, t.priority, t.assignee_name, t.assignee_account_id, t.reporter_name, t.due_date, t.labels,
         t.jira_created_at, t.last_status_change_at,
         t.last_edited_by AS last_actor, t.last_edited_at AS last_actor_at,
         es.acknowledged, es.snooze_until, es.owner_user_id, es.root_cause, es.note,
@@ -89,6 +89,7 @@ export async function getExceptions({ from = null, to = null, all = false, scope
       labels: r.labels ? r.labels.split(',').filter(Boolean) : [],
       dueDate: r.due_date,
       createdAt: r.jira_created_at,
+      reporter: r.reporter_name || null,
       daysInStatus: r.days_in_status,
       lastActor: r.last_actor || null,
       lastActorAt: r.last_actor_at || null,

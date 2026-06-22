@@ -106,6 +106,7 @@ const DICT = {
     thStatus: 'الحالة',
     thPriority: 'الأولوية',
     thAssignee: 'المسؤول',
+    thCreator: 'المُنشئ',
     thLastActor: 'آخر تحديث',
     thDue: 'الاستحقاق',
     thDays: 'أيام بالحالة',
@@ -245,6 +246,7 @@ const DICT = {
     thStatus: 'Status',
     thPriority: 'Priority',
     thAssignee: 'Assignee',
+    thCreator: 'Reporter',
     thLastActor: 'Last update',
     thDue: 'Due',
     thDays: 'Days in status',
@@ -1109,13 +1111,15 @@ function MultiSelect({ label, value, options, onChange, labels = {} }) {
 
 // تصدير صفوف إلى CSV وتنزيلها (مع BOM لدعم العربية في Excel)
 function downloadCsv(rows, t) {
-  const headers = [t.thKey, t.thSummary, t.thType, t.fProject, t.thStatus, t.thPriority, t.thAssignee, t.thLastActor, t.thDue, t.thDays, t.thReasons];
+  const headers = [t.thKey, t.thSummary, t.thType, t.fProject, t.thStatus, t.thPriority, t.thAssignee, t.thCreator, t.thLastActor, t.thDue, t.thDays, t.thReasons];
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const dt = (v) => (v ? String(v).slice(0, 16).replace('T', ' ') : '');
   const lines = [headers.map(esc).join(',')];
   for (const r of rows) {
     lines.push([
       r.key, r.summary, r.issueType || '', r.project, r.status, r.priority, r.assignee || '',
-      r.lastActor ? `${r.lastActor}${r.lastActorAt ? ` (${String(r.lastActorAt).slice(0, 16).replace('T', ' ')})` : ''}` : '',
+      r.reporter ? `${r.reporter}${r.createdAt ? ` (${dt(r.createdAt)})` : ''}` : dt(r.createdAt),
+      r.lastActor ? `${r.lastActor}${r.lastActorAt ? ` (${dt(r.lastActorAt)})` : ''}` : '',
       r.dueDate || '', r.daysInStatus, r.reasonsAr ? r.reasonsAr.join(' | ') : r.reasons.join(' | '),
     ].map(esc).join(','));
   }
@@ -1640,6 +1644,7 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
         <F label={t.thAssignee}>{it.assignee || <span style={{ color: C.red }}>—</span>}</F>
         <F label={t.thDue}>{fmtDate(it.dueDate)}</F>
         <F label={t.thDays}>{fmt(it.daysInStatus)}</F>
+        <F label={t.thCreator}>{it.reporter ? `${it.reporter} · ${fmtDateTime(it.createdAt)}` : (it.createdAt ? fmtDateTime(it.createdAt) : '—')}</F>
         <F label={t.thLastActor}>{it.lastActor ? `${it.lastActor} · ${fmtDateTime(it.lastActorAt)}` : '—'}</F>
       </div>
       <div>{it.reasons.map((r) => <Chip key={r} color={EXC_COLORS[r]}>{t.exc[r] || r}</Chip>)}</div>
@@ -2051,6 +2056,7 @@ function OperationalTab({ screen = 'exceptions' }) {
                 <Th>{t.thStatus}</Th>
                 <Th>{t.thPriority}</Th>
                 <Th>{t.thAssignee}</Th>
+                <Th>{t.thCreator}</Th>
                 <Th>{t.thLastActor}</Th>
                 <Th>{t.thDue}</Th>
                 <Th align="center">{t.thDays}</Th>
@@ -2074,6 +2080,11 @@ function OperationalTab({ screen = 'exceptions' }) {
                   <Td>{it.status}</Td>
                   <Td>{it.priority}</Td>
                   <Td>{it.assignee || <span style={{ color: C.red }}>—</span>}</Td>
+                  <Td>
+                    {it.reporter ? (
+                      <span>{it.reporter}<span style={{ color: C.muted, fontSize: 12 }}> · {fmtDateTime(it.createdAt)}</span></span>
+                    ) : (it.createdAt ? fmtDateTime(it.createdAt) : '—')}
+                  </Td>
                   <Td>
                     {it.lastActor ? (
                       <span>{it.lastActor}<span style={{ color: C.muted, fontSize: 12 }}> · {fmtDateTime(it.lastActorAt)}</span></span>

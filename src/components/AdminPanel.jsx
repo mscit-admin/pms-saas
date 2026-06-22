@@ -19,7 +19,7 @@ const T = {
     projectsCol: 'المشاريع', confirmDelCo: 'حذف الشركة وكل مشاريعها وإسناداتها؟', confirmDelProj: 'حذف المشروع وإسناداته؟',
     jiraAccounts: 'حسابات جيرا', accLabel: 'اسم الحساب', accBase: 'رابط جيرا', accEmail: 'البريد', accToken: 'API Token', accTokenKeep: 'اتركه فارغاً للإبقاء على الحالي', accJql: 'JQL', accActive: 'نشط', accCompanies: 'الشركات المرتبطة', addAccount: 'إضافة حساب', testConn: 'اختبار', accProject: 'الحساب', noAccounts: 'لا حسابات بعد — أضِف حساب جيرا واحداً أو أكثر.', accHint: 'كل حساب يُزامَن باعتماداته و JQL الخاصّين به، ويُربط بشركة أو عدّة شركات. ثم تختار حساب كل مشروع.', confirmDelAcc: 'حذف هذا الحساب؟ ستفقد ربطه بالشركات.',
     aiEnabled: 'تفعيل اقتراح التعليقات', aiProvider: 'المزوّد', aiBaseUrl: 'الرابط (Base URL)', aiModel: 'النموذج', aiKeyL: 'مفتاح API', aiAnthropic: 'Anthropic (Claude)', aiOpenai: 'متوافق مع OpenAI',
-    loginLogs: 'سجلّ الدخول', auditLogs: 'سجلّ التدقيق', time: 'الوقت', actor: 'المنفّذ', actionC: 'الإجراء', target: 'الهدف', ipC: 'IP', detailC: 'تفاصيل', noLogs: 'لا سجلّات', from2: 'من', to2: 'إلى',
+    loginLogs: 'سجلّ الدخول', auditLogs: 'سجلّ التدقيق', time: 'الوقت', actor: 'المنفّذ', actionC: 'الإجراء', target: 'الهدف', ipC: 'IP', detailC: 'تفاصيل', noLogs: 'لا سجلّات', from2: 'من', to2: 'إلى', rowsPerPage: 'عدد الصفوف',
     al: { login_success: 'دخول ناجح', login_failed: 'محاولة فاشلة', logout: 'خروج', user_create: 'إنشاء مستخدم', user_update: 'تعديل مستخدم', user_delete: 'حذف مستخدم', reset_2fa: 'إعادة ضبط 2FA', role_create: 'إنشاء دور', role_update: 'تعديل دور', role_delete: 'حذف دور', settings_update: 'تعديل إعدادات', integration_update: 'تعديل الربط', branding_upload: 'رفع هوية', branding_remove: 'إزالة هوية', ticket_assign: 'إسناد تذكرة', ticket_comment: 'تعليق', ticket_transition: 'نقل حالة', ticket_fields: 'تعديل حقول', followup_update: 'متابعة' },
     logo: 'الشعار', favicon: 'أيقونة المتصفح', upload: 'رفع', remove: 'إزالة', currentImg: 'الحالي', noImg: 'لا يوجد',
     appBg: 'خلفية التطبيق', loginBg: 'خلفية شاشة الدخول', dim: 'الخفوت', show: 'إظهار الصورة', saveDisplay: 'حفظ العرض', refreshHint2: 'حدّث الصفحة لرؤية الأثر.',
@@ -52,7 +52,7 @@ const T = {
     projectsCol: 'Projects', confirmDelCo: 'Delete the company with all its projects and assignments?', confirmDelProj: 'Delete the project and its assignments?',
     jiraAccounts: 'Jira accounts', accLabel: 'Account name', accBase: 'Jira base URL', accEmail: 'Email', accToken: 'API Token', accTokenKeep: 'leave blank to keep current', accJql: 'JQL', accActive: 'Active', accCompanies: 'Linked companies', addAccount: 'Add account', testConn: 'Test', accProject: 'Account', noAccounts: 'No accounts yet — add one or more Jira accounts.', accHint: 'Each account syncs with its own credentials and JQL, and links to one or more companies. Then you pick each project’s account.', confirmDelAcc: 'Delete this account? Its company links will be lost.',
     aiEnabled: 'Enable comment suggestions', aiProvider: 'Provider', aiBaseUrl: 'Base URL', aiModel: 'Model', aiKeyL: 'API key', aiAnthropic: 'Anthropic (Claude)', aiOpenai: 'OpenAI-compatible',
-    loginLogs: 'Login log', auditLogs: 'Audit log', time: 'Time', actor: 'Actor', actionC: 'Action', target: 'Target', ipC: 'IP', detailC: 'Detail', noLogs: 'No entries', from2: 'From', to2: 'To',
+    loginLogs: 'Login log', auditLogs: 'Audit log', time: 'Time', actor: 'Actor', actionC: 'Action', target: 'Target', ipC: 'IP', detailC: 'Detail', noLogs: 'No entries', from2: 'From', to2: 'To', rowsPerPage: 'Rows',
     al: { login_success: 'Login OK', login_failed: 'Login failed', logout: 'Logout', user_create: 'Create user', user_update: 'Update user', user_delete: 'Delete user', reset_2fa: 'Reset 2FA', role_create: 'Create role', role_update: 'Update role', role_delete: 'Delete role', settings_update: 'Update settings', integration_update: 'Update integration', branding_upload: 'Branding upload', branding_remove: 'Branding remove', ticket_assign: 'Assign ticket', ticket_comment: 'Comment', ticket_transition: 'Transition', ticket_fields: 'Edit fields', followup_update: 'Follow-up' },
     logo: 'Logo', favicon: 'Favicon', upload: 'Upload', remove: 'Remove', currentImg: 'Current', noImg: 'none',
     appBg: 'App background', loginBg: 'Login background', dim: 'Dimming', show: 'Show image', saveDisplay: 'Save display', refreshHint2: 'Refresh the page to see the effect.',
@@ -887,19 +887,19 @@ function LogsSection({ t }) {
   const [tab, setTab] = useState('login');
   const [data, setData] = useState(null);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [err, setErr] = useState('');
-  const pageSize = 50;
 
   const load = useCallback(async () => {
     const qs = new URLSearchParams({ category: tab, page: String(page), pageSize: String(pageSize) });
     if (from) qs.set('from', from);
     if (to) qs.set('to', to);
     setData(await api(`/api/audit?${qs.toString()}`));
-  }, [tab, page, from, to]);
+  }, [tab, page, pageSize, from, to]);
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
-  useEffect(() => { setPage(1); }, [tab, from, to]);
+  useEffect(() => { setPage(1); }, [tab, pageSize, from, to]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
   const fmtTime = (d) => (d ? new Date(d).toLocaleString('en-GB') : '—');
@@ -944,8 +944,11 @@ function LogsSection({ t }) {
             )}
           </tbody>
         </table>
-        {data && data.total > pageSize && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
+        {data && data.total > 0 && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={{ ...inp, cursor: 'pointer' }} title={t.rowsPerPage} aria-label={t.rowsPerPage}>
+              {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} style={ghost}>‹</button>
             <span style={{ fontSize: 13, color: C.muted }}>{page} / {totalPages}</span>
             <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} style={ghost}>›</button>

@@ -68,6 +68,7 @@ const DICT = {
     exportCsv: 'تصدير CSV',
     perPage: 'لكل صفحة',
     pageOf: (x, y) => `صفحة ${x} من ${y}`,
+    rowsPerPage: 'عدد الصفوف',
     prev: 'السابق',
     next: 'التالي',
     actions: 'إجراءات',
@@ -205,6 +206,7 @@ const DICT = {
     exportCsv: 'Export CSV',
     perPage: 'per page',
     pageOf: (x, y) => `Page ${x} of ${y}`,
+    rowsPerPage: 'Rows',
     prev: 'Prev',
     next: 'Next',
     actions: 'Actions',
@@ -1851,9 +1853,34 @@ function DashboardScreen({ perms = [], userId }) {
   );
 }
 
+// شريط ترقيم مشترك مع مُحدِّد عدد الصفوف (10/20/50/100) — لكل الجداول.
+const PAGE_SIZES = [10, 20, 50, 100];
+function PageBar({ page, setPage, pageSize, setPageSize, total }) {
+  const { t } = useUI();
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safe = Math.min(page, totalPages);
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+      <select
+        value={pageSize}
+        onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+        title={t.rowsPerPage}
+        aria-label={t.rowsPerPage}
+        style={{ border: `1px solid ${C.border}`, borderRadius: 5, padding: '5px 8px', fontSize: 13, background: C.card, cursor: 'pointer' }}
+      >
+        {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+      <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safe <= 1} style={ghostBtn}>‹ {t.prev}</button>
+      <span style={{ fontSize: 13, color: C.muted }}>{t.pageOf(safe, totalPages)}</span>
+      <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safe >= totalPages} style={ghostBtn}>{t.next} ›</button>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------- العملياتي
 function OperationalTab({ screen = 'exceptions' }) {
-  const { t, fmt, fmtDate, fmtDateTime, perms, pageSize } = useUI();
+  const { t, fmt, fmtDate, fmtDateTime, perms, pageSize: defaultPageSize } = useUI();
+  const [pageSize, setPageSize] = useState(PAGE_SIZES.includes(defaultPageSize) ? defaultPageSize : 20);
   const isMobile = useIsMobile();
   const canAct = (perms || []).includes('act_tickets');
   const canManage = (perms || []).includes('manage_exceptions');
@@ -2070,11 +2097,7 @@ function OperationalTab({ screen = 'exceptions' }) {
 
         {/* ترقيم الصفحات */}
         {filtered.length > 0 && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} style={ghostBtn}>‹ {t.prev}</button>
-            <span style={{ fontSize: 13, color: C.muted }}>{t.pageOf(safePage, totalPages)}</span>
-            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} style={ghostBtn}>{t.next} ›</button>
-          </div>
+          <PageBar page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} total={filtered.length} />
         )}
       </Screen>
       )}
@@ -2103,7 +2126,8 @@ function OperationalTab({ screen = 'exceptions' }) {
 
 // ------------------------------------------------------------------- الإداري
 function ManagerialTab({ screen = 'performance' }) {
-  const { t, pageSize } = useUI();
+  const { t, pageSize: defaultPageSize } = useUI();
+  const [pageSize, setPageSize] = useState(PAGE_SIZES.includes(defaultPageSize) ? defaultPageSize : 20);
   const isMobile = useIsMobile();
   const [summary, setSummary] = useState(null);
   const [trend, setTrend] = useState(null);
@@ -2263,11 +2287,7 @@ function ManagerialTab({ screen = 'performance' }) {
             </div>
             )}
             {atRisk.length > 0 && (
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
-                <button onClick={() => setSlaPage((p) => Math.max(1, p - 1))} disabled={slaSafePage <= 1} style={ghostBtn}>‹ {t.prev}</button>
-                <span style={{ fontSize: 13, color: C.muted }}>{t.pageOf(slaSafePage, slaTotalPages)}</span>
-                <button onClick={() => setSlaPage((p) => Math.min(slaTotalPages, p + 1))} disabled={slaSafePage >= slaTotalPages} style={ghostBtn}>{t.next} ›</button>
-              </div>
+              <PageBar page={slaPage} setPage={setSlaPage} pageSize={pageSize} setPageSize={setPageSize} total={atRisk.length} />
             )}
           </Screen>
         </div>
@@ -2312,9 +2332,20 @@ function ScorePill({ value }) {
 function Performance({ data }) {
   const { t, fmt } = useUI();
   const isMobile = useIsMobile();
+  const [aPage, setAPage] = useState(1);
+  const [aSize, setASize] = useState(20);
+  const [tPage, setTPage] = useState(1);
+  const [tSize, setTSize] = useState(20);
   if (!data) return <Loading />;
 
   const F = ({ label, children }) => (<div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>);
+
+  const assignees = data.assignees || [];
+  const teams = data.teams || [];
+  const aSafe = Math.min(aPage, Math.max(1, Math.ceil(assignees.length / aSize)));
+  const tSafe = Math.min(tPage, Math.max(1, Math.ceil(teams.length / tSize)));
+  const aShown = assignees.slice((aSafe - 1) * aSize, aSafe * aSize);
+  const tShown = teams.slice((tSafe - 1) * tSize, tSafe * tSize);
 
   const assigneeCard = (x) => (
     <div key={x.name} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
@@ -2336,7 +2367,7 @@ function Performance({ data }) {
 
       <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0 6px' }}>{t.perfAssignees}</div>
       {isMobile ? (
-        (data.assignees || []).map(assigneeCard)
+        aShown.map(assigneeCard)
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
@@ -2345,7 +2376,7 @@ function Performance({ data }) {
               <Th align="center">{t.onTime}</Th><Th align="center">{t.colCycle}</Th><Th align="center">{t.colLoad}</Th>
             </tr></thead>
             <tbody>
-              {(data.assignees || []).map((x) => (
+              {aShown.map((x) => (
                 <tr key={x.name}>
                   <Td>{x.name}</Td>
                   <Td align="center"><ScorePill value={x.overall} /></Td>
@@ -2355,16 +2386,17 @@ function Performance({ data }) {
                   <Td align="center">{fmt(x.openLoad)}{x.stuck ? ` · ${fmt(x.stuck)}⚠` : ''}</Td>
                 </tr>
               ))}
-              {(!data.assignees || data.assignees.length === 0) && <tr><Td align="center">—</Td></tr>}
+              {assignees.length === 0 && <tr><Td align="center">—</Td></tr>}
             </tbody>
           </table>
         </div>
       )}
+      {assignees.length > 0 && <PageBar page={aPage} setPage={setAPage} pageSize={aSize} setPageSize={setASize} total={assignees.length} />}
 
       <div style={{ fontSize: 13, fontWeight: 600, margin: '14px 0 6px' }}>{t.perfTeams}</div>
       {isMobile ? (
         <>
-          {(data.teams || []).map((x) => (
+          {tShown.map((x) => (
             <div key={x.project} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <strong>{x.project}</strong><ScorePill value={x.overall} />
@@ -2377,7 +2409,7 @@ function Performance({ data }) {
               </div>
             </div>
           ))}
-          {(!data.teams || data.teams.length === 0) && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
+          {teams.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>—</div>}
         </>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -2387,7 +2419,7 @@ function Performance({ data }) {
               <Th align="center">{t.onTime}</Th><Th align="center">{t.colCycle}</Th><Th align="center">{t.colPredict}</Th>
             </tr></thead>
             <tbody>
-              {(data.teams || []).map((x) => (
+              {tShown.map((x) => (
                 <tr key={x.project}>
                   <Td><strong>{x.project}</strong></Td>
                   <Td align="center"><ScorePill value={x.overall} /></Td>
@@ -2397,11 +2429,12 @@ function Performance({ data }) {
                   <Td align="center"><ScorePill value={x.scores.predictability} /></Td>
                 </tr>
               ))}
-              {(!data.teams || data.teams.length === 0) && <tr><Td align="center">—</Td></tr>}
+              {teams.length === 0 && <tr><Td align="center">—</Td></tr>}
             </tbody>
           </table>
         </div>
       )}
+      {teams.length > 0 && <PageBar page={tPage} setPage={setTPage} pageSize={tSize} setPageSize={setTSize} total={teams.length} />}
     </div>
   );
 }
@@ -2411,8 +2444,13 @@ function Scorecard({ items }) {
   const { t, fmt } = useUI();
   const isMobile = useIsMobile();
   const HC = { red: C.red, amber: C.amber, green: C.green };
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   if (!items) return <Loading />;
   if (items.length === 0) return <div style={{ color: C.muted, fontSize: 13 }}>—</div>;
+
+  const safePage = Math.min(page, Math.max(1, Math.ceil(items.length / pageSize)));
+  const shown = items.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const healthBadge = (x) => (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -2425,7 +2463,7 @@ function Scorecard({ items }) {
     const F = ({ label, children }) => (<div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>);
     return (
       <div>
-        {items.map((x) => (
+        {shown.map((x) => (
           <div key={x.project} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <strong>{x.project}</strong>
@@ -2440,6 +2478,7 @@ function Scorecard({ items }) {
             </div>
           </div>
         ))}
+        <PageBar page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} total={items.length} />
       </div>
     );
   }
@@ -2459,7 +2498,7 @@ function Scorecard({ items }) {
           </tr>
         </thead>
         <tbody>
-          {items.map((x) => (
+          {shown.map((x) => (
             <tr key={x.project}>
               <Td><strong>{x.project}</strong></Td>
               <Td>{healthBadge(x)}</Td>
@@ -2472,6 +2511,7 @@ function Scorecard({ items }) {
           ))}
         </tbody>
       </table>
+      <PageBar page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} total={items.length} />
     </div>
   );
 }
@@ -2604,6 +2644,8 @@ function DependencyLog() {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const load = () => fetchJson('/api/analytics/dependency-log').then((d) => setItems(d.items)).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
   const undo = async (id) => {
@@ -2621,13 +2663,16 @@ function DependencyLog() {
     : null);
   if (err && !items) return <Screen title={t.depLog} hint={t.depLogHint}><ErrorBox message={err} /></Screen>;
   if (!items) return <Screen title={t.depLog} hint={t.depLogHint}><Loading /></Screen>;
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = items.slice((safePage - 1) * pageSize, safePage * pageSize);
   return (
     <Screen title={t.depLog} hint={t.depLogHint}>
       {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 8 }}>{err}</div>}
       {items.length === 0 ? (
         <div style={{ color: C.muted, fontSize: 13, padding: 8 }}>{t.noDepLog}</div>
       ) : isMobile ? (
-        items.map((r, i) => (
+        pageItems.map((r, i) => (
           <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><KeyLink k={r.blocker} /> → <KeyLink k={r.blocked} /></span>
@@ -2646,7 +2691,7 @@ function DependencyLog() {
               <Th>{t.dlActor}</Th><Th>{t.dlWhen}</Th><Th>{t.dlReason}</Th><Th align="center">{t.dlAction}</Th>
             </tr></thead>
             <tbody>
-              {items.map((r, i) => (
+              {pageItems.map((r, i) => (
                 <tr key={i}>
                   <Td><KeyLink k={r.blocker} /></Td>
                   <Td><KeyLink k={r.blocked} /></Td>
@@ -2660,6 +2705,9 @@ function DependencyLog() {
             </tbody>
           </table>
         </div>
+      )}
+      {items.length > 0 && (
+        <PageBar page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} total={items.length} />
       )}
     </Screen>
   );
@@ -2682,19 +2730,18 @@ function DepBottlenecks({ flow }) {
   return <div>{deps.map((d) => <DepRow key={d.key} d={d} ageColor={ageColor} />)}</div>;
 }
 
-const AGING_PAGE_SIZE = 5;
-
 function Flow({ flow }) {
   const { t, fmt, fmtDate } = useUI();
   const isMobile = useIsMobile();
   const [agingPage, setAgingPage] = useState(1);
+  const [agingPageSize, setAgingPageSize] = useState(10);
   if (!flow) return <Loading />;
   const ageColor = (d) => (d > 14 ? C.red : d > 7 ? C.amber : C.green);
   const maxWip = Math.max(1, ...(flow.wip || []).map((w) => w.count));
   const agingAll = flow.aging || [];
-  const agingTotalPages = Math.max(1, Math.ceil(agingAll.length / AGING_PAGE_SIZE));
+  const agingTotalPages = Math.max(1, Math.ceil(agingAll.length / agingPageSize));
   const agingSafePage = Math.min(agingPage, agingTotalPages);
-  const aging = agingAll.slice((agingSafePage - 1) * AGING_PAGE_SIZE, agingSafePage * AGING_PAGE_SIZE);
+  const aging = agingAll.slice((agingSafePage - 1) * agingPageSize, agingSafePage * agingPageSize);
   const bn = flow.bottleneck;
   return (
     <div>
@@ -2778,12 +2825,8 @@ function Flow({ flow }) {
         </table>
       </div>
       )}
-      {agingAll.length > AGING_PAGE_SIZE && (
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
-          <button onClick={() => setAgingPage((p) => Math.max(1, p - 1))} disabled={agingSafePage <= 1} style={ghostBtn}>‹ {t.prev}</button>
-          <span style={{ fontSize: 13, color: C.muted }}>{t.pageOf(agingSafePage, agingTotalPages)}</span>
-          <button onClick={() => setAgingPage((p) => Math.min(agingTotalPages, p + 1))} disabled={agingSafePage >= agingTotalPages} style={ghostBtn}>{t.next} ›</button>
-        </div>
+      {agingAll.length > 0 && (
+        <PageBar page={agingPage} setPage={setAgingPage} pageSize={agingPageSize} setPageSize={setAgingPageSize} total={agingAll.length} />
       )}
     </div>
   );

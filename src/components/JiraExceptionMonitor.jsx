@@ -132,6 +132,7 @@ const DICT = {
     windowL: 'النافذة', d30: '30 يوم', d90: '90 يوم', d180: '180 يوم', printReport: '🖨 طباعة التقرير',
     performance: 'تقييم الأداء', perfNote: 'أداة توازن بنّاءة — الدرجات بسياق الحِمل، لا للمحاسبة الفردية.',
     perfAssignees: 'المسؤولون', perfTeams: 'المشاريع', score: 'الدرجة', colResolved: 'منجَز', colLoad: 'الحِمل', colPredict: 'الثبات', windowD: (d) => `آخر ${d} يوم`,
+    loadOpen: 'مفتوحة', loadStuck: 'عالقة', loadStuckTip: 'تذاكر قيد التنفيذ لم تتغيّر حالتها منذ أكثر من حدّ الركود (٣ أيام افتراضياً)',
     scorecard: 'صحة المشاريع (RAG)',
     health: 'الصحة', onTime: 'متوسط التسليم بالموعد', colOpen: 'مفتوحة', colExc: 'استثناءات', colBreach: 'متجاوز SLA', colCycle: 'متوسط زمن الدورة',
     healthLabel: { red: 'حرِج', amber: 'تحذير', green: 'سليم' },
@@ -273,6 +274,7 @@ const DICT = {
     windowL: 'Window', d30: '30d', d90: '90d', d180: '180d', printReport: '🖨 Print report',
     performance: 'Performance evaluation', perfNote: 'A constructive balancing tool — scores shown in context of load, not for individual blame.',
     perfAssignees: 'Assignees', perfTeams: 'Projects', score: 'Score', colResolved: 'Resolved', colLoad: 'Load', colPredict: 'Consistency', windowD: (d) => `last ${d} days`,
+    loadOpen: 'open', loadStuck: 'stuck', loadStuckTip: 'In-progress tickets unchanged beyond the stagnation threshold (3 days by default)',
     scorecard: 'Project health (RAG)',
     health: 'Health', onTime: 'Avg on-time', colOpen: 'Open', colExc: 'Exceptions', colBreach: 'SLA breached', colCycle: 'Avg cycle time',
     healthLabel: { red: 'Critical', amber: 'Warning', green: 'Healthy' },
@@ -2503,7 +2505,10 @@ function Performance({ data }) {
         <F label={t.colResolved}>{fmt(x.resolved)}</F>
         <F label={t.onTime}>{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</F>
         <F label={t.colCycle}>{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)}${t.dayUnit}`}</F>
-        <F label={t.colLoad}>{fmt(x.openLoad)}{x.stuck ? ` · ${fmt(x.stuck)} ${t.stuckLabel}` : ''}</F>
+        <F label={t.colLoad}>
+          {fmt(x.openLoad)} {t.loadOpen}
+          {x.stuck > 0 && <span style={{ color: C.amber, fontWeight: 600 }}> · {fmt(x.stuck)} {t.loadStuck}</span>}
+        </F>
       </div>
     </div>
   );
@@ -2540,7 +2545,12 @@ function Performance({ data }) {
                   <Td align="center">{fmt(x.resolved)}</Td>
                   <Td align="center">{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</Td>
                   <Td align="center">{x.avgCycleDays == null ? '—' : `${fmt(x.avgCycleDays)} ${t.dayUnit}`}</Td>
-                  <Td align="center">{fmt(x.openLoad)}{x.stuck ? ` · ${fmt(x.stuck)}⚠` : ''}</Td>
+                  <Td align="center">
+                    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <span>{fmt(x.openLoad)} <span style={{ color: C.muted, fontSize: 11 }}>{t.loadOpen}</span></span>
+                      {x.stuck > 0 && <span title={t.loadStuckTip}><Chip color={C.amber}>{fmt(x.stuck)} {t.loadStuck}</Chip></span>}
+                    </span>
+                  </Td>
                 </tr>
               ))}
               {assignees.length === 0 && <tr><Td align="center">—</Td></tr>}

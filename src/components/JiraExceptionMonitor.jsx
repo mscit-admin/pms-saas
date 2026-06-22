@@ -58,6 +58,7 @@ const DICT = {
     to: 'إلى',
     clear: 'مسح',
     all: 'الكل',
+    searchTickets: 'بحث: مفتاح / عنوان / مسؤول',
     fAssignee: 'المسؤول',
     fProject: 'المشروع',
     fPriority: 'الأهمية',
@@ -196,6 +197,7 @@ const DICT = {
     to: 'To',
     clear: 'Clear',
     all: 'All',
+    searchTickets: 'Search: key / summary / assignee',
     fAssignee: 'Assignee',
     fProject: 'Project',
     fPriority: 'Priority',
@@ -1900,6 +1902,7 @@ function OperationalTab({ screen = 'exceptions' }) {
   const [fStatus, setFStatus] = useState([]);
   const [fLabels, setFLabels] = useState([]);
   const [fType, setFType] = useState([]);
+  const [fSearch, setFSearch] = useState('');
 
   // ترقيم الصفحات (حجم الصفحة من إعدادات الإدارة)
   const [page, setPage] = useState(1);
@@ -1945,21 +1948,28 @@ function OperationalTab({ screen = 'exceptions' }) {
     };
   }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = useMemo(() => items.filter((x) =>
-    (fAssignee.length === 0
-      || fAssignee.includes(x.assignee)
-      || (fAssignee.includes(UNASSIGNED) && !x.assignee)) &&
-    (fProject.length === 0 || fProject.includes(x.project)) &&
-    (fPriority.length === 0 || fPriority.includes(x.priority)) &&
-    (fStatus.length === 0 || fStatus.includes(x.status)) &&
-    (fLabels.length === 0 || (x.labels || []).some((l) => fLabels.includes(l))) &&
-    (fType.length === 0 || fType.includes(x.issueType)) &&
-    (!hideSnoozed || !x.followup?.snoozed) &&
-    (!hideAcked || !x.followup?.acknowledged)
-  ), [items, fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked]);
+  const filtered = useMemo(() => {
+    const q = fSearch.trim().toLowerCase();
+    return items.filter((x) =>
+      (fAssignee.length === 0
+        || fAssignee.includes(x.assignee)
+        || (fAssignee.includes(UNASSIGNED) && !x.assignee)) &&
+      (fProject.length === 0 || fProject.includes(x.project)) &&
+      (fPriority.length === 0 || fPriority.includes(x.priority)) &&
+      (fStatus.length === 0 || fStatus.includes(x.status)) &&
+      (fLabels.length === 0 || (x.labels || []).some((l) => fLabels.includes(l))) &&
+      (fType.length === 0 || fType.includes(x.issueType)) &&
+      (!hideSnoozed || !x.followup?.snoozed) &&
+      (!hideAcked || !x.followup?.acknowledged) &&
+      (q === ''
+        || (x.key || '').toLowerCase().includes(q)
+        || (x.summary || '').toLowerCase().includes(q)
+        || (x.assignee || '').toLowerCase().includes(q))
+    );
+  }, [items, fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked, fSearch]);
 
   // أعد للصفحة الأولى عند تغيّر الفلاتر أو حجم الصفحة
-  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked, pageSize, items.length, screen]);
+  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked, fSearch, pageSize, items.length, screen]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -1969,7 +1979,7 @@ function OperationalTab({ screen = 'exceptions' }) {
   if (error) return <ErrorBox message={error} />;
 
   const maxLoad = Math.max(1, ...(workload || []).map((w) => w.openCount));
-  const anyFilter = fAssignee.length || fProject.length || fPriority.length || fStatus.length || fLabels.length || fType.length;
+  const anyFilter = fAssignee.length || fProject.length || fPriority.length || fStatus.length || fLabels.length || fType.length || fSearch.trim();
 
   return (
     <>
@@ -1990,6 +2000,13 @@ function OperationalTab({ screen = 'exceptions' }) {
         }
       >
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+          <input
+            value={fSearch}
+            onChange={(e) => setFSearch(e.target.value)}
+            placeholder={t.searchTickets}
+            aria-label={t.searchTickets}
+            style={{ ...inputStyle, minWidth: 200 }}
+          />
           <MultiSelect label={t.fAssignee} value={fAssignee} options={opts.assignees} onChange={setFAssignee} labels={{ [UNASSIGNED]: t.cUnassigned }} />
           <MultiSelect label={t.fProject} value={fProject} options={opts.projects} onChange={setFProject} />
           <MultiSelect label={t.fPriority} value={fPriority} options={opts.priorities} onChange={setFPriority} />
@@ -2001,7 +2018,7 @@ function OperationalTab({ screen = 'exceptions' }) {
             <MultiSelect label={t.fLabel} value={fLabels} options={opts.labels} onChange={setFLabels} />
           )}
           {anyFilter ? (
-            <button onClick={() => { setFAssignee([]); setFProject([]); setFPriority([]); setFStatus([]); setFLabels([]); setFType([]); }} style={ghostBtn}>{t.clear}</button>
+            <button onClick={() => { setFAssignee([]); setFProject([]); setFPriority([]); setFStatus([]); setFLabels([]); setFType([]); setFSearch(''); }} style={ghostBtn}>{t.clear}</button>
           ) : null}
           {canManage && (
             <>

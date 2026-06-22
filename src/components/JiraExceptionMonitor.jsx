@@ -104,6 +104,7 @@ const DICT = {
     thStatus: 'الحالة',
     thPriority: 'الأولوية',
     thAssignee: 'المسؤول',
+    thLastActor: 'آخر تحديث',
     thDue: 'الاستحقاق',
     thDays: 'أيام بالحالة',
     thReasons: 'الأسباب',
@@ -240,6 +241,7 @@ const DICT = {
     thStatus: 'Status',
     thPriority: 'Priority',
     thAssignee: 'Assignee',
+    thLastActor: 'Last update',
     thDue: 'Due',
     thDays: 'Days in status',
     thReasons: 'Reasons',
@@ -1106,12 +1108,13 @@ function MultiSelect({ label, value, options, onChange, labels = {} }) {
 
 // تصدير صفوف إلى CSV وتنزيلها (مع BOM لدعم العربية في Excel)
 function downloadCsv(rows, t) {
-  const headers = [t.thKey, t.thSummary, t.thType, t.fProject, t.thStatus, t.thPriority, t.thAssignee, t.thDue, t.thDays, t.thReasons];
+  const headers = [t.thKey, t.thSummary, t.thType, t.fProject, t.thStatus, t.thPriority, t.thAssignee, t.thLastActor, t.thDue, t.thDays, t.thReasons];
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [headers.map(esc).join(',')];
   for (const r of rows) {
     lines.push([
       r.key, r.summary, r.issueType || '', r.project, r.status, r.priority, r.assignee || '',
+      r.lastActor ? `${r.lastActor}${r.lastActorAt ? ` (${String(r.lastActorAt).slice(0, 16).replace('T', ' ')})` : ''}` : '',
       r.dueDate || '', r.daysInStatus, r.reasonsAr ? r.reasonsAr.join(' | ') : r.reasons.join(' | '),
     ].map(esc).join(','));
   }
@@ -1613,7 +1616,7 @@ function TicketActions({ ticket, onClose, onDone }) {
 
 // بطاقة استثناء للجوال (بديل صف الجدول)
 function ExceptionCard({ it, canManage, canOpen, onAction }) {
-  const { t, fmt, fmtDate } = useUI();
+  const { t, fmt, fmtDate, fmtDateTime } = useUI();
   const F = ({ label, children }) => (
     <div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>
   );
@@ -1636,6 +1639,7 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
         <F label={t.thAssignee}>{it.assignee || <span style={{ color: C.red }}>—</span>}</F>
         <F label={t.thDue}>{fmtDate(it.dueDate)}</F>
         <F label={t.thDays}>{fmt(it.daysInStatus)}</F>
+        <F label={t.thLastActor}>{it.lastActor ? `${it.lastActor} · ${fmtDateTime(it.lastActorAt)}` : '—'}</F>
       </div>
       <div>{it.reasons.map((r) => <Chip key={r} color={EXC_COLORS[r]}>{t.exc[r] || r}</Chip>)}</div>
       {canManage && (fu.acknowledged || fu.snoozed || fu.ownerName || fu.rootCause) && (
@@ -1849,7 +1853,7 @@ function DashboardScreen({ perms = [], userId }) {
 
 // ------------------------------------------------------------------- العملياتي
 function OperationalTab({ screen = 'exceptions' }) {
-  const { t, fmt, fmtDate, perms, pageSize } = useUI();
+  const { t, fmt, fmtDate, fmtDateTime, perms, pageSize } = useUI();
   const isMobile = useIsMobile();
   const canAct = (perms || []).includes('act_tickets');
   const canManage = (perms || []).includes('manage_exceptions');
@@ -2006,6 +2010,7 @@ function OperationalTab({ screen = 'exceptions' }) {
                 <Th>{t.thStatus}</Th>
                 <Th>{t.thPriority}</Th>
                 <Th>{t.thAssignee}</Th>
+                <Th>{t.thLastActor}</Th>
                 <Th>{t.thDue}</Th>
                 <Th align="center">{t.thDays}</Th>
                 <Th>{t.thReasons}</Th>
@@ -2028,6 +2033,11 @@ function OperationalTab({ screen = 'exceptions' }) {
                   <Td>{it.status}</Td>
                   <Td>{it.priority}</Td>
                   <Td>{it.assignee || <span style={{ color: C.red }}>—</span>}</Td>
+                  <Td>
+                    {it.lastActor ? (
+                      <span>{it.lastActor}<span style={{ color: C.muted, fontSize: 12 }}> · {fmtDateTime(it.lastActorAt)}</span></span>
+                    ) : '—'}
+                  </Td>
                   <Td>{fmtDate(it.dueDate)}</Td>
                   <Td align="center">{fmt(it.daysInStatus)}</Td>
                   <Td>

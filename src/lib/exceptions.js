@@ -56,6 +56,8 @@ export async function getExceptions({ from = null, to = null, all = false, scope
         t.id, t.issue_key, t.project_key, t.summary, t.status, t.status_category,
         t.issue_type, t.priority, t.assignee_name, t.assignee_account_id, t.due_date, t.labels,
         t.jira_created_at, t.last_status_change_at,
+        (SELECT h2.author_name FROM ticket_history h2 WHERE h2.issue_id = t.id ORDER BY h2.changed_at DESC, h2.id DESC LIMIT 1) AS last_actor,
+        (SELECT h2.changed_at  FROM ticket_history h2 WHERE h2.issue_id = t.id ORDER BY h2.changed_at DESC, h2.id DESC LIMIT 1) AS last_actor_at,
         es.acknowledged, es.snooze_until, es.owner_user_id, es.root_cause, es.note,
         u.full_name AS owner_name, u.username AS owner_username,
         (es.snooze_until IS NOT NULL AND es.snooze_until >= CURRENT_DATE) AS is_snoozed,
@@ -89,6 +91,8 @@ export async function getExceptions({ from = null, to = null, all = false, scope
       dueDate: r.due_date,
       createdAt: r.jira_created_at,
       daysInStatus: r.days_in_status,
+      lastActor: r.last_actor || null,
+      lastActorAt: r.last_actor_at || null,
       reasons,
       reasonsAr: reasons.map((x) => EXCEPTION_LABELS_AR[x]),
       followup: {

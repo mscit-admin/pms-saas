@@ -654,6 +654,17 @@ export default function JiraExceptionMonitor() {
 
   const go = (id) => { setScreen(id); if (isMobile) setDrawer(false); };
 
+  // مزامنة تلقائية عند الدخول (مرّة واحدة لكل جلسة، مع كَبح زمني في الخادم)
+  const autoSyncedRef = useRef(false);
+  useEffect(() => {
+    if (!me || autoSyncedRef.current) return;
+    autoSyncedRef.current = true;
+    fetch('/api/sync/run?auto=1', { method: 'POST' })
+      .then((r) => r.json())
+      .then((j) => { if (j?.data?.started) setTimeout(() => setReloadKey((k) => k + 1), 20000); })
+      .catch(() => {});
+  }, [me]);
+
   const renderScreen = () => {
     if (!screen) return <Loading />;
     if (screen === 'dash_main') return <DashboardScreen key={`dash-${reloadKey}`} perms={perms} userId={me?.id} />;

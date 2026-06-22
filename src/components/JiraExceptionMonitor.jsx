@@ -2480,6 +2480,7 @@ function Performance({ data }) {
   const [tSize, setTSize] = useState(20);
   const [fProj, setFProj] = useState('');
   const [fName, setFName] = useState('');
+  const [fEng, setFEng] = useState('');
   if (!data) return <Loading />;
 
   const F = ({ label, children }) => (<div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>);
@@ -2496,8 +2497,11 @@ function Performance({ data }) {
     ...allTeams.map((x) => x.project).filter(Boolean),
   ])).sort();
   const nameQ = fName.trim().toLowerCase();
+  const engCat = (r) => (r == null ? null : r >= 60 ? 'high' : r >= 30 ? 'mid' : 'low');
   const assignees = allAssignees.filter((x) =>
-    (!fProj || x.project === fProj) && (!nameQ || (x.name || '').toLowerCase().includes(nameQ)));
+    (!fProj || x.project === fProj)
+    && (!nameQ || (x.name || '').toLowerCase().includes(nameQ))
+    && (!fEng || engCat(x.engagementRate) === fEng));
   const teams = allTeams.filter((x) => !fProj || x.project === fProj);
 
   const aSafe = Math.min(aPage, Math.max(1, Math.ceil(assignees.length / aSize)));
@@ -2533,7 +2537,13 @@ function Performance({ data }) {
           {projectOpts.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         <input value={fName} onChange={(e) => { setFName(e.target.value); setAPage(1); }} placeholder={t.fAssignee} style={inputStyle} aria-label={t.fAssignee} />
-        {(fProj || fName) && <button onClick={() => { setFProj(''); setFName(''); }} style={ghostBtn}>{t.clear}</button>}
+        <select value={fEng} onChange={(e) => { setFEng(e.target.value); setAPage(1); }} style={inputStyle} aria-label={t.engagement}>
+          <option value="">{t.engagement}: {t.all}</option>
+          <option value="high">{t.engHigh}</option>
+          <option value="mid">{t.engMid}</option>
+          <option value="low">{t.engLow}</option>
+        </select>
+        {(fProj || fName || fEng) && <button onClick={() => { setFProj(''); setFName(''); setFEng(''); }} style={ghostBtn}>{t.clear}</button>}
       </div>
 
       <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0 6px' }}>{t.perfAssignees}</div>

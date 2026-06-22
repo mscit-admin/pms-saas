@@ -41,7 +41,7 @@ const DICT = {
     logout: 'خروج',
     refresh: 'تحديث', collapseAll: 'طي الكل', expandAll: 'فتح الكل',
     syncNow: 'مزامنة جيرا', syncStarted: 'بدأت المزامنة في الخلفية… حدّث بعد قليل', syncBusy: 'المزامنة قيد التشغيل بالفعل', syncFail: 'تعذّرت المزامنة',
-    navDashboard: 'لوحة المعلومات', navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي',
+    navDashboard: 'لوحة المعلومات', navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي', projectTickets: 'عرض تذاكر المشروع',
     scrDashboard: 'المؤشرات', hDashboard: 'أهم مؤشرات الأداء في لقطة واحدة. تظهر المؤشرات أو تُخفى حسب صلاحيات دورك.', noKpi: 'لا توجد مؤشرات متاحة لدورك.',
     dragHint: 'اسحب البطاقات لإعادة ترتيبها', resetLayout: 'إعادة الترتيب الافتراضي',
     scrOverview: 'نظرة عامة', scrKpi: 'المؤشرات العامة', scrCycle: 'زمن الدورة', scrSecurity: 'إعدادات الحساب',
@@ -179,7 +179,7 @@ const DICT = {
     logout: 'Log out',
     refresh: 'Refresh', collapseAll: 'Collapse all', expandAll: 'Expand all',
     syncNow: 'Sync Jira', syncStarted: 'Sync started in background… refresh shortly', syncBusy: 'A sync is already running', syncFail: 'Sync failed',
-    navDashboard: 'Dashboard', navOps: 'Operations', navMgmt: 'Analytics', navAdmin: 'Administration', navAccount: 'My Account',
+    navDashboard: 'Dashboard', navOps: 'Operations', navMgmt: 'Analytics', navAdmin: 'Administration', navAccount: 'My Account', projectTickets: 'Project tickets',
     scrDashboard: 'KPIs', hDashboard: 'Key performance indicators at a glance. Tiles show or hide based on your role permissions.', noKpi: 'No KPIs available for your role.',
     dragHint: 'Drag cards to rearrange', resetLayout: 'Reset layout',
     scrOverview: 'Overview', scrKpi: 'KPIs', scrCycle: 'Cycle time', scrSecurity: 'Account settings',
@@ -596,9 +596,7 @@ export default function JiraExceptionMonitor() {
     // لوحة المعلومات: مدخل واحد مباشر يفتح كل المحتوى (KPI + الأدوات) — بلا عنصر فرعي
     if (can('view_dashboard')) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', solo: true, targetId: 'dash_main' });
 
-    if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: 'grid', items: [
-      { id: 'ops_alltickets', label: t.allTickets, icon: 'list' },
-    ] });
+    if (can('view_operational')) cats.push({ id: 'projtickets', label: t.projectTickets, icon: 'list', solo: true, targetId: 'ops_alltickets' });
     const mgmtItems = [];
     if (can('view_managerial')) {
       mgmtItems.push(
@@ -1977,7 +1975,7 @@ function OperationalTab({ screen = 'exceptions' }) {
     <>
       {(screen === 'exceptions' || isAll) && (
       <Screen
-        title={`${isAll ? t.allTickets : t.exceptions} · ${t.showing(fmt(filtered.length), fmt(items.length))}`}
+        title={`${isAll ? t.projectTickets : t.exceptions} · ${t.showing(fmt(filtered.length), fmt(items.length))}`}
         hint={isAll ? t.hAllTickets : t.hExceptions}
         extra={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>

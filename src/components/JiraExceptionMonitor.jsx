@@ -133,7 +133,7 @@ const DICT = {
     performance: 'تقييم الأداء', perfNote: 'أداة توازن بنّاءة — الدرجات بسياق الحِمل، لا للمحاسبة الفردية.',
     perfAssignees: 'المسؤولون', perfTeams: 'المشاريع', score: 'الدرجة', colResolved: 'منجَز', colLoad: 'الحِمل', colPredict: 'الثبات', windowD: (d) => `آخر ${d} يوم`,
     scorecard: 'صحة المشاريع (RAG)',
-    health: 'الصحة', onTime: 'التسليم بالموعد', colOpen: 'مفتوحة', colExc: 'استثناءات', colBreach: 'متجاوز SLA', colCycle: 'زمن الدورة',
+    health: 'الصحة', onTime: 'متوسط التسليم بالموعد', colOpen: 'مفتوحة', colExc: 'استثناءات', colBreach: 'متجاوز SLA', colCycle: 'متوسط زمن الدورة',
     healthLabel: { red: 'حرِج', amber: 'تحذير', green: 'سليم' },
     flow: 'تدفّق العمل والاختناقات', wipByStage: 'العمل الجاري حسب المرحلة (العدد · متوسط العمر)', agingWip: 'أقدم العناصر العالقة',
     ageDays: 'عمر بالحالة',
@@ -274,7 +274,7 @@ const DICT = {
     performance: 'Performance evaluation', perfNote: 'A constructive balancing tool — scores shown in context of load, not for individual blame.',
     perfAssignees: 'Assignees', perfTeams: 'Projects', score: 'Score', colResolved: 'Resolved', colLoad: 'Load', colPredict: 'Consistency', windowD: (d) => `last ${d} days`,
     scorecard: 'Project health (RAG)',
-    health: 'Health', onTime: 'On-time', colOpen: 'Open', colExc: 'Exceptions', colBreach: 'SLA breached', colCycle: 'Cycle time',
+    health: 'Health', onTime: 'Avg on-time', colOpen: 'Open', colExc: 'Exceptions', colBreach: 'SLA breached', colCycle: 'Avg cycle time',
     healthLabel: { red: 'Critical', amber: 'Warning', green: 'Healthy' },
     flow: 'Flow & bottlenecks', wipByStage: 'WIP by stage (count · avg age)', agingWip: 'Oldest stuck items',
     ageDays: 'Age in status',
@@ -2472,21 +2472,32 @@ function Performance({ data }) {
   const [aSize, setASize] = useState(20);
   const [tPage, setTPage] = useState(1);
   const [tSize, setTSize] = useState(20);
+  const [fProj, setFProj] = useState('');
+  const [fName, setFName] = useState('');
   if (!data) return <Loading />;
 
   const F = ({ label, children }) => (<div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>);
 
-  const assignees = data.assignees || [];
-  const teams = data.teams || [];
+  const allAssignees = data.assignees || [];
+  const allTeams = data.teams || [];
+  const projectOpts = Array.from(new Set([
+    ...allAssignees.map((x) => x.project).filter(Boolean),
+    ...allTeams.map((x) => x.project).filter(Boolean),
+  ])).sort();
+  const nameQ = fName.trim().toLowerCase();
+  const assignees = allAssignees.filter((x) =>
+    (!fProj || x.project === fProj) && (!nameQ || (x.name || '').toLowerCase().includes(nameQ)));
+  const teams = allTeams.filter((x) => !fProj || x.project === fProj);
+
   const aSafe = Math.min(aPage, Math.max(1, Math.ceil(assignees.length / aSize)));
   const tSafe = Math.min(tPage, Math.max(1, Math.ceil(teams.length / tSize)));
   const aShown = assignees.slice((aSafe - 1) * aSize, aSafe * aSize);
   const tShown = teams.slice((tSafe - 1) * tSize, tSafe * tSize);
 
-  const assigneeCard = (x) => (
-    <div key={x.name} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
+  const assigneeCard = (x, i) => (
+    <div key={`${x.name}|${x.project}|${i}`} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong>{x.name}</strong><ScorePill value={x.overall} />
+        <strong>{x.name} <span style={{ color: C.muted, fontWeight: 400 }}>· {x.project}</span></strong><ScorePill value={x.overall} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px', marginTop: 4 }}>
         <F label={t.colResolved}>{fmt(x.resolved)}</F>
@@ -2501,20 +2512,30 @@ function Performance({ data }) {
     <div>
       <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 10 }}>{t.perfNote}</div>
 
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <select value={fProj} onChange={(e) => { setFProj(e.target.value); setAPage(1); setTPage(1); }} style={inputStyle} aria-label={t.fProject}>
+          <option value="">{t.fProject}: {t.all}</option>
+          {projectOpts.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <input value={fName} onChange={(e) => { setFName(e.target.value); setAPage(1); }} placeholder={t.fAssignee} style={inputStyle} aria-label={t.fAssignee} />
+        {(fProj || fName) && <button onClick={() => { setFProj(''); setFName(''); }} style={ghostBtn}>{t.clear}</button>}
+      </div>
+
       <div style={{ fontSize: 13, fontWeight: 600, margin: '4px 0 6px' }}>{t.perfAssignees}</div>
       {isMobile ? (
         aShown.map(assigneeCard)
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
             <thead><tr>
-              <Th>{t.thAssignee}</Th><Th align="center">{t.score}</Th><Th align="center">{t.colResolved}</Th>
+              <Th>{t.thAssignee}</Th><Th>{t.fProject}</Th><Th align="center">{t.score}</Th><Th align="center">{t.colResolved}</Th>
               <Th align="center">{t.onTime}</Th><Th align="center">{t.colCycle}</Th><Th align="center">{t.colLoad}</Th>
             </tr></thead>
             <tbody>
-              {aShown.map((x) => (
-                <tr key={x.name}>
+              {aShown.map((x, i) => (
+                <tr key={`${x.name}|${x.project}|${i}`}>
                   <Td>{x.name}</Td>
+                  <Td>{x.project}</Td>
                   <Td align="center"><ScorePill value={x.overall} /></Td>
                   <Td align="center">{fmt(x.resolved)}</Td>
                   <Td align="center">{x.onTimeRate == null ? '—' : `${x.onTimeRate}%`}</Td>

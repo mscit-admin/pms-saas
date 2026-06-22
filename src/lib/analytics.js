@@ -202,9 +202,9 @@ export async function getPerformance({ days = 90, scope = null } = {}) {
   const stuckDays = ruleConfig.stagnantDays;
   const sc = scopeAnd(scope, '');
 
-  // ---- المسؤولون ----
+  // ---- المسؤولون (لكل مسؤول داخل كل مشروع) ----
   const aDone = await query(
-    `SELECT assignee_account_id AS id, assignee_name AS name,
+    `SELECT assignee_account_id AS id, assignee_name AS name, project_key AS project,
         COUNT(*) AS resolved,
         AVG(TIMESTAMPDIFF(HOUR, jira_created_at, resolved_at)) / 24 AS avg_cycle,
         SUM(due_date IS NOT NULL) AS with_due,
@@ -212,24 +212,25 @@ export async function getPerformance({ days = 90, scope = null } = {}) {
      FROM tickets
      WHERE status_category = 'done' AND resolved_at IS NOT NULL AND assignee_account_id IS NOT NULL
        AND resolved_at >= DATE_SUB(CURRENT_DATE, INTERVAL :days DAY)${sc.sql}
-     GROUP BY assignee_account_id, assignee_name`,
+     GROUP BY assignee_account_id, assignee_name, project_key`,
     { days, ...sc.params }
   );
   const aOpen = await query(
-    `SELECT assignee_account_id AS id, COUNT(*) AS open_count,
+    `SELECT assignee_account_id AS id, project_key AS project, COUNT(*) AS open_count,
         SUM(status_category = 'indeterminate' AND TIMESTAMPDIFF(DAY, last_status_change_at, UTC_TIMESTAMP()) > :stuckDays) AS stuck,
         SUM(due_date IS NOT NULL AND due_date < CURRENT_DATE) AS overdue
      FROM tickets WHERE status_category <> 'done' AND assignee_account_id IS NOT NULL${sc.sql}
-     GROUP BY assignee_account_id`,
+     GROUP BY assignee_account_id, project_key`,
     { stuckDays, ...sc.params }
   );
-  const openById = new Map(aOpen.map((r) => [r.id, r]));
+  const openById = new Map(aOpen.map((r) => [`${r.id}|${r.project}`, r]));
 
   const aRaw = aDone.map((r) => {
-    const o = openById.get(r.id) || {};
+    const o = openById.get(`${r.id}|${r.project}`) || {};
     const withDue = Number(r.with_due || 0);
     return {
       name: r.name || '—',
+      project: r.project || '—',
       resolved: Number(r.resolved),
       avgCycleDays: r.avg_cycle != null ? Number(Number(r.avg_cycle).toFixed(1)) : null,
       onTimeRate: withDue > 0 ? Math.round((Number(r.on_time) / withDue) * 100) : null,

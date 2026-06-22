@@ -133,6 +133,8 @@ const DICT = {
     performance: 'تقييم الأداء', perfNote: 'أداة توازن بنّاءة — الدرجات بسياق الحِمل، لا للمحاسبة الفردية.',
     perfAssignees: 'المسؤولون', perfTeams: 'المشاريع', score: 'الدرجة', colResolved: 'منجَز', colLoad: 'الحِمل', colPredict: 'الثبات', windowD: (d) => `آخر ${d} يوم`,
     loadOpen: 'مفتوحة', loadStuck: 'عالقة', loadStuckTip: 'تذاكر قيد التنفيذ لم تتغيّر حالتها منذ أكثر من حدّ الركود (٣ أيام افتراضياً)',
+    engagement: 'التفاعل', engHigh: 'متفاعل', engMid: 'متوسط', engLow: 'ضعيف',
+    engagementTip: 'نسبة تذاكره المفتوحة التي كان هو آخر مَن عدّلها خلال آخر ٧ أيام — مؤشّر على متابعته وتعليقه عليها.',
     scorecard: 'صحة المشاريع (RAG)',
     health: 'الصحة', onTime: 'متوسط التسليم بالموعد', colOpen: 'مفتوحة', colExc: 'استثناءات', colBreach: 'متجاوز SLA', colCycle: 'متوسط زمن الدورة',
     healthLabel: { red: 'حرِج', amber: 'تحذير', green: 'سليم' },
@@ -275,6 +277,8 @@ const DICT = {
     performance: 'Performance evaluation', perfNote: 'A constructive balancing tool — scores shown in context of load, not for individual blame.',
     perfAssignees: 'Assignees', perfTeams: 'Projects', score: 'Score', colResolved: 'Resolved', colLoad: 'Load', colPredict: 'Consistency', windowD: (d) => `last ${d} days`,
     loadOpen: 'open', loadStuck: 'stuck', loadStuckTip: 'In-progress tickets unchanged beyond the stagnation threshold (3 days by default)',
+    engagement: 'Engagement', engHigh: 'engaged', engMid: 'moderate', engLow: 'low',
+    engagementTip: 'Share of their open tickets they were the last to edit within the last 7 days — a signal of follow-up/commenting.',
     scorecard: 'Project health (RAG)',
     health: 'Health', onTime: 'Avg on-time', colOpen: 'Open', colExc: 'Exceptions', colBreach: 'SLA breached', colCycle: 'Avg cycle time',
     healthLabel: { red: 'Critical', amber: 'Warning', green: 'Healthy' },
@@ -2479,6 +2483,11 @@ function Performance({ data }) {
   if (!data) return <Loading />;
 
   const F = ({ label, children }) => (<div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>);
+  const engColor = (r) => (r >= 60 ? C.green : r >= 30 ? C.amber : C.red);
+  const engLabel = (r) => (r >= 60 ? t.engHigh : r >= 30 ? t.engMid : t.engLow);
+  const engCell = (x) => (x.engagementRate == null
+    ? <span style={{ color: C.muted }}>—</span>
+    : <span title={t.engagementTip}><Chip color={engColor(x.engagementRate)}>{x.engagementRate}% · {engLabel(x.engagementRate)}</Chip></span>);
 
   const allAssignees = data.assignees || [];
   const allTeams = data.teams || [];
@@ -2509,6 +2518,7 @@ function Performance({ data }) {
           {fmt(x.openLoad)} {t.loadOpen}
           {x.stuck > 0 && <span style={{ color: C.amber, fontWeight: 600 }}> · {fmt(x.stuck)} {t.loadStuck}</span>}
         </F>
+        <F label={t.engagement}>{engCell(x)}</F>
       </div>
     </div>
   );
@@ -2531,10 +2541,10 @@ function Performance({ data }) {
         aShown.map(assigneeCard)
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
             <thead><tr>
               <Th>{t.thAssignee}</Th><Th>{t.fProject}</Th><Th align="center">{t.score}</Th><Th align="center">{t.colResolved}</Th>
-              <Th align="center">{t.onTime}</Th><Th align="center">{t.colCycle}</Th><Th align="center">{t.colLoad}</Th>
+              <Th align="center">{t.onTime}</Th><Th align="center">{t.colCycle}</Th><Th align="center">{t.colLoad}</Th><Th align="center">{t.engagement}</Th>
             </tr></thead>
             <tbody>
               {aShown.map((x, i) => (
@@ -2551,6 +2561,7 @@ function Performance({ data }) {
                       {x.stuck > 0 && <span title={t.loadStuckTip}><Chip color={C.amber}>{fmt(x.stuck)} {t.loadStuck}</Chip></span>}
                     </span>
                   </Td>
+                  <Td align="center">{engCell(x)}</Td>
                 </tr>
               ))}
               {assignees.length === 0 && <tr><Td align="center">—</Td></tr>}

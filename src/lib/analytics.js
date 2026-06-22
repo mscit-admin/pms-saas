@@ -218,7 +218,8 @@ export async function getPerformance({ days = 90, scope = null } = {}) {
   const aOpen = await query(
     `SELECT assignee_account_id AS id, project_key AS project, COUNT(*) AS open_count,
         SUM(status_category = 'indeterminate' AND TIMESTAMPDIFF(DAY, last_status_change_at, UTC_TIMESTAMP()) > :stuckDays) AS stuck,
-        SUM(due_date IS NOT NULL AND due_date < CURRENT_DATE) AS overdue
+        SUM(due_date IS NOT NULL AND due_date < CURRENT_DATE) AS overdue,
+        SUM(last_edited_by = assignee_name AND last_edited_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)) AS engaged
      FROM tickets WHERE status_category <> 'done' AND assignee_account_id IS NOT NULL${sc.sql}
      GROUP BY assignee_account_id, project_key`,
     { stuckDays, ...sc.params }
@@ -228,15 +229,19 @@ export async function getPerformance({ days = 90, scope = null } = {}) {
   const aRaw = aDone.map((r) => {
     const o = openById.get(`${r.id}|${r.project}`) || {};
     const withDue = Number(r.with_due || 0);
+    const openLoad = Number(o.open_count || 0);
+    const engaged = Number(o.engaged || 0);
     return {
       name: r.name || '—',
       project: r.project || '—',
       resolved: Number(r.resolved),
       avgCycleDays: r.avg_cycle != null ? Number(Number(r.avg_cycle).toFixed(1)) : null,
       onTimeRate: withDue > 0 ? Math.round((Number(r.on_time) / withDue) * 100) : null,
-      openLoad: Number(o.open_count || 0),
+      openLoad,
       stuck: Number(o.stuck || 0),
       overdue: Number(o.overdue || 0),
+      engaged,
+      engagementRate: openLoad > 0 ? Math.round((engaged / openLoad) * 100) : null,
     };
   });
 

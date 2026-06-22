@@ -31,10 +31,28 @@ export function normalizePriority(jiraPriorityName) {
 }
 
 // يستخرج صف tickets من كائن issue الخام
+// آخر مَن عدّل التذكرة في جيرا (أي تغيير: حقل/حالة/تعليق) + وقته.
+// المؤلّف من أحدث إدخال بين الـ changelog والتعليقات؛ والوقت = fields.updated (الموثوق).
+export function computeLastEdit(issue) {
+  const f = issue.fields || {};
+  let bestAt = null;
+  let bestBy = null;
+  const consider = (iso, name) => {
+    if (!iso || !name) return;
+    const v = toMysqlDateTime(iso);
+    if (v && (!bestAt || v > bestAt)) { bestAt = v; bestBy = name; }
+  };
+  for (const h of issue.changelog?.histories || []) consider(h.created, h.author?.displayName);
+  for (const c of f.comment?.comments || []) consider(c.updated || c.created, c.updateAuthor?.displayName || c.author?.displayName);
+  const updatedAt = toMysqlDateTime(f.updated);
+  return { by: bestBy ? bestBy.slice(0, 255) : null, at: updatedAt || bestAt };
+}
+
 export function mapIssueToRow(issue, syncedAt) {
   const f = issue.fields || {};
   const status = f.status || {};
   const category = status.statusCategory || {};
+  const lastEdit = computeLastEdit(issue);
   return {
     id: Number(issue.id),
     issue_key: issue.key,
@@ -55,6 +73,8 @@ export function mapIssueToRow(issue, syncedAt) {
     jira_updated_at: toMysqlDateTime(f.updated),
     due_date: toMysqlDate(f.duedate),
     resolved_at: toMysqlDateTime(f.resolutiondate),
+    last_edited_by: lastEdit.by,
+    last_edited_at: lastEdit.at,
     synced_at: syncedAt,
   };
 }

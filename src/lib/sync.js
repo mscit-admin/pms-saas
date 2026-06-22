@@ -1,6 +1,6 @@
 import { iterateIssues, fetchChangelog, getIssue } from './jira.js';
 import { getPool, withTransaction } from './db.js';
-import { mapIssueToRow, extractStatusChanges, extractBlocks } from './normalize.js';
+import { mapIssueToRow, extractStatusChanges, extractBlocks, computeLastEdit } from './normalize.js';
 import { snapshotExceptions } from './exceptions.js';
 import { snapshotWip } from './analytics.js';
 import { detectAndAlert } from './alerts.js';
@@ -13,11 +13,13 @@ const UPSERT_TICKET = `
   INSERT INTO tickets (
     id, issue_key, project_key, summary, issue_type, status, status_category,
     priority, assignee_account_id, assignee_name, reporter_account_id, reporter_name, labels,
-    jira_created_at, jira_updated_at, due_date, resolved_at, last_status_change_at, synced_at
+    jira_created_at, jira_updated_at, due_date, resolved_at, last_status_change_at,
+    last_edited_by, last_edited_at, synced_at
   ) VALUES (
     :id, :issue_key, :project_key, :summary, :issue_type, :status, :status_category,
     :priority, :assignee_account_id, :assignee_name, :reporter_account_id, :reporter_name, :labels,
-    :jira_created_at, :jira_updated_at, :due_date, :resolved_at, :last_status_change_at, :synced_at
+    :jira_created_at, :jira_updated_at, :due_date, :resolved_at, :last_status_change_at,
+    :last_edited_by, :last_edited_at, :synced_at
   )
   ON DUPLICATE KEY UPDATE
     issue_key = VALUES(issue_key),
@@ -37,6 +39,8 @@ const UPSERT_TICKET = `
     due_date = VALUES(due_date),
     resolved_at = VALUES(resolved_at),
     last_status_change_at = VALUES(last_status_change_at),
+    last_edited_by = VALUES(last_edited_by),
+    last_edited_at = VALUES(last_edited_at),
     synced_at = VALUES(synced_at)
 `;
 
@@ -69,6 +73,10 @@ async function persistIssue(issue) {
   if (!issue.changelog || !Array.isArray(issue.changelog.histories)) {
     issue.changelog = await fetchChangelog(issue.id);
   }
+  // أعِد حساب آخر مَن عدّل بعد ضمان تحميل الـ changelog كاملاً.
+  const lastEdit = computeLastEdit(issue);
+  row.last_edited_by = lastEdit.by;
+  row.last_edited_at = lastEdit.at;
   const changes = extractStatusChanges(issue);
   row.last_status_change_at = computeLastStatusChange(changes, row.jira_created_at);
   const blocks = extractBlocks(issue);

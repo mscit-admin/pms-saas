@@ -47,7 +47,7 @@ const DICT = {
     scrOverview: 'نظرة عامة', scrKpi: 'المؤشرات العامة', scrCycle: 'زمن الدورة', scrSecurity: 'إعدادات الحساب',
     menuShow: 'إظهار القائمة', menuHide: 'إخفاء القائمة',
     searchPlaceholder: 'بحث في الشاشات والتذاكر…', recent: 'عمليات البحث الأخيرة', screensGroup: 'الشاشات', ticketsGroup: 'التذاكر', noResults: 'لا نتائج', clearHistory: 'مسح',
-    lastSync: 'آخر مزامنة',
+    lastSync: 'آخر مزامنة', lastSyncTip: 'وقت آخر مزامنة مع جيرا. تتم المزامنة تلقائياً عند الدخول، ويمكنك تشغيلها يدوياً بزرّ «مزامنة جيرا». النقطة الخضراء الوامضة تعني أن البيانات حيّة.',
     never: 'لا يوجد',
     cOverdue: 'متأخر عن الاستحقاق',
     cStagnant: 'راكد > 3 أيام',
@@ -188,7 +188,7 @@ const DICT = {
     scrOverview: 'Overview', scrKpi: 'KPIs', scrCycle: 'Cycle time', scrSecurity: 'Account settings',
     menuShow: 'Show menu', menuHide: 'Hide menu',
     searchPlaceholder: 'Search screens & tickets…', recent: 'Recent searches', screensGroup: 'Screens', ticketsGroup: 'Tickets', noResults: 'No results', clearHistory: 'Clear',
-    lastSync: 'Last sync',
+    lastSync: 'Last sync', lastSyncTip: 'Time of the last Jira sync. Syncs run automatically on entry; you can also run one manually with the “Sync Jira” button. The flashing green dot means data is live.',
     never: 'never',
     cOverdue: 'Overdue',
     cStagnant: 'Stagnant > 3 days',
@@ -787,8 +787,10 @@ export default function JiraExceptionMonitor() {
                 title={sidebarVisible ? t.menuHide : t.menuShow}
                 style={{ ...ghostBtn, fontSize: 18, lineHeight: 1, padding: '4px 10px' }}
               >☰</button>
-              <span style={{ color: C.muted, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span className="pms-tip" style={{ color: C.muted, fontSize: 12, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span className="pms-live-dot" />
                 {t.lastSync}: {fmtDateTime(meta?.lastSyncAt)}
+                <span className="pms-tip-box">{t.lastSyncTip}</span>
               </span>
             </div>
 

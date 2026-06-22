@@ -38,6 +38,12 @@ const THEME_CSS = `
 *{box-sizing:border-box;}
 html,body{max-width:100%;overflow-x:hidden;}
 input,select,textarea{background:var(--c-card);color:var(--c-text);}
+/* مؤشّر «آخر مزامنة»: نقطة وامضة + تلميح عند المرور */
+@keyframes pmsFlash{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.2;transform:scale(.7);}}
+.pms-live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e;animation:pmsFlash 1.1s ease-in-out infinite;}
+.pms-tip{position:relative;}
+.pms-tip>.pms-tip-box{position:absolute;top:135%;inset-inline-start:0;background:var(--c-text);color:var(--c-bg);font-size:12px;line-height:1.5;padding:7px 11px;border-radius:6px;max-width:260px;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .15s;z-index:60;box-shadow:0 8px 22px rgba(0,0,0,.28);}
+.pms-tip:hover>.pms-tip-box{opacity:1;visibility:visible;}
 @media print{
   .no-print{display:none !important;}
   :root,[data-theme="dark"]{--c-bg:#ffffff;--c-card:#ffffff;--c-border:#cccccc;--c-text:#000000;--c-muted:#444444;}

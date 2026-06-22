@@ -5,6 +5,7 @@ import { snapshotExceptions } from './exceptions.js';
 import { snapshotWip } from './analytics.js';
 import { detectAndAlert } from './alerts.js';
 import { processClearedDependencies } from './dependencies.js';
+import { getActiveAccounts, accountForIssueKey } from './jiraAccounts.js';
 
 // محرّك السحب: يجلب التذاكر من جيرا، يحدّث جدول tickets (upsert)،
 // ويُدرج تغيّرات الحالة الجديدة في ticket_history (idempotent عبر change_id).
@@ -14,12 +15,12 @@ const UPSERT_TICKET = `
     id, issue_key, project_key, summary, issue_type, status, status_category,
     priority, assignee_account_id, assignee_name, reporter_account_id, reporter_name, labels,
     jira_created_at, jira_updated_at, due_date, resolved_at, last_status_change_at,
-    last_edited_by, last_edited_at, synced_at
+    last_edited_by, last_edited_at, account_id, synced_at
   ) VALUES (
     :id, :issue_key, :project_key, :summary, :issue_type, :status, :status_category,
     :priority, :assignee_account_id, :assignee_name, :reporter_account_id, :reporter_name, :labels,
     :jira_created_at, :jira_updated_at, :due_date, :resolved_at, :last_status_change_at,
-    :last_edited_by, :last_edited_at, :synced_at
+    :last_edited_by, :last_edited_at, :account_id, :synced_at
   )
   ON DUPLICATE KEY UPDATE
     issue_key = VALUES(issue_key),
@@ -41,6 +42,7 @@ const UPSERT_TICKET = `
     last_status_change_at = VALUES(last_status_change_at),
     last_edited_by = VALUES(last_edited_by),
     last_edited_at = VALUES(last_edited_at),
+    account_id = VALUES(account_id),
     synced_at = VALUES(synced_at)
 `;
 
@@ -65,13 +67,14 @@ function computeLastStatusChange(changes, createdAt) {
 }
 
 // حفظ تذكرة واحدة (upsert + تاريخها). يُعيد عدد صفوف التاريخ المُدرجة.
-async function persistIssue(issue) {
+async function persistIssue(issue, account = null) {
   const syncedAt = nowUtc();
   const row = mapIssueToRow(issue, syncedAt);
+  row.account_id = account?.id || null;
 
   // نقطة البحث الجديدة قد لا تُرجع changelog — نجلبه من نقطته المخصّصة عند غيابه.
   if (!issue.changelog || !Array.isArray(issue.changelog.histories)) {
-    issue.changelog = await fetchChangelog(issue.id);
+    issue.changelog = await fetchChangelog(issue.id, account);
   }
   // أعِد حساب آخر مَن عدّل بعد ضمان تحميل الـ changelog كاملاً.
   const lastEdit = computeLastEdit(issue);
@@ -115,10 +118,15 @@ export async function runSync({ jql } = {}) {
   let historyInserted = 0;
 
   try {
-    for await (const page of iterateIssues(jql)) {
-      for (const issue of page) {
-        historyInserted += await persistIssue(issue);
-        issuesProcessed += 1;
+    // مزامنة كل حساب جيرا نشط على حدة (كل حساب باعتماداته و JQL الخاص به).
+    const accounts = await getActiveAccounts();
+    for (const account of accounts) {
+      // عند تمرير jql صريح يُطبَّق على كل الحسابات؛ وإلا يُستخدم JQL الحساب.
+      for await (const page of iterateIssues(jql, undefined, account)) {
+        for (const issue of page) {
+          historyInserted += await persistIssue(issue, account);
+          issuesProcessed += 1;
+        }
       }
     }
 
@@ -164,9 +172,11 @@ export async function runSync({ jql } = {}) {
 }
 
 // مزامنة تذكرة واحدة (تُستدعى من Webhook) — تجلب التذكرة الطازجة وتحفظها.
+// يُحدَّد الحساب من سجلّ التذكرة إن وُجد، وإلا الحساب الافتراضي.
 export async function syncSingleIssue(idOrKey) {
-  const issue = await getIssue(idOrKey);
-  const historyInserted = await persistIssue(issue);
+  const account = await accountForIssueKey(idOrKey);
+  const issue = await getIssue(idOrKey, account);
+  const historyInserted = await persistIssue(issue, account);
   await snapshotExceptions();
   return { ok: true, issueKey: issue.key, historyInserted };
 }

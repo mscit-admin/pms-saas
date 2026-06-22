@@ -5,11 +5,14 @@ import { query } from './db.js';
 // ---- الشركات ----
 export async function listCompanies() {
   const companies = await query('SELECT id, name FROM companies ORDER BY name');
-  const projects = await query('SELECT id, company_id, name, jira_key FROM projects ORDER BY name');
+  const projects = await query(
+    `SELECT p.id, p.company_id, p.name, p.jira_key, p.account_id, a.label AS account_label
+     FROM projects p LEFT JOIN jira_accounts a ON a.id = p.account_id ORDER BY p.name`
+  );
   const byCompany = new Map(companies.map((c) => [c.id, { id: c.id, name: c.name, projects: [] }]));
   for (const p of projects) {
     const c = byCompany.get(p.company_id);
-    if (c) c.projects.push({ id: p.id, name: p.name, jiraKey: p.jira_key });
+    if (c) c.projects.push({ id: p.id, name: p.name, jiraKey: p.jira_key, accountId: p.account_id ? Number(p.account_id) : null, accountLabel: p.account_label || null });
   }
   return Array.from(byCompany.values());
 }
@@ -32,16 +35,16 @@ export async function deleteCompany(id) {
 }
 
 // ---- المشاريع ----
-export async function createProject(companyId, name, jiraKey) {
+export async function createProject(companyId, name, jiraKey, accountId = null) {
   const n = String(name || '').trim();
   const k = String(jiraKey || '').trim().toUpperCase();
   if (!n) throw new Error('اسم المشروع مطلوب');
   if (!k) throw new Error('مفتاح مشروع جيرا مطلوب');
   const res = await query(
-    'INSERT INTO projects (company_id, name, jira_key) VALUES (:c, :n, :k)',
-    { c: companyId, n, k }
+    'INSERT INTO projects (company_id, name, jira_key, account_id) VALUES (:c, :n, :k, :a)',
+    { c: companyId, n, k, a: accountId || null }
   );
-  return { id: res.insertId, name: n, jiraKey: k };
+  return { id: res.insertId, name: n, jiraKey: k, accountId: accountId || null };
 }
 
 export async function deleteProject(id) {

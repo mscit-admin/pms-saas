@@ -7,9 +7,9 @@ export const dynamic = 'force-dynamic';
 
 export const POST = handler(async (req) => {
   const me = await requirePermission('manage_companies');
-  const { companyId, name, jiraKey } = await req.json().catch(() => ({}));
+  const { companyId, name, jiraKey, accountId } = await req.json().catch(() => ({}));
   if (!companyId) return fail('الشركة مطلوبة', 400);
-  const p = await createProject(companyId, name, jiraKey);
+  const p = await createProject(companyId, name, jiraKey, accountId || null);
   await logAudit({ action: 'project_create', actorId: me.id, actorName: me.username, targetType: 'project', targetId: String(p.id), detail: `${p.name} (${p.jiraKey})`, ip: clientIp(req) });
   return ok(p);
 });

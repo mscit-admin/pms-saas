@@ -34,7 +34,7 @@ export const DELETE = handler(async (req, { params }) => {
     if (rows[0]) { status = rows[0].status; project = rows[0].project_key; }
   } catch { /* تجاهل */ }
 
-  await deleteIssueLink(String(linkId));
+  await deleteIssueLink(String(linkId), params.key);
   if (other) {
     await logManualCancel({ blocker, blocked, status, project, linkId: String(linkId), actorName: me.fullName || me.username, reason: reasonText.slice(0, 512) });
   }

@@ -17,6 +17,7 @@ const T = {
     coName: 'اسم الشركة', addCompany: 'إضافة شركة', projName: 'اسم المشروع', projJira: 'مفتاح مشروع جيرا', addProject: 'إضافة مشروع',
     noCompanies: 'لا شركات بعد — أضِف شركة لتبدأ بتقييد الوصول حسب المشروع.', assignTitle: 'إسناد مستخدم لمشاريع', pickUser: 'اختر مستخدماً', assignSave: 'حفظ الإسناد', assignHint: 'يرى المستخدم بيانات المشاريع المُحدَّدة فقط. ملاحظة: ما لم يُعرَّف أي مشروع، يرى الجميع كل البيانات.',
     projectsCol: 'المشاريع', confirmDelCo: 'حذف الشركة وكل مشاريعها وإسناداتها؟', confirmDelProj: 'حذف المشروع وإسناداته؟',
+    jiraAccounts: 'حسابات جيرا', accLabel: 'اسم الحساب', accBase: 'رابط جيرا', accEmail: 'البريد', accToken: 'API Token', accTokenKeep: 'اتركه فارغاً للإبقاء على الحالي', accJql: 'JQL', accActive: 'نشط', accCompanies: 'الشركات المرتبطة', addAccount: 'إضافة حساب', testConn: 'اختبار', accProject: 'الحساب', noAccounts: 'لا حسابات بعد — أضِف حساب جيرا واحداً أو أكثر.', accHint: 'كل حساب يُزامَن باعتماداته و JQL الخاصّين به، ويُربط بشركة أو عدّة شركات. ثم تختار حساب كل مشروع.', confirmDelAcc: 'حذف هذا الحساب؟ ستفقد ربطه بالشركات.',
     aiEnabled: 'تفعيل اقتراح التعليقات', aiProvider: 'المزوّد', aiBaseUrl: 'الرابط (Base URL)', aiModel: 'النموذج', aiKeyL: 'مفتاح API', aiAnthropic: 'Anthropic (Claude)', aiOpenai: 'متوافق مع OpenAI',
     loginLogs: 'سجلّ الدخول', auditLogs: 'سجلّ التدقيق', time: 'الوقت', actor: 'المنفّذ', actionC: 'الإجراء', target: 'الهدف', ipC: 'IP', detailC: 'تفاصيل', noLogs: 'لا سجلّات', from2: 'من', to2: 'إلى',
     al: { login_success: 'دخول ناجح', login_failed: 'محاولة فاشلة', logout: 'خروج', user_create: 'إنشاء مستخدم', user_update: 'تعديل مستخدم', user_delete: 'حذف مستخدم', reset_2fa: 'إعادة ضبط 2FA', role_create: 'إنشاء دور', role_update: 'تعديل دور', role_delete: 'حذف دور', settings_update: 'تعديل إعدادات', integration_update: 'تعديل الربط', branding_upload: 'رفع هوية', branding_remove: 'إزالة هوية', ticket_assign: 'إسناد تذكرة', ticket_comment: 'تعليق', ticket_transition: 'نقل حالة', ticket_fields: 'تعديل حقول', followup_update: 'متابعة' },
@@ -49,6 +50,7 @@ const T = {
     coName: 'Company name', addCompany: 'Add company', projName: 'Project name', projJira: 'Jira project key', addProject: 'Add project',
     noCompanies: 'No companies yet — add one to start restricting access per project.', assignTitle: 'Assign a user to projects', pickUser: 'Pick a user', assignSave: 'Save assignment', assignHint: 'The user only sees data for the selected projects. Note: until any project is defined, everyone sees all data.',
     projectsCol: 'Projects', confirmDelCo: 'Delete the company with all its projects and assignments?', confirmDelProj: 'Delete the project and its assignments?',
+    jiraAccounts: 'Jira accounts', accLabel: 'Account name', accBase: 'Jira base URL', accEmail: 'Email', accToken: 'API Token', accTokenKeep: 'leave blank to keep current', accJql: 'JQL', accActive: 'Active', accCompanies: 'Linked companies', addAccount: 'Add account', testConn: 'Test', accProject: 'Account', noAccounts: 'No accounts yet — add one or more Jira accounts.', accHint: 'Each account syncs with its own credentials and JQL, and links to one or more companies. Then you pick each project’s account.', confirmDelAcc: 'Delete this account? Its company links will be lost.',
     aiEnabled: 'Enable comment suggestions', aiProvider: 'Provider', aiBaseUrl: 'Base URL', aiModel: 'Model', aiKeyL: 'API key', aiAnthropic: 'Anthropic (Claude)', aiOpenai: 'OpenAI-compatible',
     loginLogs: 'Login log', auditLogs: 'Audit log', time: 'Time', actor: 'Actor', actionC: 'Action', target: 'Target', ipC: 'IP', detailC: 'Detail', noLogs: 'No entries', from2: 'From', to2: 'To',
     al: { login_success: 'Login OK', login_failed: 'Login failed', logout: 'Logout', user_create: 'Create user', user_update: 'Update user', user_delete: 'Delete user', reset_2fa: 'Reset 2FA', role_create: 'Create role', role_update: 'Update role', role_delete: 'Delete role', settings_update: 'Update settings', integration_update: 'Update integration', branding_upload: 'Branding upload', branding_remove: 'Branding remove', ticket_assign: 'Assign ticket', ticket_comment: 'Comment', ticket_transition: 'Transition', ticket_fields: 'Edit fields', followup_update: 'Follow-up' },
@@ -154,12 +156,88 @@ export default function AdminPanel({ lang = 'ar', perms = [], section }) {
   );
 }
 
+// ----------------------------------------------------------- Jira accounts (multi-account)
+function JiraAccountsPanel({ t, companies, onChange }) {
+  const [accounts, setAccounts] = useState([]);
+  const [form, setForm] = useState({ label: '', baseUrl: '', email: '', apiToken: '', jql: '', companyIds: [] });
+  const [err, setErr] = useState('');
+  const [test, setTest] = useState({});
+
+  const load = useCallback(async () => { const d = await api('/api/jira-accounts'); setAccounts(d.accounts || []); }, []);
+  useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
+
+  const run = async (fn) => { setErr(''); try { await fn(); await load(); onChange?.(); } catch (e) { setErr(e.message); } };
+  const addAccount = () => run(async () => {
+    await api('/api/jira-accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+    setForm({ label: '', baseUrl: '', email: '', apiToken: '', jql: '', companyIds: [] });
+  });
+  const saveAccount = (a) => run(async () => {
+    await api(`/api/jira-accounts/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: a.label, baseUrl: a.baseUrl, email: a.email, apiToken: a.apiToken || '', jql: a.jql, isActive: a.isActive, companyIds: a.companyIds }) });
+  });
+  const delAccount = (a) => { if (!confirm(t.confirmDelAcc)) return; run(async () => { await api(`/api/jira-accounts/${a.id}`, { method: 'DELETE' }); }); };
+  const testAccount = async (a) => {
+    setTest((s) => ({ ...s, [a.id]: '…' }));
+    try { const d = await api(`/api/jira-accounts/${a.id}`, { method: 'POST' }); setTest((s) => ({ ...s, [a.id]: d.ok ? `✓ ${d.displayName || ''}` : `✗ ${d.error}` })); }
+    catch (e) { setTest((s) => ({ ...s, [a.id]: `✗ ${e.message}` })); }
+  };
+  const upd = (id, patch) => setAccounts((list) => list.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const toggleCo = (a, cid) => upd(a.id, { companyIds: a.companyIds.includes(cid) ? a.companyIds.filter((x) => x !== cid) : [...a.companyIds, cid] });
+
+  return (
+    <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+      <h4 style={{ margin: '0 0 4px' }}>{t.jiraAccounts}</h4>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>{t.accHint}</div>
+      {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 8 }}>{err}</div>}
+
+      {accounts.map((a) => (
+        <div key={a.id} style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: 10, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input value={a.label} onChange={(e) => upd(a.id, { label: e.target.value })} placeholder={t.accLabel} style={{ ...inp, width: 140 }} />
+            <input value={a.baseUrl} onChange={(e) => upd(a.id, { baseUrl: e.target.value })} placeholder={t.accBase} style={{ ...inp, width: 200 }} />
+            <input value={a.email} onChange={(e) => upd(a.id, { email: e.target.value })} placeholder={t.accEmail} style={{ ...inp, width: 170 }} />
+            <input value={a.apiToken || ''} onChange={(e) => upd(a.id, { apiToken: e.target.value })} placeholder={a.hasToken ? t.accTokenKeep : t.accToken} type="password" style={{ ...inp, width: 150 }} />
+            <label style={{ fontSize: 13, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+              <input type="checkbox" checked={a.isActive} onChange={(e) => upd(a.id, { isActive: e.target.checked })} />{t.accActive}
+            </label>
+          </div>
+          <input value={a.jql} onChange={(e) => upd(a.id, { jql: e.target.value })} placeholder={t.accJql} style={{ ...inp, width: '100%', boxSizing: 'border-box', marginTop: 6 }} />
+          <div style={{ fontSize: 12, color: C.muted, margin: '8px 0 4px' }}>{t.accCompanies}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            {companies.map((c) => (
+              <label key={c.id} style={{ fontSize: 13, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                <input type="checkbox" checked={a.companyIds.includes(c.id)} onChange={() => toggleCo(a, c.id)} />{c.name}
+              </label>
+            ))}
+            {companies.length === 0 && <span style={{ fontSize: 12, color: C.muted }}>—</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+            <button onClick={() => saveAccount(a)} style={btn(C.green)}>{t.save}</button>
+            <button onClick={() => testAccount(a)} style={ghost}>{t.testConn}</button>
+            <button onClick={() => delAccount(a)} style={{ ...ghost, color: C.red }}>{t.del}</button>
+            {test[a.id] && <span style={{ fontSize: 12, color: C.muted }}>{test[a.id]}</span>}
+          </div>
+        </div>
+      ))}
+      {accounts.length === 0 && <div style={{ color: C.muted, fontSize: 13, marginBottom: 8 }}>{t.noAccounts}</div>}
+
+      <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 8, paddingTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder={t.accLabel} style={{ ...inp, width: 140 }} />
+        <input value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder={t.accBase} style={{ ...inp, width: 200 }} />
+        <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={t.accEmail} style={{ ...inp, width: 170 }} />
+        <input value={form.apiToken} onChange={(e) => setForm({ ...form, apiToken: e.target.value })} placeholder={t.accToken} type="password" style={{ ...inp, width: 150 }} />
+        <button disabled={!form.label.trim()} onClick={addAccount} style={btn(C.green)}>{t.addAccount}</button>
+      </div>
+    </div>
+  );
+}
+
 // ----------------------------------------------------------- Companies & projects
 function CompaniesSection({ t }) {
   const [companies, setCompanies] = useState([]);
   const [users, setUsers] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [coName, setCoName] = useState('');
-  const [proj, setProj] = useState({}); // { [companyId]: { name, jiraKey } }
+  const [proj, setProj] = useState({}); // { [companyId]: { name, jiraKey, accountId } }
   const [userId, setUserId] = useState('');
   const [assigned, setAssigned] = useState([]);
   const [err, setErr] = useState('');
@@ -167,7 +245,7 @@ function CompaniesSection({ t }) {
 
   const load = useCallback(async () => {
     const d = await api('/api/companies');
-    setCompanies(d.companies || []); setUsers(d.users || []);
+    setCompanies(d.companies || []); setUsers(d.users || []); setAccounts(d.accounts || []);
   }, []);
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
 
@@ -180,8 +258,8 @@ function CompaniesSection({ t }) {
   const delCompany = (c) => { if (!confirm(t.confirmDelCo)) return; run(async () => { await api(`/api/companies/${c.id}`, { method: 'DELETE' }); await load(); }); };
   const addProject = (c) => run(async () => {
     const p = proj[c.id] || {};
-    await api('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ companyId: c.id, name: (p.name || '').trim(), jiraKey: (p.jiraKey || '').trim() }) });
-    setProj((s) => ({ ...s, [c.id]: { name: '', jiraKey: '' } })); await load();
+    await api('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ companyId: c.id, name: (p.name || '').trim(), jiraKey: (p.jiraKey || '').trim(), accountId: p.accountId ? Number(p.accountId) : null }) });
+    setProj((s) => ({ ...s, [c.id]: { name: '', jiraKey: '', accountId: '' } })); await load();
   });
   const delProject = (p) => { if (!confirm(t.confirmDelProj)) return; run(async () => { await api(`/api/projects/${p.id}`, { method: 'DELETE' }); await load(); }); };
 
@@ -201,6 +279,8 @@ function CompaniesSection({ t }) {
     <div>
       {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 10 }}>{err}</div>}
 
+      <JiraAccountsPanel t={t} companies={companies} onChange={load} />
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
         <input value={coName} onChange={(e) => setCoName(e.target.value)} placeholder={t.coName} style={inp} />
         <button disabled={!coName.trim()} onClick={addCompany} style={btn(C.green)}>{t.addCompany}</button>
@@ -216,13 +296,17 @@ function CompaniesSection({ t }) {
           </div>
           {c.projects.map((p) => (
             <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '4px 0' }}>
-              <span>{p.name} <span style={{ color: C.muted }}>· {p.jiraKey}</span></span>
+              <span>{p.name} <span style={{ color: C.muted }}>· {p.jiraKey}{p.accountLabel ? ` · ${p.accountLabel}` : ''}</span></span>
               <button onClick={() => delProject(p)} style={{ ...ghost, color: C.red }}>{t.del}</button>
             </div>
           ))}
           <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-            <input value={proj[c.id]?.name || ''} onChange={(e) => setProj((s) => ({ ...s, [c.id]: { ...s[c.id], name: e.target.value } }))} placeholder={t.projName} style={{ ...inp, flex: 1, minWidth: 120 }} />
-            <input value={proj[c.id]?.jiraKey || ''} onChange={(e) => setProj((s) => ({ ...s, [c.id]: { ...s[c.id], jiraKey: e.target.value } }))} placeholder={t.projJira} style={{ ...inp, width: 150 }} />
+            <input value={proj[c.id]?.name || ''} onChange={(e) => setProj((s) => ({ ...s, [c.id]: { ...s[c.id], name: e.target.value } }))} placeholder={t.projName} style={{ ...inp, flex: 1, minWidth: 110 }} />
+            <input value={proj[c.id]?.jiraKey || ''} onChange={(e) => setProj((s) => ({ ...s, [c.id]: { ...s[c.id], jiraKey: e.target.value } }))} placeholder={t.projJira} style={{ ...inp, width: 120 }} />
+            <select value={proj[c.id]?.accountId || ''} onChange={(e) => setProj((s) => ({ ...s, [c.id]: { ...s[c.id], accountId: e.target.value } }))} style={{ ...inp, width: 150 }}>
+              <option value="">{t.accProject}</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </select>
             <button onClick={() => addProject(c)} style={ghost}>{t.addProject}</button>
           </div>
         </div>

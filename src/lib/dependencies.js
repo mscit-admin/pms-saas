@@ -51,7 +51,7 @@ export async function processClearedDependencies() {
     // 2) احذف رابط جيرا مرة واحدة لكل link_id
     if (r.link_id && !deletedLinks.has(r.link_id)) {
       deletedLinks.add(r.link_id);
-      try { await deleteIssueLink(r.link_id); removed += 1; }
+      try { await deleteIssueLink(r.link_id, r.blocker_key); removed += 1; }
       catch (e) { console.error('deleteIssueLink failed', r.link_id, e?.message || e); }
     }
   }

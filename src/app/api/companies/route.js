@@ -1,14 +1,15 @@
 import { handler, ok } from '@/lib/http';
 import { requirePermission } from '@/lib/auth';
 import { listCompanies, createCompany, listUsersBrief } from '@/lib/companies';
+import { listAccounts } from '@/lib/jiraAccounts';
 import { logAudit, clientIp } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
 export const GET = handler(async () => {
   await requirePermission('manage_companies');
-  const [companies, users] = await Promise.all([listCompanies(), listUsersBrief()]);
-  return ok({ companies, users });
+  const [companies, users, accounts] = await Promise.all([listCompanies(), listUsersBrief(), listAccounts()]);
+  return ok({ companies, users, accounts: accounts.map((a) => ({ id: a.id, label: a.label })) });
 });
 
 export const POST = handler(async (req) => {

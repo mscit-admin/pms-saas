@@ -1,4 +1,5 @@
-import { getJiraSettings, assertJira } from './jira-settings.js';
+import { assertJira } from './jira-settings.js';
+import { defaultJiraAccount, accountForIssueKey } from './jiraAccounts.js';
 import { textToAdf } from './adf.js';
 
 // عميل Jira Cloud — Basic Auth (email + API Token). الإعدادات من قاعدة البيانات
@@ -32,8 +33,8 @@ const FIELDS = [
   'comment',
 ];
 
-async function jiraRequest(method, path, body) {
-  const settings = await getJiraSettings();
+async function jiraRequest(method, path, body, account) {
+  const settings = account || await defaultJiraAccount();
   assertJira(settings);
   const url = `${settings.baseUrl}${path}`;
   const res = await fetch(url, {
@@ -57,8 +58,7 @@ async function jiraRequest(method, path, body) {
 }
 
 // صفحة واحدة من نقطة البحث الجديدة. expand=changelog كمحاولة أولى (مدعومة أحياناً).
-async function searchPage(jql, nextPageToken, maxResults) {
-  const settings = await getJiraSettings();
+async function searchPage(jql, nextPageToken, maxResults, account) {
   const body = {
     jql,
     maxResults,
@@ -66,12 +66,12 @@ async function searchPage(jql, nextPageToken, maxResults) {
     expand: 'changelog',
   };
   if (nextPageToken) body.nextPageToken = nextPageToken;
-  return jiraRequest('POST', settings.searchPath, body);
+  return jiraRequest('POST', account?.searchPath || '/rest/api/3/search/jql', body, account);
 }
 
 // يجلب سجلّ تغييرات تذكرة من النقطة المخصّصة (مرقّمة) — احتياط حين لا يرجعها البحث.
 // شكل القيم value يطابق histories: { id, created, author, items }.
-export async function fetchChangelog(issueIdOrKey) {
+export async function fetchChangelog(issueIdOrKey, account) {
   const histories = [];
   let startAt = 0;
   // حلقة ترقيم كلاسيكية — هذه النقطة ما زالت تستخدم startAt
@@ -79,7 +79,9 @@ export async function fetchChangelog(issueIdOrKey) {
   while (true) {
     const data = await jiraRequest(
       'GET',
-      `/rest/api/3/issue/${issueIdOrKey}/changelog?startAt=${startAt}&maxResults=100`
+      `/rest/api/3/issue/${issueIdOrKey}/changelog?startAt=${startAt}&maxResults=100`,
+      undefined,
+      account
     );
     const values = data.values || [];
     histories.push(...values);
@@ -91,17 +93,15 @@ export async function fetchChangelog(issueIdOrKey) {
 }
 
 // سحب كل التذاكر المطابقة لـ JQL عبر الترقيم بالرمز (nextPageToken).
-// عند عدم تمرير jql/pageSize نقرأهما من الإعدادات (قاعدة البيانات/البيئة).
-export async function* iterateIssues(jql, pageSize) {
-  if (jql === undefined || pageSize === undefined) {
-    const s = await getJiraSettings();
-    if (jql === undefined) jql = s.jql;
-    if (pageSize === undefined) pageSize = s.pageSize;
-  }
+// يُمرَّر account (حساب جيرا) لتحديد الاعتمادات و JQL/حجم الصفحة الخاصّين به.
+export async function* iterateIssues(jql, pageSize, account) {
+  const acct = account || await defaultJiraAccount();
+  if (jql === undefined) jql = acct.jql;
+  if (pageSize === undefined) pageSize = acct.pageSize;
   let nextPageToken;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const data = await searchPage(jql, nextPageToken, pageSize);
+    const data = await searchPage(jql, nextPageToken, pageSize, acct);
     const issues = data.issues ?? [];
     if (issues.length > 0) yield issues;
 
@@ -111,49 +111,54 @@ export async function* iterateIssues(jql, pageSize) {
 }
 
 // جلب تذكرة واحدة بحقولها وتاريخها — يُستخدم في معالج Webhook.
-export async function getIssue(idOrKey) {
+export async function getIssue(idOrKey, account) {
   const path = `/rest/api/3/issue/${encodeURIComponent(idOrKey)}?fields=${FIELDS.join(',')}&expand=changelog`;
-  return jiraRequest('GET', path);
+  return jiraRequest('GET', path, undefined, account);
 }
 
 // ---- عمليات الكتابة في جيرا (Write-back) ----
 
 // إسناد تذكرة (accountId=null لإلغاء الإسناد)
 export async function assignIssue(idOrKey, accountId) {
+  const acct = await accountForIssueKey(idOrKey);
   return jiraRequest('PUT', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/assignee`, {
     accountId: accountId || null,
-  });
+  }, acct);
 }
 
 // إضافة تعليق (يدعم الإشارات @ عبر بناء ADF مع عقد mention)
 export async function addComment(idOrKey, text, mentions = []) {
+  const acct = await accountForIssueKey(idOrKey);
   return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/comment`, {
     body: textToAdf(text, mentions),
-  });
+  }, acct);
 }
 
 // إنشاء رابط بين تذكرتين (Blocks). الدلالة: outwardIssue «يحجب» inwardIssue.
 export async function createIssueLink({ type = 'Blocks', inwardKey, outwardKey }) {
+  const acct = await accountForIssueKey(outwardKey || inwardKey);
   return jiraRequest('POST', '/rest/api/3/issueLink', {
     type: { name: type },
     inwardIssue: { key: inwardKey },
     outwardIssue: { key: outwardKey },
-  });
+  }, acct);
 }
 
-// حذف رابط بين تذكرتين بمعرّفه (issueLink id).
-export async function deleteIssueLink(linkId) {
-  return jiraRequest('DELETE', `/rest/api/3/issueLink/${encodeURIComponent(linkId)}`);
+// حذف رابط بين تذكرتين بمعرّفه (issueLink id). يُمرَّر مفتاح تذكرة لتحديد الحساب.
+export async function deleteIssueLink(linkId, contextKey) {
+  const acct = contextKey ? await accountForIssueKey(contextKey) : await defaultJiraAccount();
+  return jiraRequest('DELETE', `/rest/api/3/issueLink/${encodeURIComponent(linkId)}`, undefined, acct);
 }
 
 // جلب روابط تذكرة (issuelinks) فقط — لعرض/حذف الاعتماديات الحالية.
 export async function getIssueLinks(idOrKey) {
-  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}?fields=issuelinks`);
+  const acct = await accountForIssueKey(idOrKey);
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}?fields=issuelinks`, undefined, acct);
 }
 
-// بحث مستخدمي جيرا (للإشارات @) — حسب نص الاستعلام.
-export async function searchUsers(q) {
-  const data = await jiraRequest('GET', `/rest/api/3/user/search?query=${encodeURIComponent(q || '')}&maxResults=10`);
+// بحث مستخدمي جيرا (للإشارات @) — حسب نص الاستعلام. account اختياري (حساب التذكرة).
+export async function searchUsers(q, account) {
+  const data = await jiraRequest('GET', `/rest/api/3/user/search?query=${encodeURIComponent(q || '')}&maxResults=10`, undefined, account);
   return (data || [])
     .filter((u) => u.accountType !== 'app' && u.active !== false)
     .map((u) => ({ accountId: u.accountId, name: u.displayName }));
@@ -161,40 +166,46 @@ export async function searchUsers(q) {
 
 // بيانات تعديل حقول التذكرة (editmeta) — لمعرفة الحقول وقيمها المسموحة
 export async function getEditMeta(idOrKey) {
-  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/editmeta`);
+  const acct = await accountForIssueKey(idOrKey);
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/editmeta`, undefined, acct);
 }
 
 // تحديث حقول التذكرة (لضبط مثل labels/priority قبل انتقال يتطلبها validator)
 export async function updateIssueFields(idOrKey, fields) {
-  return jiraRequest('PUT', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}`, { fields });
+  const acct = await accountForIssueKey(idOrKey);
+  return jiraRequest('PUT', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}`, { fields }, acct);
 }
 
 // الانتقالات المتاحة لتذكرة (مع حقولها لاكتشاف الإلزامي منها)
 export async function getTransitions(idOrKey) {
-  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions?expand=transitions.fields`);
+  const acct = await accountForIssueKey(idOrKey);
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions?expand=transitions.fields`, undefined, acct);
 }
 
 // تنفيذ انتقال حالة (مع حقول الشاشة الإلزامية إن وُجدت)
 export async function transitionIssue(idOrKey, transitionId, fields) {
+  const acct = await accountForIssueKey(idOrKey);
   const body = { transition: { id: String(transitionId) } };
   if (fields && Object.keys(fields).length > 0) body.fields = fields;
-  return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions`, body);
+  return jiraRequest('POST', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/transitions`, body, acct);
 }
 
 // تفاصيل إضافية للتاريخ: المهام الفرعية + سجل التغييرات الكامل.
 export async function getIssueExtra(idOrKey) {
-  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}?fields=subtasks,parent&expand=changelog`);
+  const acct = await accountForIssueKey(idOrKey);
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}?fields=subtasks,parent&expand=changelog`, undefined, acct);
 }
 
 // تعليقات التذكرة (مرقّمة، الأحدث أولاً).
 export async function getComments(idOrKey, startAt = 0, maxResults = 30) {
-  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/comment?startAt=${startAt}&maxResults=${maxResults}&orderBy=-created`);
+  const acct = await accountForIssueKey(idOrKey);
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/comment?startAt=${startAt}&maxResults=${maxResults}&orderBy=-created`, undefined, acct);
 }
 
 // اختبار سريع للاتصال — يُستخدم في /api/health وزر اختبار الربط.
 // يقبل إعدادات اختيارية لاختبار اتصال قبل حفظه.
 export async function ping(override) {
-  const settings = override || (await getJiraSettings());
+  const settings = override || (await defaultJiraAccount());
   assertJira(settings);
   const res = await fetch(`${settings.baseUrl}/rest/api/3/myself`, {
     headers: { Authorization: authHeader(settings), Accept: 'application/json' },

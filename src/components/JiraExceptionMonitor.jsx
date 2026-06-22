@@ -1340,6 +1340,8 @@ function TicketActions({ ticket, onClose, onDone }) {
   const [editValues, setEditValues] = useState({});
   const [linkRelation, setLinkRelation] = useState('blocked_by');
   const [linkOther, setLinkOther] = useState('');
+  const [linkSug, setLinkSug] = useState([]);
+  const [linkSugOpen, setLinkSugOpen] = useState(false);
   const [links, setLinks] = useState([]);
   const [unlinkReason, setUnlinkReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1380,6 +1382,18 @@ function TicketActions({ ticket, onClose, onDone }) {
       fetchJson(`/api/tickets/${ticket.key}/link`).then((d) => setLinks(d.links || [])).catch(() => {});
     }
   }, [ticket, canAct, canManage]);
+
+  // اقتراح تذاكر أثناء كتابة مفتاح التذكرة الأخرى (اعتمادية)
+  useEffect(() => {
+    const q = linkOther.trim();
+    if (q.length < 1) { setLinkSug([]); return; }
+    const id = setTimeout(() => {
+      fetchJson(`/api/tickets/search?q=${encodeURIComponent(q)}`)
+        .then((d) => setLinkSug((d.items || []).filter((s) => s.key !== ticket.key)))
+        .catch(() => setLinkSug([]));
+    }, 200);
+    return () => clearTimeout(id);
+  }, [linkOther, ticket.key]);
 
   // بناء حمولة الحقول بصيغة جيرا
   const buildEditPayload = () => {
@@ -1513,7 +1527,30 @@ function TicketActions({ ticket, onClose, onDone }) {
           <option value="blocks">{t.relBlocks}</option>
         </select>
         <div style={{ display: 'flex', gap: 6 }}>
-          <input value={linkOther} onChange={(e) => setLinkOther(e.target.value)} placeholder={t.otherKeyPh} style={{ ...inputStyle, flex: 1, boxSizing: 'border-box' }} />
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input
+              value={linkOther}
+              onChange={(e) => { setLinkOther(e.target.value); setLinkSugOpen(true); }}
+              onFocus={() => setLinkSugOpen(true)}
+              onBlur={() => setTimeout(() => setLinkSugOpen(false), 150)}
+              placeholder={t.otherKeyPh}
+              style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+            />
+            {linkSugOpen && linkSug.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', insetInlineStart: 0, insetInlineEnd: 0, zIndex: 40, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, marginTop: 2, maxHeight: 220, overflowY: 'auto', boxShadow: '0 6px 18px rgba(0,0,0,0.14)' }}>
+                {linkSug.map((s) => (
+                  <div
+                    key={s.key}
+                    onMouseDown={(e) => { e.preventDefault(); setLinkOther(s.key); setLinkSugOpen(false); }}
+                    style={{ padding: '6px 10px', cursor: 'pointer', fontSize: 13, borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 6, alignItems: 'baseline' }}
+                  >
+                    <strong>{s.key}</strong>
+                    <span style={{ color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.summary}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <button disabled={busy || !linkOther.trim()} onClick={() => run(() => postJson(`/api/tickets/${ticket.key}/link`, { relation: linkRelation, otherKey: linkOther.trim() }).then(() => { setLinkOther(''); return refetchLinks(); }))} style={ghostBtn}>{t.apply}</button>
         </div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.6 }}>{t.linkHint}</div>

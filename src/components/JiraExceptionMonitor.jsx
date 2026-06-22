@@ -106,6 +106,7 @@ const DICT = {
     thStatus: 'الحالة',
     thPriority: 'الأولوية',
     thAssignee: 'المسؤول',
+    hierTitle: 'شجرة التذاكر', hierEmpty: 'لا توجد تذاكر تابعة لهذه التذكرة.',
     thCreator: 'المُنشئ',
     thLastActor: 'آخر تحديث',
     thDue: 'الاستحقاق',
@@ -246,6 +247,7 @@ const DICT = {
     thStatus: 'Status',
     thPriority: 'Priority',
     thAssignee: 'Assignee',
+    hierTitle: 'Ticket hierarchy', hierEmpty: 'This ticket has no child tickets.',
     thCreator: 'Reporter',
     thLastActor: 'Last update',
     thDue: 'Due',
@@ -1657,7 +1659,7 @@ function TicketActions({ ticket, onClose, onDone }) {
 }
 
 // بطاقة استثناء للجوال (بديل صف الجدول)
-function ExceptionCard({ it, canManage, canOpen, onAction }) {
+function ExceptionCard({ it, canManage, canOpen, onAction, onType }) {
   const { t, fmt, fmtDate, fmtDateTime } = useUI();
   const F = ({ label, children }) => (
     <div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>
@@ -1674,7 +1676,9 @@ function ExceptionCard({ it, canManage, canOpen, onAction }) {
         <div style={{ marginBottom: 6 }}>{it.labels.map((l) => <Chip key={l} color="#6b7280">{l}</Chip>)}</div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px', marginBottom: 6 }}>
-        <F label={t.thType}>{it.issueType || '—'}</F>
+        <F label={t.thType}>{it.issueType
+          ? <span onClick={() => onType?.(it.key)} style={{ cursor: 'pointer', color: C.blue, textDecoration: 'underline' }}>{it.issueType} ⤵</span>
+          : '—'}</F>
         <F label={t.fProject}>{it.project}</F>
         <F label={t.thStatus}>{it.status}</F>
         <F label={t.thPriority}>{it.priority}</F>
@@ -1918,6 +1922,60 @@ function PageBar({ page, setPage, pageSize, setPageSize, total }) {
   );
 }
 
+// عقدة في شجرة التذاكر (تُستدعى تكرارياً)
+function HierNode({ node, depth }) {
+  const { t, fmtDate } = useUI();
+  const catColor = { done: C.green, indeterminate: C.amber, new: '#6b7280' }[node.statusCategory] || '#6b7280';
+  return (
+    <div style={{ marginInlineStart: depth ? 16 : 0, borderInlineStart: depth ? `2px solid ${C.border}` : 'none', paddingInlineStart: depth ? 10 : 0, marginTop: 6 }}>
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', background: C.card }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {node.type && <Chip color={C.blue}>{node.type}</Chip>}
+          <KeyLink k={node.key} />
+          <span style={{ fontWeight: 600 }}>{node.summary}</span>
+          {node.status && <Chip color={catColor}>{node.status}</Chip>}
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <span>{t.thAssignee}: {node.assignee || '—'}</span>
+          <span>{t.thPriority}: {node.priority || '—'}</span>
+          <span>{t.thCreator}: {node.reporter || '—'}</span>
+          {node.due && <span>{t.thDue}: {fmtDate(node.due)}</span>}
+        </div>
+      </div>
+      {(node.children || []).map((c) => <HierNode key={c.key} node={c} depth={depth + 1} />)}
+    </div>
+  );
+}
+
+// نافذة شجرة التذاكر (Epic → Task → Subtask) بتفاصيلها.
+function HierarchyModal({ issueKey, onClose }) {
+  const { t } = useUI();
+  const [tree, setTree] = useState(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    setTree(null); setErr('');
+    fetchJson(`/api/tickets/${issueKey}/hierarchy`).then((d) => setTree(d.tree)).catch((e) => setErr(e.message));
+  }, [issueKey]);
+  const count = (n) => (n ? 1 + (n.children || []).reduce((a, c) => a + count(c), 0) - 1 : 0);
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 60, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.bg, borderRadius: 12, padding: 16, width: 'min(820px, 100%)', marginTop: 24, maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <strong>{t.hierTitle} · {issueKey}</strong>
+          <button onClick={onClose} style={ghostBtn}>{t.close}</button>
+        </div>
+        {err && <ErrorBox message={err} />}
+        {!tree && !err && <Loading />}
+        {tree && (
+          (tree.children || []).length === 0
+            ? (<><HierNode node={tree} depth={0} /><div style={{ color: C.muted, fontSize: 13, marginTop: 10 }}>{t.hierEmpty}</div></>)
+            : <HierNode node={tree} depth={0} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------- العملياتي
 function OperationalTab({ screen = 'exceptions' }) {
   const { t, fmt, fmtDate, fmtDateTime, perms, pageSize: defaultPageSize } = useUI();
@@ -1927,6 +1985,7 @@ function OperationalTab({ screen = 'exceptions' }) {
   const canManage = (perms || []).includes('manage_exceptions');
   const canOpen = canAct || canManage;
   const [actionTicket, setActionTicket] = useState(null);
+  const [hierKey, setHierKey] = useState(null);
   const [hideSnoozed, setHideSnoozed] = useState(true);
   const [hideAcked, setHideAcked] = useState(false);
   const [from, setFrom] = useState('');
@@ -2077,7 +2136,7 @@ function OperationalTab({ screen = 'exceptions' }) {
         {isMobile ? (
           <div>
             {pageItems.map((it) => (
-              <ExceptionCard key={it.id} it={it} canManage={canManage} canOpen={canOpen} onAction={setActionTicket} />
+              <ExceptionCard key={it.id} it={it} canManage={canManage} canOpen={canOpen} onAction={setActionTicket} onType={setHierKey} />
             ))}
             {filtered.length === 0 && <div style={{ textAlign: 'center', color: C.muted, padding: 16 }}>{isAll ? t.noTickets : t.noExceptions}</div>}
           </div>
@@ -2112,7 +2171,9 @@ function OperationalTab({ screen = 'exceptions' }) {
                       <div style={{ marginTop: 4 }}>{it.labels.map((l) => <Chip key={l} color="#6b7280">{l}</Chip>)}</div>
                     )}
                   </Td>
-                  <Td>{it.issueType ? <Chip color={C.blue}>{it.issueType}</Chip> : '—'}</Td>
+                  <Td>{it.issueType
+                    ? <span onClick={() => setHierKey(it.key)} style={{ cursor: 'pointer' }} title={t.hierTitle}><Chip color={C.blue}>{it.issueType} ⤵</Chip></span>
+                    : '—'}</Td>
                   <Td>{it.project}</Td>
                   <Td>{it.status}</Td>
                   <Td>{it.priority}</Td>
@@ -2166,6 +2227,10 @@ function OperationalTab({ screen = 'exceptions' }) {
 
       {actionTicket && (
         <TicketActions ticket={actionTicket} onClose={() => setActionTicket(null)} onDone={load} />
+      )}
+
+      {hierKey && (
+        <HierarchyModal issueKey={hierKey} onClose={() => setHierKey(null)} />
       )}
 
       {screen === 'workload' && (

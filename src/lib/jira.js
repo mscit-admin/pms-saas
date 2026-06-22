@@ -202,6 +202,35 @@ export async function getComments(idOrKey, startAt = 0, maxResults = 30) {
   return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}/comment?startAt=${startAt}&maxResults=${maxResults}&orderBy=-created`, undefined, acct);
 }
 
+// ---- التسلسل الهرمي (Epic → Task → Subtask) ----
+const HIER_FIELDS = ['summary', 'status', 'assignee', 'priority', 'issuetype', 'parent', 'subtasks', 'created', 'reporter', 'duedate'];
+
+// تذكرة مختصرة بحقول التسلسل.
+export async function getIssueBrief(idOrKey, account) {
+  return jiraRequest('GET', `/rest/api/3/issue/${encodeURIComponent(idOrKey)}?fields=${HIER_FIELDS.join(',')}`, undefined, account);
+}
+
+// أبناء تذكرة: عبر parent دائماً، وللـ Epic نجرّب «Epic Link» أيضاً (مشاريع كلاسيكية).
+export async function searchChildren(parentKey, isEpic, account) {
+  const searchPath = account?.searchPath || '/rest/api/3/search/jql';
+  const results = [];
+  const seen = new Set();
+  const addAll = (data) => {
+    for (const i of data?.issues || []) {
+      if (!seen.has(i.key)) { seen.add(i.key); results.push(i); }
+    }
+  };
+  try {
+    addAll(await jiraRequest('POST', searchPath, { jql: `parent = "${parentKey}"`, maxResults: 100, fields: HIER_FIELDS }, account));
+  } catch { /* تجاهل */ }
+  if (isEpic) {
+    try {
+      addAll(await jiraRequest('POST', searchPath, { jql: `"Epic Link" = "${parentKey}"`, maxResults: 100, fields: HIER_FIELDS }, account));
+    } catch { /* الحقل غير موجود في بعض المواقع */ }
+  }
+  return results;
+}
+
 // اختبار سريع للاتصال — يُستخدم في /api/health وزر اختبار الربط.
 // يقبل إعدادات اختيارية لاختبار اتصال قبل حفظه.
 export async function ping(override) {

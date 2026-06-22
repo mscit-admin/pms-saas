@@ -597,7 +597,6 @@ export default function JiraExceptionMonitor() {
     if (can('view_dashboard')) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', solo: true, targetId: 'dash_main' });
 
     if (can('view_operational')) cats.push({ id: 'ops', label: t.navOps, icon: 'grid', items: [
-      { id: 'ops_exceptions', label: t.exceptions, icon: 'flag' },
       { id: 'ops_alltickets', label: t.allTickets, icon: 'list' },
     ] });
     const mgmtItems = [];

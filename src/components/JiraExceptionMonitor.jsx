@@ -602,10 +602,11 @@ export default function JiraExceptionMonitor() {
     // لوحة المعلومات: مدخل واحد مباشر يفتح كل المحتوى (KPI + الأدوات) — بلا عنصر فرعي
     if (can('view_dashboard')) cats.push({ id: 'dash', label: t.navDashboard, icon: 'dashboard', solo: true, targetId: 'dash_main' });
 
-    if (can('view_operational')) cats.push({ id: 'projtickets', label: t.projectTickets, icon: 'list', solo: true, targetId: 'ops_alltickets' });
-    const mgmtItems = [];
+    // تذاكر المشروع: تصنيف يضمّ قائمة التذاكر + شاشات التحليلات (دُمج «التحليلات» هنا)
+    const projItems = [];
+    if (can('view_operational')) projItems.push({ id: 'ops_alltickets', label: t.allTickets, icon: 'list' });
     if (can('view_managerial')) {
-      mgmtItems.push(
+      projItems.push(
         { id: 'mgmt_performance', label: t.performance, icon: 'award' },
         { id: 'mgmt_scorecard', label: t.scorecard, icon: 'shield' },
         { id: 'mgmt_flow', label: t.flow, icon: 'shuffle' },
@@ -613,8 +614,8 @@ export default function JiraExceptionMonitor() {
         { id: 'mgmt_sla', label: t.sla, icon: 'clock' },
       );
     }
-    if (can('view_dependency_log')) mgmtItems.push({ id: 'mgmt_deplog', label: t.depLog, icon: 'fileText' });
-    if (mgmtItems.length) cats.push({ id: 'mgmt', label: t.navMgmt, icon: 'barChart', items: mgmtItems });
+    if (can('view_dependency_log')) projItems.push({ id: 'mgmt_deplog', label: t.depLog, icon: 'fileText' });
+    if (projItems.length) cats.push({ id: 'proj', label: t.projectTickets, icon: 'list', items: projItems });
     if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: 'settings', items:
       adminSections(perms, lang).map((s) => ({ id: `adm:${s.id}`, label: s.label, icon: ADM_ICONS[s.id] || 'settings' })) });
     // «حسابي» انتقل إلى قائمة منسدلة في ترويسة الملف الشخصي (وليس في الشريط الجانبي)

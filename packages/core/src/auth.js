@@ -1,20 +1,16 @@
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { query } from './db.js';
+import { getRequestCookie, queueResponseCookie } from './cookies.js';
 
 // المصادقة: تجزئة كلمات المرور (bcrypt) + جلسة JWT في كوكي httpOnly.
-// JWT تُتحقَّق في الخادم (Node) وفي middleware (edge) عبر jose — متوافق مع الاثنين.
+// JWT تُتحقَّق في خدمة الـ API (Node) وفي حارس الواجهة عبر jose.
 //
-// ملاحظة: next/headers يُستورد ديناميكياً داخل دوال الكوكي فقط، كي تبقى
-// المساعدات (hashPassword/JWT) صالحة للاستدعاء من سكربتات Node خارج Next.
+// قراءة/كتابة الكوكي تمرّ عبر cookies.js (سياق مستقلّ عن الإطار)، كي تبقى
+// المساعدات صالحة للاستدعاء من سكربتات Node والعامل خارج سياق طلب.
 
 export const SESSION_COOKIE = 'jem_session';
 const SESSION_HOURS = 12;
-
-async function cookieStore() {
-  const { cookies } = await import('next/headers');
-  return cookies();
-}
 
 function secretKey() {
   const s = process.env.SESSION_SECRET || process.env.SYNC_SECRET || 'dev-insecure-secret-change-me';
@@ -50,8 +46,7 @@ export async function verifySession(token) {
 // ---- كوكي الجلسة (في مسارات الخادم) ----
 export async function setSessionCookie(payload) {
   const token = await signSession(payload);
-  const store = await cookieStore();
-  store.set(SESSION_COOKIE, token, {
+  queueResponseCookie(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
     // عبر HTTP العادي لا يُرسَل الكوكي الآمن — نفعّله فقط عند توفّر HTTPS (COOKIE_SECURE=true)
@@ -61,14 +56,12 @@ export async function setSessionCookie(payload) {
   });
 }
 export async function clearSessionCookie() {
-  const store = await cookieStore();
-  store.set(SESSION_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 });
+  queueResponseCookie(SESSION_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 });
 }
 
 // ---- المستخدم الحالي + صلاحياته (من قاعدة البيانات، طازجة) ----
 export async function getCurrentUser() {
-  const store = await cookieStore();
-  const token = store.get(SESSION_COOKIE)?.value;
+  const token = getRequestCookie(SESSION_COOKIE);
   if (!token) return null;
   const payload = await verifySession(token);
   if (!payload?.sub) return null;

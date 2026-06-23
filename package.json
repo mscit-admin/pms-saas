@@ -1,36 +1,25 @@
 {
-  "name": "jira-exception-monitor",
+  "name": "pms-monorepo",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "مراقب جيرا — لوحة استثناءات تحوّل مئات التذاكر إلى ما يحتاج تدخّل المدير فقط",
+  "description": "PMS — مراقب جيرا، معماريّة خدمات مصغّرة (واجهة / API / عامل مزامنة) فوق منطق مشترك",
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "db:migrate": "node scripts/migrate.js",
-    "seed:admin": "node scripts/seed-admin.js",
-    "jira:sync": "node scripts/sync-once.js",
-    "jira:poll": "node scripts/poll.js",
-    "jira:backfill": "node scripts/backfill-trend.js",
-    "digest": "node scripts/digest.js"
-  },
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "jose": "^6.2.3",
-    "mysql2": "^3.11.0",
-    "next": "14.2.5",
-    "nodemailer": "^9.0.1",
-    "otplib": "^13.4.1",
-    "qrcode": "^1.5.4",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "dotenv": "^16.4.5"
+    "db:migrate": "npm run db:migrate -w @pms/core",
+    "seed:admin": "npm run seed:admin -w @pms/core",
+    "jira:sync": "npm run jira:sync -w @pms/core",
+    "jira:backfill": "npm run jira:backfill -w @pms/core",
+    "digest": "npm run digest -w @pms/core",
+    "dev:web": "npm run dev -w @pms/web",
+    "dev:api": "npm run dev -w @pms/api",
+    "dev:worker": "npm run start -w @pms/worker",
+    "build:web": "npm run build -w @pms/web"
   },
   "engines": {
-    "node": ">=18.18"
+    "node": ">=20"
   }
 }

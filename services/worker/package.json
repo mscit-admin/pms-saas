@@ -1,0 +1,14 @@
+{
+  "name": "@pms/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "عامل المزامنة الدورية مع جيرا لـ PMS",
+  "scripts": {
+    "start": "node ./src/index.js"
+  },
+  "dependencies": {
+    "@pms/core": "*",
+    "dotenv": "^16.4.5"
+  }
+}

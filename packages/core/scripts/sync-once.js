@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
-const { runSync } = await import('../src/lib/sync.js');
+const { runSync } = await import('../src/sync.js');
 
 try {
   console.log('› بدء المزامنة مع جيرا ...');

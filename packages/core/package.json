@@ -1,0 +1,27 @@
+{
+  "name": "@pms/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "منطق العمل المشترك (قاعدة البيانات، المصادقة، جيرا، التحليلات) لخدمات PMS",
+  "exports": {
+    "./*": "./src/*.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "db:migrate": "node scripts/migrate.js",
+    "seed:admin": "node scripts/seed-admin.js",
+    "jira:sync": "node scripts/sync-once.js",
+    "jira:backfill": "node scripts/backfill-trend.js",
+    "digest": "node scripts/digest.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^16.4.5",
+    "jose": "^6.2.3",
+    "mysql2": "^3.11.0",
+    "nodemailer": "^9.0.1",
+    "otplib": "^13.4.1",
+    "qrcode": "^1.5.4"
+  }
+}

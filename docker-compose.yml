@@ -1,0 +1,84 @@
+# تشغيل PMS كخدمات مصغّرة: قاعدة بيانات + هجرة + API + عامل + واجهة.
+# الإقلاع:  cp .env.docker.example .env  ثم  docker compose up -d --build
+# أول مرة:  docker compose run --rm api node /app/packages/core/scripts/seed-admin.js
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${DB_NAME:-jira_monitor}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD:-rootpass}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # هجرة المخطط (تشغيل لمرّة واحدة ثم تخرج)
+  migrate:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    command: ["node", "/app/packages/core/scripts/migrate.js"]
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      API_PORT: "3001"
+    volumes:
+      - uploads:/app/services/api/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "3001"
+
+  worker:
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: services/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:3001
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+volumes:
+  db-data:
+  uploads:

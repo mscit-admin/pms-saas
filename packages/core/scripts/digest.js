@@ -5,10 +5,10 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
-const { getExecutiveSummary, getSlaForecast } = await import('../src/lib/analytics.js');
-const { getExceptionCounts, getExceptions } = await import('../src/lib/exceptions.js');
-const { notify, notifyConfigured } = await import('../src/lib/notify.js');
-const { getJiraSettings } = await import('../src/lib/jira-settings.js');
+const { getExecutiveSummary, getSlaForecast } = await import('../src/analytics.js');
+const { getExceptionCounts, getExceptions } = await import('../src/exceptions.js');
+const { notify, notifyConfigured } = await import('../src/notify.js');
+const { getJiraSettings } = await import('../src/jira-settings.js');
 const jiraSettings = await getJiraSettings();
 
 if (!notifyConfigured()) {

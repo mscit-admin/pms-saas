@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
-const { backfillTrend } = await import('../src/lib/backfill.js');
+const { backfillTrend } = await import('../src/backfill.js');
 
 const days = parseInt(process.argv[2] || '30', 10);
 

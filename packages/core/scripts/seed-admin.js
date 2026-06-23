@@ -5,9 +5,9 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
-const { query, withTransaction } = await import('../src/lib/db.js');
-const { hashPassword } = await import('../src/lib/auth.js');
-const { PERMISSION_KEYS } = await import('../src/lib/permissions.js');
+const { query, withTransaction } = await import('../src/db.js');
+const { hashPassword } = await import('../src/auth.js');
+const { PERMISSION_KEYS } = await import('../src/permissions.js');
 
 const password = process.env.ADMIN_INITIAL_PASSWORD || 'admin';
 

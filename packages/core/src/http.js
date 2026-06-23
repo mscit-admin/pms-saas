@@ -1,13 +1,13 @@
-import { NextResponse } from 'next/server';
-
 // مساعدات موحّدة لردود JSON من مسارات الـ API.
+// تُعيد كائن Response قياسي (Web Fetch API) — صالح في أي بيئة Node 18+
+// دون اعتماد على Next.js، كي تعمل في خدمة الـ API المستقلّة (Express).
 
 export function ok(data, init = {}) {
-  return NextResponse.json({ ok: true, data }, init);
+  return Response.json({ ok: true, data }, init);
 }
 
 export function fail(message, status = 500) {
-  return NextResponse.json({ ok: false, error: String(message) }, { status });
+  return Response.json({ ok: false, error: String(message) }, { status });
 }
 
 // غلاف يلتقط الأخطاء ويعيد رسالة عربية مفهومة بدل 500 صامت

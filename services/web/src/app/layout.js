@@ -1,5 +1,14 @@
 import { Cairo } from 'next/font/google';
-import { brandManifest } from '@/lib/branding';
+
+// خدمة الواجهة بلا اتصال مباشر بقاعدة البيانات — تجلب بيان الهوية من خدمة الـ API.
+const API_URL = process.env.API_URL || 'http://api:3001';
+
+async function brandManifest() {
+  const res = await fetch(`${API_URL}/api/branding/manifest`, { cache: 'no-store' });
+  const json = await res.json();
+  if (!json?.ok) throw new Error('manifest unavailable');
+  return json.data;
+}
 
 // خط Cairo — عربي/لاتيني، مستضاف ذاتياً عبر next/font (لا طلب خارجي من المتصفح).
 const cairo = Cairo({

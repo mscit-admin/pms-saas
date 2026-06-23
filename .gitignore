@@ -1,10 +1,11 @@
-# dependencies
+# dependencies (monorepo: أي مساحة عمل)
 /node_modules
+**/node_modules
 /.pnp
 .pnp.js
 
-# next.js
-/.next/
+# next.js (في أي خدمة)
+**/.next/
 /out/
 
 # production
@@ -16,7 +17,7 @@
 .env.local
 
 # أصول الهوية المرفوعة + ملف بيئة المنفذ (تُولَّد وقت التشغيل)
-/uploads/
+**/uploads/
 /port.env
 
 # logs

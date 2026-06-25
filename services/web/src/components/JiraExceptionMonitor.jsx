@@ -710,8 +710,8 @@ export default function JiraExceptionMonitor() {
       cats.push({ id: 'perf', label: t.performance, icon: 'award', solo: true, targetId: 'mgmt_performance' });
       cats.push({ id: 'score', label: t.scorecard, icon: 'shield', solo: true, targetId: 'mgmt_scorecard' });
       cats.push({ id: 'flow', label: t.flow, icon: 'shuffle', solo: true, targetId: 'mgmt_flow' });
-      cats.push({ id: 'deps', label: t.depBottlenecks, icon: 'link', solo: true, targetId: 'mgmt_deps' });
       cats.push({ id: 'sla', label: t.sla, icon: 'clock', solo: true, targetId: 'mgmt_sla' });
+      cats.push({ id: 'deps', label: t.depBottlenecks, icon: 'link', solo: true, targetId: 'mgmt_deps' });
     }
     if (can('view_dependency_log')) cats.push({ id: 'deplog', label: t.depLog, icon: 'fileText', solo: true, targetId: 'mgmt_deplog' });
     if (hasAdmin) cats.push({ id: 'admin', label: t.navAdmin, icon: 'settings', items:

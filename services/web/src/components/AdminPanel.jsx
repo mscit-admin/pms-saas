@@ -444,22 +444,44 @@ function UsersSection({ t }) {
   );
 }
 
-// قائمة أدوار متعددة الاختيار (مبسّطة عبر checkboxes منسدلة)
+// قائمة أدوار متعددة الاختيار — قائمة منسدلة بمربّعات اختيار
 function MultiRole({ roles, value, onChange, t }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const selected = roles.filter((r) => value.includes(r.id));
+  const label = selected.length ? selected.map((r) => r.name).join('، ') : t.selectRoles;
   return (
-    <div style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }} title={t.selectRoles}>
-      {roles.map((r) => {
-        const on = value.includes(r.id);
-        return (
-          <button
-            key={r.id}
-            onClick={() => onChange(on ? value.filter((x) => x !== r.id) : [...value, r.id])}
-            style={on ? btn(C.blue) : ghost}
-          >
-            {r.name}
-          </button>
-        );
-      })}
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block', minWidth: 170 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title={t.selectRoles}
+        style={{ ...ghost, display: 'inline-flex', alignItems: 'center', gap: 8, width: '100%', maxWidth: 260, justifyContent: 'space-between', color: selected.length ? C.text : C.muted }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span aria-hidden style={{ color: C.muted, fontSize: 10 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', insetInlineStart: 0, top: 'calc(100% + 4px)', zIndex: 50, minWidth: 200, maxHeight: 260, overflowY: 'auto', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.18)', padding: 4 }}>
+          {roles.length === 0 && <div style={{ padding: 8, color: C.muted, fontSize: 13 }}>—</div>}
+          {roles.map((r) => {
+            const on = value.includes(r.id);
+            return (
+              <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 13, background: on ? `${C.blue}10` : 'transparent' }}>
+                <input type="checkbox" checked={on} onChange={() => onChange(on ? value.filter((x) => x !== r.id) : [...value, r.id])} />
+                {r.name}
+              </label>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

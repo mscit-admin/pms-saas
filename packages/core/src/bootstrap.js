@@ -9,6 +9,7 @@ import mysql from 'mysql2/promise';
 import { dbConfig, controlDbConfig } from './config.js';
 import { findOrgBySlug, runInTenant } from './tenancy.js';
 import { provisionTenant, applySchema } from './provision.js';
+import { seedControlAdmin } from './control-auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -36,6 +37,14 @@ export async function ensureControlSchema({ log = () => {} } = {}) {
     log(`✓ قاعدة التحكّم جاهزة: ${dbName}`);
   } finally {
     await admin.end();
+  }
+
+  // بذر المشرف الأعلى من متغيّرات البيئة (إن ضُبطت).
+  const su = process.env.CONTROL_ADMIN_USER;
+  const sp = process.env.CONTROL_ADMIN_PASSWORD;
+  if (su && sp) {
+    await seedControlAdmin({ username: su, password: sp });
+    log(`✓ مشرف أعلى جاهز: ${su}`);
   }
 }
 

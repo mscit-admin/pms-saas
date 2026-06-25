@@ -10,9 +10,15 @@ export const config = {
 };
 
 const SESSION_COOKIE = 'jem_session';
+const CONTROL_COOKIE = 'pms_control_session';
 
 function secretKey() {
   const s = process.env.SESSION_SECRET || process.env.SYNC_SECRET || 'dev-insecure-secret-change-me';
+  return new TextEncoder().encode(s);
+}
+
+function controlSecretKey() {
+  const s = process.env.CONTROL_SESSION_SECRET || process.env.SESSION_SECRET || 'dev-insecure-control-secret-change-me';
   return new TextEncoder().encode(s);
 }
 
@@ -21,6 +27,17 @@ export async function middleware(req) {
 
   // طلبات الـ API تُمرَّر إلى خدمة الـ API (هي من يفرض الجلسة/الصلاحيات)
   if (pathname.startsWith('/api/')) return NextResponse.next();
+
+  // ---- مستوى التحكّم (المشرف الأعلى) — جلسة منفصلة بكوكي مستقلّ ----
+  if (pathname === '/control/login') return NextResponse.next();
+  if (pathname === '/control' || pathname.startsWith('/control/')) {
+    const ct = req.cookies.get(CONTROL_COOKIE)?.value;
+    if (ct) {
+      try { await jwtVerify(ct, controlSecretKey()); return NextResponse.next(); }
+      catch { /* توقيع غير صالح */ }
+    }
+    return NextResponse.redirect(new URL('/control/login', req.url));
+  }
 
   // صفحة الدخول عامّة
   if (pathname === '/login') return NextResponse.next();

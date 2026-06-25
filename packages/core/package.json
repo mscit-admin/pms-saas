@@ -12,6 +12,7 @@
     "db:migrate:control": "node scripts/migrate-control.js",
     "db:migrate": "node scripts/migrate.js",
     "bootstrap": "node scripts/bootstrap.js",
+    "seed:control": "node scripts/seed-control-admin.js",
     "provision:tenant": "node scripts/provision-tenant.js",
     "seed:admin": "node scripts/seed-admin.js",
     "jira:sync": "node scripts/sync-once.js",

@@ -72,6 +72,8 @@ services:
       context: .
       dockerfile: services/web/Dockerfile
     restart: unless-stopped
+    # يحتاج SESSION_SECRET/SYNC_SECRET نفسه ليتحقّق حارسُه من جلسة وقّعتها خدمة الـ API
+    env_file: .env
     environment:
       API_URL: http://api:3001
     depends_on:

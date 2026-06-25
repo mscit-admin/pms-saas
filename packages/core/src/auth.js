@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { query } from './db.js';
 import { getRequestCookie, queueResponseCookie } from './cookies.js';
+import { getCurrentOrg } from './tenancy.js';
 
 // المصادقة: تجزئة كلمات المرور (bcrypt) + جلسة JWT في كوكي httpOnly.
 // JWT تُتحقَّق في خدمة الـ API (Node) وفي حارس الواجهة عبر jose.
@@ -45,7 +46,11 @@ export async function verifySession(token) {
 
 // ---- كوكي الجلسة (في مسارات الخادم) ----
 export async function setSessionCookie(payload) {
-  const token = await signSession(payload);
+  // نربط الجلسة بالمستأجر الحالي: كوكي مستأجر لا يصلح لدى مستأجر آخر
+  // (تُتحقَّق في getCurrentUser). يمنع إعادة استخدام الجلسة عبر المستأجرين.
+  const org = getCurrentOrg();
+  const bound = org ? { ...payload, org: org.slug } : payload;
+  const token = await signSession(bound);
   queueResponseCookie(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -65,6 +70,10 @@ export async function getCurrentUser() {
   if (!token) return null;
   const payload = await verifySession(token);
   if (!payload?.sub) return null;
+
+  // ربط المستأجر: ترفض الجلسة إن كانت موقّعة لمستأجر مختلف عن الحالي.
+  const org = getCurrentOrg();
+  if (org && payload.org !== org.slug) return null;
 
   const rows = await query(
     `SELECT id, username, full_name, email, is_active, totp_enabled, lang, theme, timezone, avatar_mime

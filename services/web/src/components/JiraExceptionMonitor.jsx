@@ -389,6 +389,7 @@ const ICON_PATHS = {
   logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9',
   search: 'M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.35-4.35',
   briefcase: 'M4 7h16a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2z M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2 M2 12h20',
+  cart: 'M9 22a1 1 0 100-2 1 1 0 000 2z M20 22a1 1 0 100-2 1 1 0 000 2z M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6',
 };
 function Icon({ name, size = 16 }) {
   const d = ICON_PATHS[name];
@@ -2102,6 +2103,43 @@ function OperationalTab({ screen = 'exceptions' }) {
     setBasket((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
   };
 
+  // اقتراحات حيّة أثناء الكتابة في سلّة البحث (typeahead عبر /api/tickets/search)
+  const [bSug, setBSug] = useState([]);
+  const [bOpen, setBOpen] = useState(false);
+  const [bActive, setBActive] = useState(-1);
+  useEffect(() => {
+    const q = basketInput.trim();
+    if (q.length < 1) { setBSug([]); setBOpen(false); return undefined; }
+    let alive = true;
+    const id = setTimeout(async () => {
+      try {
+        const d = await fetchJson(`/api/tickets/search?q=${encodeURIComponent(q)}`);
+        if (!alive) return;
+        setBSug(d.items || []);
+        setBOpen(true);
+        setBActive(-1);
+      } catch { if (alive) setBSug([]); }
+    }, 200);
+    return () => { alive = false; clearTimeout(id); };
+  }, [basketInput]);
+  const pickSug = (it) => { addToBasket(it.key); setBOpen(false); setBSug([]); setBActive(-1); };
+  const onBasketKey = (e) => {
+    if (bOpen && bSug.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setBActive((i) => Math.min(i + 1, bSug.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setBActive((i) => Math.max(i - 1, 0)); return; }
+      if (e.key === 'Escape') { setBOpen(false); return; }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (bActive >= 0 && bActive < bSug.length) pickSug(bSug[bActive]);
+        else addToBasket(basketInput);
+        return;
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      addToBasket(basketInput);
+    }
+  };
+
   // ترقيم الصفحات (حجم الصفحة من إعدادات الإدارة)
   const [page, setPage] = useState(1);
 
@@ -2199,15 +2237,36 @@ function OperationalTab({ screen = 'exceptions' }) {
         }
       >
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }} title={t.basketHint}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.text, display: 'inline-flex', alignItems: 'center', gap: 5 }}>🧺 {t.basketTitle}</span>
-          <input
-            value={basketInput}
-            onChange={(e) => setBasketInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addToBasket(basketInput); } }}
-            placeholder={t.basketPlaceholder}
-            aria-label={t.basketPlaceholder}
-            style={{ ...inputStyle, minWidth: 240 }}
-          />
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.text, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="cart" size={15} /> {t.basketTitle}</span>
+          <span style={{ position: 'relative', display: 'inline-block' }}>
+            <input
+              value={basketInput}
+              onChange={(e) => setBasketInput(e.target.value)}
+              onKeyDown={onBasketKey}
+              onFocus={() => { if (bSug.length) setBOpen(true); }}
+              onBlur={() => setTimeout(() => setBOpen(false), 150)}
+              placeholder={t.basketPlaceholder}
+              aria-label={t.basketPlaceholder}
+              autoComplete="off"
+              style={{ ...inputStyle, minWidth: 240 }}
+            />
+            {bOpen && bSug.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', insetInlineStart: 0, zIndex: 50, marginTop: 4, minWidth: 320, maxWidth: 460, maxHeight: 280, overflowY: 'auto', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
+                {bSug.map((it, i) => (
+                  <button
+                    key={it.key}
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); pickSug(it); }}
+                    onMouseEnter={() => setBActive(i)}
+                    style={{ display: 'flex', width: '100%', gap: 8, alignItems: 'baseline', textAlign: 'start', padding: '7px 10px', border: 'none', borderBottom: `1px solid ${C.border}`, background: i === bActive ? C.bg : 'transparent', color: C.text, cursor: 'pointer', fontSize: 13 }}
+                  >
+                    <span style={{ fontWeight: 700, color: inBasket(it.key) ? C.green : C.blue, whiteSpace: 'nowrap' }}>{inBasket(it.key) ? '✓ ' : ''}{it.key}</span>
+                    <span style={{ color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.summary}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
           <button onClick={() => addToBasket(basketInput)} style={ghostBtn}>+ {t.basketAdd}</button>
           {basket.map((k) => (
             <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, padding: '3px 6px 3px 10px', fontSize: 12 }}>
@@ -2267,7 +2326,7 @@ function OperationalTab({ screen = 'exceptions' }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <Th align="center">🧺</Th>
+                <Th align="center"><Icon name="cart" size={14} /></Th>
                 <Th>{t.thKey}</Th>
                 <Th>{t.thSummary}</Th>
                 <Th>{t.thType}</Th>

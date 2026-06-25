@@ -1,6 +1,7 @@
 import { handler, ok } from '@/lib/http';
 import { query } from '@/lib/db';
 import { getJiraSettings } from '@/lib/jira-settings';
+import { defaultJiraAccount } from '@/lib/jiraAccounts';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +15,13 @@ export const GET = handler(async () => {
     ),
     getJiraSettings(),
   ]);
+  // الرابط الأساسي: الإعدادات القديمة/البيئة، وإلا أول حساب جيرا نشط (نظام الحسابات المتعدّدة)
+  let jiraBaseUrl = jira.baseUrl;
+  if (!jiraBaseUrl) {
+    try { jiraBaseUrl = (await defaultJiraAccount())?.baseUrl || ''; } catch { /* تجاهل */ }
+  }
   return ok({
-    jiraBaseUrl: jira.baseUrl,
+    jiraBaseUrl,
     lastSyncAt: rows[0]?.finished_at || null,
     lastSyncCount: rows[0]?.issues_processed ?? null,
   });

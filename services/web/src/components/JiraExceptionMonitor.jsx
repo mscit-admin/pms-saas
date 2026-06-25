@@ -48,6 +48,7 @@ const DICT = {
     menuShow: 'إظهار القائمة', menuHide: 'إخفاء القائمة',
     searchPlaceholder: 'بحث في الشاشات والتذاكر…', recent: 'عمليات البحث الأخيرة', screensGroup: 'الشاشات', ticketsGroup: 'التذاكر', noResults: 'لا نتائج', clearHistory: 'مسح',
     lastSync: 'آخر مزامنة', lastSyncTip: 'وقت آخر مزامنة مع جيرا. تتم المزامنة تلقائياً عند الدخول، ويمكنك تشغيلها يدوياً بزرّ «مزامنة جيرا». النقطة الخضراء الوامضة تعني أن البيانات حيّة.',
+    offlineBadge: 'دون اتصال', offlineTip: 'لا يوجد اتصال بالشبكة — تُعرَض آخر بيانات محفوظة على جهازك (للقراءة فقط). ستتحدّث تلقائياً عند عودة الاتصال.',
     never: 'لا يوجد',
     cOverdue: 'متأخر عن الاستحقاق',
     cStagnant: 'راكد > 3 أيام',
@@ -192,6 +193,7 @@ const DICT = {
     menuShow: 'Show menu', menuHide: 'Hide menu',
     searchPlaceholder: 'Search screens & tickets…', recent: 'Recent searches', screensGroup: 'Screens', ticketsGroup: 'Tickets', noResults: 'No results', clearHistory: 'Clear',
     lastSync: 'Last sync', lastSyncTip: 'Time of the last Jira sync. Syncs run automatically on entry; you can also run one manually with the “Sync Jira” button. The flashing green dot means data is live.',
+    offlineBadge: 'Offline', offlineTip: 'No network connection — showing the last data cached on your device (read-only). It will refresh automatically when you are back online.',
     never: 'never',
     cOverdue: 'Overdue',
     cStagnant: 'Stagnant > 3 days',
@@ -538,6 +540,33 @@ export default function JiraExceptionMonitor() {
     }).catch(() => {});
   }, []);
 
+  // ---- وضع العمل دون اتصال (PWA) ----
+  // متابعة حالة الاتصال لعرض مؤشّر «دون اتصال»
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    const up = () => setOnline(typeof navigator === 'undefined' ? true : navigator.onLine);
+    up();
+    window.addEventListener('online', up);
+    window.addEventListener('offline', up);
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', up); };
+  }, []);
+
+  // تسجيل عامل الخدمة فقط لمن يملك صلاحية use_offline وعلى سياق آمن (HTTPS).
+  // عند غياب الصلاحية أو غياب HTTPS: إلغاء التسجيل ومسح المخزّن.
+  const offlineAllowed = !!me?.permissions?.includes('use_offline');
+  useEffect(() => {
+    if (!me || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    if (offlineAllowed && window.isSecureContext) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    } else {
+      navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => {
+        try { r.active?.postMessage('pms-clear-offline'); } catch { /* تجاهل */ }
+        r.unregister();
+      })).catch(() => {});
+      if (window.caches) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
+    }
+  }, [me, offlineAllowed]);
+
   // تغيير اللغة: فوري + حفظ على حساب المستخدم
   const changeLang = (l) => {
     setLang(l);
@@ -634,6 +663,17 @@ export default function JiraExceptionMonitor() {
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
+    // امسح بيانات الوضع دون اتصال كي لا تبقى محفوظة بعد الخروج
+    try {
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        regs.forEach((r) => r.active?.postMessage('pms-clear-offline'));
+      }
+      if (typeof caches !== 'undefined') {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch { /* تجاهل */ }
     window.location.href = '/login';
   }
 
@@ -797,6 +837,12 @@ export default function JiraExceptionMonitor() {
                 <span className="pms-live-dot" />
                 <span className="pms-tip-box">{fmtDateTime(meta?.lastSyncAt)}</span>
               </span>
+              {offlineAllowed && !online && (
+                <span className="pms-tip" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#7c2d12', color: '#fff', borderRadius: 6, padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>
+                  ⚠︎ {t.offlineBadge}
+                  <span className="pms-tip-box">{t.offlineTip}</span>
+                </span>
+              )}
             </div>
 
             <button

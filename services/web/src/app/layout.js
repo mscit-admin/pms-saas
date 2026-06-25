@@ -22,6 +22,7 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
+  themeColor: '#0f141b',
 };
 
 // التخطيط الجذري — عربي RTL. الأيقونة المخصّصة تُطبَّق إن رُفعت.
@@ -37,6 +38,8 @@ export async function generateMetadata() {
     title,
     description: 'تحويل مئات تذاكر جيرا إلى ما يحتاج تدخّل المدير فقط',
     icons,
+    manifest: '/manifest.webmanifest',
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: 'PMS' },
   };
 }
 

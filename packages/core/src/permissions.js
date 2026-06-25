@@ -34,6 +34,7 @@ export const PERMISSIONS = [
   { key: 'manage_companies', labelAr: 'إدارة الشركات والمشاريع وإسناد المستخدمين', labelEn: 'Manage companies, projects & user assignment' },
   { key: 'view_audit', labelAr: 'عرض سجلّات الدخول والتدقيق', labelEn: 'View login & audit logs' },
   { key: 'view_dependency_log', labelAr: 'عرض سجلّ الاعتماديات المُلغاة', labelEn: 'View cancelled-dependency log' },
+  { key: 'use_offline', labelAr: 'العمل دون اتصال (تخزين البيانات على الجهاز)', labelEn: 'Offline mode (cache data on device)' },
   { key: 'reset_2fa', labelAr: 'إعادة ضبط التحقق الثنائي', labelEn: 'Reset 2FA' },
 ];
 

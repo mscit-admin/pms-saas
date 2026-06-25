@@ -60,6 +60,14 @@ const DICT = {
     clear: 'مسح',
     all: 'الكل',
     searchTickets: 'بحث: مفتاح / عنوان / مسؤول',
+    basketTitle: 'سلّة البحث',
+    basketPlaceholder: 'أضف مفاتيح تذاكر (مثل GR2-36، GR2-40)',
+    basketAdd: 'أضف للسلّة',
+    basketClear: 'تفريغ السلّة',
+    basketHint: 'ابحث عن مجموعة تذاكر معاً — أضِف مفاتيح جديدة دون مسح السابقة، ويعرض الجدول تذاكر السلّة فقط.',
+    basketCount: (n) => `${n} في السلّة`,
+    basketAddRow: 'أضِف هذه التذكرة للسلّة',
+    basketRemoveRow: 'أزِل من السلّة',
     fAssignee: 'المسؤول',
     fProject: 'المشروع',
     fPriority: 'الأهمية',
@@ -205,6 +213,14 @@ const DICT = {
     clear: 'Clear',
     all: 'All',
     searchTickets: 'Search: key / summary / assignee',
+    basketTitle: 'Search basket',
+    basketPlaceholder: 'Add ticket keys (e.g. GR2-36, GR2-40)',
+    basketAdd: 'Add to basket',
+    basketClear: 'Clear basket',
+    basketHint: 'Search a set of tickets together — add new keys without clearing previous ones; the table shows only the basket tickets.',
+    basketCount: (n) => `${n} in basket`,
+    basketAddRow: 'Add this ticket to the basket',
+    basketRemoveRow: 'Remove from basket',
     fAssignee: 'Assignee',
     fProject: 'Project',
     fPriority: 'Priority',
@@ -1720,7 +1736,7 @@ function TicketActions({ ticket, onClose, onDone }) {
 }
 
 // بطاقة استثناء للجوال (بديل صف الجدول)
-function ExceptionCard({ it, canManage, canOpen, onAction, onType }) {
+function ExceptionCard({ it, canManage, canOpen, onAction, onType, inBasket, onBasket }) {
   const { t, fmt, fmtDate, fmtDateTime } = useUI();
   const F = ({ label, children }) => (
     <div style={{ fontSize: 12 }}><span style={{ color: C.muted }}>{label}: </span>{children}</div>
@@ -1729,7 +1745,12 @@ function ExceptionCard({ it, canManage, canOpen, onAction, onType }) {
   return (
     <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, marginBottom: 10, background: '#fff' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <KeyLink k={it.key} />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          {onBasket && (
+            <input type="checkbox" checked={!!inBasket} onChange={onBasket} title={inBasket ? t.basketRemoveRow : t.basketAddRow} style={{ cursor: 'pointer' }} />
+          )}
+          <KeyLink k={it.key} />
+        </span>
         {canOpen && <button onClick={() => onAction(it)} style={ghostBtn}>{t.act}</button>}
       </div>
       <div style={{ fontSize: 13, margin: '6px 0', fontWeight: 600 }}>{it.summary}</div>
@@ -2066,6 +2087,21 @@ function OperationalTab({ screen = 'exceptions' }) {
   const [fType, setFType] = useState([]);
   const [fSearch, setFSearch] = useState('');
 
+  // سلّة البحث: مجموعة مفاتيح تذاكر تتراكم — يعرض الجدول تذاكرها فقط.
+  const [basket, setBasket] = useState([]);
+  const [basketInput, setBasketInput] = useState('');
+  const addToBasket = (raw) => {
+    // يقبل مفتاحاً واحداً أو عدة مفاتيح مفصولة بمسافة/فاصلة (لاتينية أو عربية)
+    const keys = String(raw || '').split(/[\s,،;]+/).map((s) => s.trim().toUpperCase()).filter(Boolean);
+    if (keys.length) setBasket((prev) => Array.from(new Set([...prev, ...keys])));
+    setBasketInput('');
+  };
+  const inBasket = (k) => basket.includes((k || '').toUpperCase());
+  const toggleBasket = (k) => {
+    const key = (k || '').toUpperCase();
+    setBasket((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
+  };
+
   // ترقيم الصفحات (حجم الصفحة من إعدادات الإدارة)
   const [page, setPage] = useState(1);
 
@@ -2113,6 +2149,7 @@ function OperationalTab({ screen = 'exceptions' }) {
   const filtered = useMemo(() => {
     const q = fSearch.trim().toLowerCase();
     return items.filter((x) =>
+      (basket.length === 0 || basket.includes((x.key || '').toUpperCase())) &&
       (fAssignee.length === 0
         || fAssignee.includes(x.assignee)
         || (fAssignee.includes(UNASSIGNED) && !x.assignee)) &&
@@ -2128,10 +2165,10 @@ function OperationalTab({ screen = 'exceptions' }) {
         || (x.summary || '').toLowerCase().includes(q)
         || (x.assignee || '').toLowerCase().includes(q))
     );
-  }, [items, fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked, fSearch]);
+  }, [items, basket, fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked, fSearch]);
 
   // أعد للصفحة الأولى عند تغيّر الفلاتر أو حجم الصفحة
-  useEffect(() => { setPage(1); }, [fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked, fSearch, pageSize, items.length, screen]);
+  useEffect(() => { setPage(1); }, [basket, fAssignee, fProject, fPriority, fStatus, fLabels, fType, hideSnoozed, hideAcked, fSearch, pageSize, items.length, screen]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -2161,6 +2198,30 @@ function OperationalTab({ screen = 'exceptions' }) {
           </div>
         }
       >
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }} title={t.basketHint}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.text, display: 'inline-flex', alignItems: 'center', gap: 5 }}>🧺 {t.basketTitle}</span>
+          <input
+            value={basketInput}
+            onChange={(e) => setBasketInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addToBasket(basketInput); } }}
+            placeholder={t.basketPlaceholder}
+            aria-label={t.basketPlaceholder}
+            style={{ ...inputStyle, minWidth: 240 }}
+          />
+          <button onClick={() => addToBasket(basketInput)} style={ghostBtn}>+ {t.basketAdd}</button>
+          {basket.map((k) => (
+            <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, padding: '3px 6px 3px 10px', fontSize: 12 }}>
+              {k}
+              <button onClick={() => toggleBasket(k)} title={t.basketRemoveRow} style={{ border: 'none', background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+            </span>
+          ))}
+          {basket.length > 0 && (
+            <>
+              <span style={{ fontSize: 12, color: C.muted }}>· {t.basketCount(fmt(basket.length))}</span>
+              <button onClick={() => setBasket([])} style={ghostBtn}>{t.basketClear}</button>
+            </>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
           <input
             value={fSearch}
@@ -2197,7 +2258,7 @@ function OperationalTab({ screen = 'exceptions' }) {
         {isMobile ? (
           <div>
             {pageItems.map((it) => (
-              <ExceptionCard key={it.id} it={it} canManage={canManage} canOpen={canOpen} onAction={setActionTicket} onType={setHierKey} />
+              <ExceptionCard key={it.id} it={it} canManage={canManage} canOpen={canOpen} onAction={setActionTicket} onType={setHierKey} inBasket={inBasket(it.key)} onBasket={() => toggleBasket(it.key)} />
             ))}
             {filtered.length === 0 && <div style={{ textAlign: 'center', color: C.muted, padding: 16 }}>{isAll ? t.noTickets : t.noExceptions}</div>}
           </div>
@@ -2206,6 +2267,7 @@ function OperationalTab({ screen = 'exceptions' }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
+                <Th align="center">🧺</Th>
                 <Th>{t.thKey}</Th>
                 <Th>{t.thSummary}</Th>
                 <Th>{t.thType}</Th>
@@ -2225,6 +2287,15 @@ function OperationalTab({ screen = 'exceptions' }) {
             <tbody>
               {pageItems.map((it) => (
                 <tr key={it.id}>
+                  <Td align="center">
+                    <input
+                      type="checkbox"
+                      checked={inBasket(it.key)}
+                      onChange={() => toggleBasket(it.key)}
+                      title={inBasket(it.key) ? t.basketRemoveRow : t.basketAddRow}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </Td>
                   <Td><KeyLink k={it.key} /></Td>
                   <Td>
                     {it.summary}

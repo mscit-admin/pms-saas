@@ -600,9 +600,10 @@ export async function getProjectScorecard({ scope = null } = {}) {
 // ---------------------------------------------------------------------
 // الملخص التنفيذي — أرقام أعلى المستوى للوحة الإدارية.
 // ---------------------------------------------------------------------
-export async function getExecutiveSummary({ scope = null } = {}) {
+export async function getExecutiveSummary({ scope = null, windowDays = 90 } = {}) {
   const scn = scopeAnd(scope, '');
   const sc = scopeAnd(scope, 't');
+  const win = Math.min(365, Math.max(1, parseInt(windowDays, 10) || 90));
   const totals = await query(
     `SELECT
         COUNT(*) AS total,
@@ -622,8 +623,59 @@ export async function getExecutiveSummary({ scope = null } = {}) {
     sc.params
   );
 
+  // التسليم في الموعد: من المنجزة ذات تاريخ استحقاق (المُحلولة ضمن النافذة) كم أُنجز في/قبل الموعد
+  const ontime = await query(
+    `SELECT
+        SUM(due_date IS NOT NULL) AS due_total,
+        SUM(due_date IS NOT NULL AND DATE(resolved_at) <= due_date) AS on_time
+     FROM tickets
+     WHERE status_category = 'done' AND resolved_at IS NOT NULL
+       AND resolved_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL :win DAY)${scn.sql}`,
+    { win, ...scn.params }
+  );
+
+  // امتثال SLA: نسبة غير المخروقة من التذاكر الخاضعة لـSLA
+  // (المفتوحة المتجاوزة الموعد + المنجزة بعد الموعد ضمن النافذة)
+  const slaComp = await query(
+    `SELECT
+        COUNT(*) AS sla_total,
+        SUM(
+          (t.status_category <> 'done' AND DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY) < UTC_TIMESTAMP())
+          OR (t.status_category = 'done' AND t.resolved_at IS NOT NULL
+              AND t.resolved_at > DATE_ADD(t.jira_created_at, INTERVAL s.sla_days DAY))
+        ) AS breached_all
+     FROM tickets t JOIN sla_config s ON s.priority = t.priority
+     WHERE (t.status_category <> 'done'
+            OR t.resolved_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL :win DAY))${sc.sql}`,
+    { win, ...sc.params }
+  );
+
+  // صافي التدفّق: المُنشأ مقابل المُنجز خلال النافذة (موجب = الـBacklog يتضخّم)
+  const flow = await query(
+    `SELECT
+        SUM(jira_created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL :win DAY)) AS created_in,
+        SUM(resolved_at IS NOT NULL AND resolved_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL :win DAY)) AS resolved_in
+     FROM tickets WHERE 1=1${scn.sql}`,
+    { win, ...scn.params }
+  );
+
+  // متوسط انتظار التذاكر المفتوحة بلا مسؤول (أيام) — سرعة التقاط الجديد
+  const wait = await query(
+    `SELECT AVG(TIMESTAMPDIFF(HOUR, jira_created_at, UTC_TIMESTAMP())) / 24 AS avg_days
+     FROM tickets
+     WHERE status_category <> 'done' AND assignee_account_id IS NULL${scn.sql}`,
+    scn.params
+  );
+
   const cycle = await getCycleTime({ scope });
   const t = totals[0] || {};
+  const dueTotal = Number(ontime[0]?.due_total || 0);
+  const onTime = Number(ontime[0]?.on_time || 0);
+  const slaTotal = Number(slaComp[0]?.sla_total || 0);
+  const slaBad = Number(slaComp[0]?.breached_all || 0);
+  const createdIn = Number(flow[0]?.created_in || 0);
+  const resolvedIn = Number(flow[0]?.resolved_in || 0);
+  const waitDays = wait[0]?.avg_days;
   return {
     totalTickets: Number(t.total || 0),
     openTickets: Number(t.open_count || 0),
@@ -633,5 +685,14 @@ export async function getExecutiveSummary({ scope = null } = {}) {
     slaBreached: Number(breached[0]?.breached || 0),
     avgCycleDays: cycle.overall.avgDays,
     resolvedLast90Days: cycle.overall.resolvedCount,
+    // مؤشّرات الحزمة الأولى (نافذة windowDays)
+    onTimePct: dueTotal > 0 ? Math.round((onTime / dueTotal) * 100) : null,
+    onTimeResolved: onTime,
+    onTimeDue: dueTotal,
+    slaCompliancePct: slaTotal > 0 ? Math.round(((slaTotal - slaBad) / slaTotal) * 100) : null,
+    flowCreated: createdIn,
+    flowResolved: resolvedIn,
+    netFlow: createdIn - resolvedIn,
+    unassignedWaitDays: waitDays != null ? Math.round(Number(waitDays) * 10) / 10 : null,
   };
 }

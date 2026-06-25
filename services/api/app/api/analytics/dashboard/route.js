@@ -21,12 +21,16 @@ export const GET = handler(async (req) => {
   const out = { days };
 
   // مؤشّرات KPI (الإظهار لكل بطاقة في الواجهة حسب صلاحيات kpi_*)
-  const [summary, counts] = await Promise.all([getExecutiveSummary({ scope }), getExceptionCounts({ scope })]);
+  const [summary, counts] = await Promise.all([getExecutiveSummary({ scope, windowDays: days }), getExceptionCounts({ scope })]);
   out.kpis = {
     total: summary.totalTickets, open: summary.openTickets, done: summary.doneTickets,
     overdue: summary.overdueTickets, unassigned: summary.unassignedTickets,
     slaBreached: summary.slaBreached, avgCycle: summary.avgCycleDays,
     stagnant: counts.stagnant, review: counts.review,
+    // الحزمة الأولى
+    onTimePct: summary.onTimePct, slaCompliancePct: summary.slaCompliancePct,
+    netFlow: summary.netFlow, flowCreated: summary.flowCreated, flowResolved: summary.flowResolved,
+    unassignedWaitDays: summary.unassignedWaitDays,
   };
 
   const jobs = [];

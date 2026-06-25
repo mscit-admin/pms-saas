@@ -15,6 +15,10 @@ export const PERMISSIONS = [
   { key: 'kpi_review', labelAr: 'مؤشّر: مراجعة متأخرة', labelEn: 'KPI: Long review' },
   { key: 'kpi_sla_breached', labelAr: 'مؤشّر: خرق SLA', labelEn: 'KPI: SLA breached' },
   { key: 'kpi_avg_cycle', labelAr: 'مؤشّر: متوسط زمن الدورة', labelEn: 'KPI: Avg cycle time' },
+  { key: 'kpi_on_time', labelAr: 'مؤشّر: نسبة التسليم في الموعد', labelEn: 'KPI: On-time delivery %' },
+  { key: 'kpi_sla_compliance', labelAr: 'مؤشّر: امتثال SLA', labelEn: 'KPI: SLA compliance %' },
+  { key: 'kpi_net_flow', labelAr: 'مؤشّر: صافي التدفّق (مُنشأ−مُنجز)', labelEn: 'KPI: Net flow (created−resolved)' },
+  { key: 'kpi_unassigned_wait', labelAr: 'مؤشّر: متوسط انتظار بلا مسؤول', labelEn: 'KPI: Avg unassigned wait' },
   // عناصر لوحة المعلومات (Widgets) — كل عنصر يُظهَر/يُخفى حسب الدور
   { key: 'widget_workload', labelAr: 'لوحة: أعباء الفريق', labelEn: 'Dashboard: Team workload' },
   { key: 'widget_wip', labelAr: 'لوحة: العمل الجاري WIP', labelEn: 'Dashboard: WIP over time' },

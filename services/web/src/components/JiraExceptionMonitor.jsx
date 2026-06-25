@@ -137,6 +137,14 @@ const DICT = {
     sDone: 'منجزة',
     sBreached: 'متجاوزة SLA',
     sAvgCycle: 'متوسط زمن الدورة (يوم)',
+    sOnTime: 'التسليم في الموعد',
+    sOnTimeHint: 'نسبة التذاكر المنجزة قبل/في تاريخ استحقاقها (ضمن نافذة الفترة المختارة). كلما ارتفعت كان الالتزام أفضل.',
+    sSlaCompliance: 'امتثال SLA',
+    sSlaComplianceHint: 'نسبة التذاكر الخاضعة لـSLA التي لم تتجاوز المهلة (مفتوحة أو منجزة في الموعد).',
+    sNetFlow: 'صافي التدفّق (مُنشأ−مُنجز)',
+    sNetFlowHint: 'الفرق بين المُنشأة والمُنجزة خلال الفترة. قيمة موجبة تعني أن المتراكم (Backlog) يتضخّم.',
+    sUnassignedWait: 'متوسط انتظار بلا مسؤول',
+    sUnassignedWaitHint: 'متوسط عمر التذاكر المفتوحة التي لم تُسنَد بعد — يقيس سرعة التقاط الجديد.',
     trend: 'اتجاه الاستثناءات — آخر 30 يوماً',
     chartLines: 'خطوط', chartArea: 'مساحات', chartBars: 'أعمدة',
     trendEmpty: 'لا لقطات اتجاه بعد — تتراكم يومياً مع كل مزامنة.',
@@ -293,6 +301,14 @@ const DICT = {
     sDone: 'Done',
     sBreached: 'SLA breached',
     sAvgCycle: 'Avg cycle time (days)',
+    sOnTime: 'On-time delivery',
+    sOnTimeHint: 'Share of done tickets resolved on/before their due date (within the selected window). Higher is better.',
+    sSlaCompliance: 'SLA compliance',
+    sSlaComplianceHint: 'Share of SLA-bound tickets that have not breached (open within SLA, or resolved on time).',
+    sNetFlow: 'Net flow (created−resolved)',
+    sNetFlowHint: 'Created minus resolved over the period. A positive value means the backlog is growing.',
+    sUnassignedWait: 'Avg unassigned wait',
+    sUnassignedWaitHint: 'Average age of open tickets that are still unassigned — measures pickup speed.',
     trend: 'Exceptions trend — last 30 days',
     chartLines: 'Lines', chartArea: 'Area', chartBars: 'Bars',
     trendEmpty: 'No trend snapshots yet — they accumulate daily with each sync.',
@@ -1082,10 +1098,11 @@ function Screen({ title, hint, extra, children, collapsible = false }) {
   );
 }
 
-function StatCard({ label, value, color }) {
+function StatCard({ label, value, color, suffix, hint }) {
   const { fmt } = useUI();
   return (
     <div
+      title={hint || undefined}
       style={{
         background: C.card,
         border: `1px solid ${C.border}`,
@@ -1095,7 +1112,10 @@ function StatCard({ label, value, color }) {
         flex: '1 1 140px',
       }}
     >
-      <div style={{ fontSize: 26, fontWeight: 700, color: color || C.text }}>{fmt(value)}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: color || C.text }}>
+        {fmt(value)}
+        {value != null && suffix ? <span style={{ fontSize: 15, fontWeight: 600 }}>{suffix}</span> : null}
+      </div>
       <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>{label}</div>
     </div>
   );
@@ -1861,6 +1881,10 @@ function DashboardScreen({ perms = [], userId }) {
     { perm: 'kpi_review', label: t.cReview, color: C.blue, val: (d) => d.review },
     { perm: 'kpi_sla_breached', label: t.sBreached, color: C.red, val: (d) => d.slaBreached },
     { perm: 'kpi_avg_cycle', label: t.sAvgCycle, color: C.purple, val: (d) => d.avgCycle },
+    { perm: 'kpi_on_time', label: t.sOnTime, color: C.green, val: (d) => d.onTimePct, suffix: '%', hint: t.sOnTimeHint },
+    { perm: 'kpi_sla_compliance', label: t.sSlaCompliance, color: C.blue, val: (d) => d.slaCompliancePct, suffix: '%', hint: t.sSlaComplianceHint },
+    { perm: 'kpi_net_flow', label: t.sNetFlow, color: C.amber, val: (d) => d.netFlow, hint: t.sNetFlowHint },
+    { perm: 'kpi_unassigned_wait', label: t.sUnassignedWait, color: C.purple, val: (d) => d.unassignedWaitDays, suffix: t.dayUnit, hint: t.sUnassignedWaitHint },
   ];
   const kpiVisible = KPIS.filter((k) => has(k.perm));
 
@@ -1938,7 +1962,7 @@ function DashboardScreen({ perms = [], userId }) {
     kpi: { full: true, node: (
       <Screen collapsible title={t.scrKpi} hint={t.hDashboard}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
-          {kpiVisible.map((k) => <StatCard key={k.perm} label={k.label} value={k.val(data.kpis)} color={k.color} />)}
+          {kpiVisible.map((k) => <StatCard key={k.perm} label={k.label} value={k.val(data.kpis)} color={k.color} suffix={k.suffix} hint={k.hint} />)}
         </div>
       </Screen>
     ) },

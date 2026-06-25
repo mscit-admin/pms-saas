@@ -66,6 +66,50 @@ npm run db:migrate -w @pms/core -- --slug acme  # واحد
 # محلياً: acme.localhost (يعمل في أغلب المتصفّحات دون تعديل hosts)
 ```
 
+## النشر على الخادم (المنفذ 4447)
+
+النشر عبر **Docker Compose**. الواجهة تُنشَر على المضيف عبر `WEB_PORT` (الافتراضي
+الآن **4447**)، والـ API على `127.0.0.1:4448` ليوجّه إليه nginx مسارات `/api`
+مباشرةً (حفظ ترويسة Host لازم لتحديد المستأجر).
+
+```bash
+# 1) جهّز ملف البيئة
+cp .env.docker.example .env
+nano .env
+#   DB_PASSWORD · SESSION_SECRET · SYNC_SECRET · WEBHOOK_SECRET
+#   APP_ROOT_DOMAIN=example.com            (نطاقك)
+#   BOOTSTRAP_TENANT_SLUG=acme             (منظمة أولى تُوفَّر تلقائياً)
+#   ADMIN_INITIAL_PASSWORD=...             (كلمة مرور admin الأولى)
+#   WEB_PORT=4447                          (المنفذ المطلوب)
+#   COOKIE_SECURE=true                     (فقط بعد تفعيل HTTPS)
+
+# 2) أقلِع: قاعدة → bootstrap (تحكّم + منظمة) → api + worker + web
+docker compose up -d --build
+
+# 3) تحقّق
+curl -H 'Host: acme.example.com' http://127.0.0.1:4448/api/health   # عبر الـ API
+docker compose logs -f bootstrap                                    # توفير المنظمة
+```
+
+**الوصول المباشر (بلا nginx):** الواجهة على `http://IP:4447` — لكن تعدّد
+المستأجرين بالنطاق الفرعي يحتاج اسم مضيف (`acme.example.com`)، لذا nginx مُوصى به.
+
+**nginx + النطاقات الفرعية:** انسخ `deploy/nginx-pms-saas.conf` (يطابق
+`example.com` و`*.example.com`؛ يوجّه `/api`→4448 و`/`→4447):
+```bash
+sudo cp deploy/nginx-pms-saas.conf /etc/nginx/sites-available/pms
+sudo ln -sf /etc/nginx/sites-available/pms /etc/nginx/sites-enabled/pms
+sudo nginx -t && sudo systemctl reload nginx
+sudo ufw allow 'Nginx Full'      # وأبقِ 4447/4448 داخليّين
+```
+**DNS:** سجّلا `A` للجذر و`*` (wildcard):
+`example.com → IP` و `*.example.com → IP`. ثم الدخول عبر
+`http://acme.example.com` (admin / كلمة المرور التي ضبطتها).
+
+> ملاحظة (Phase 9): جلب الهوية في الـ SSR للواجهة لا يمرّر Host بعد، فيتراجع
+> إلى هوية افتراضية في عنوان التبويب/الأيقونة فقط — لا يؤثّر على عزل البيانات
+> (كل نداءات المتصفح لـ `/api` تمرّ عبر nginx بالـ Host الصحيح).
+
 ## ما الذي تبقّى (المراحل 3–10)
 
 3. **تسجيل ذاتي/Onboarding**: مسار تحكّم على النطاق الجذر يستدعي `provisionTenant`

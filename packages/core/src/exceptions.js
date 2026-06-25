@@ -39,7 +39,7 @@ function flagsSelect() {
 
 // قائمة الاستثناءات التشغيلية. فلتر اختياري بنطاق تاريخ على jira_created_at.
 // all=true يُرجع كل التذاكر المفتوحة (للمتابعة) بدل المُستثناة فقط.
-export async function getExceptions({ from = null, to = null, all = false, scope = null } = {}) {
+export async function getExceptions({ from = null, to = null, all = false, scope = null, includeDone = false } = {}) {
   const sc = scopeAnd(scope, 't');
   const params = {
     stagnantDays: ruleConfig.stagnantDays,
@@ -50,6 +50,8 @@ export async function getExceptions({ from = null, to = null, all = false, scope
   if (from) { dateFilter += ' AND t.jira_created_at >= :from'; params.from = `${from} 00:00:00`; }
   if (to)   { dateFilter += ' AND t.jira_created_at <= :to';   params.to = `${to} 23:59:59`; }
   const havingClause = all ? '' : 'HAVING is_stagnant OR is_review OR is_overdue OR is_unassigned';
+  // الافتراضي: استبعاد المنجزة. مع includeDone (شاشة كل التذاكر) نُظهر المنجزة أيضاً.
+  const statusCond = includeDone ? '1 = 1' : "t.status_category <> 'done'";
 
   const rows = await query(
     `SELECT
@@ -64,7 +66,7 @@ export async function getExceptions({ from = null, to = null, all = false, scope
      FROM tickets t
      LEFT JOIN exception_status es ON es.issue_key = t.issue_key
      LEFT JOIN users u ON u.id = es.owner_user_id
-     WHERE t.status_category <> 'done' ${dateFilter}
+     WHERE ${statusCond} ${dateFilter}
      ${havingClause}
      ORDER BY is_overdue DESC, days_in_status DESC`,
     params
@@ -83,6 +85,7 @@ export async function getExceptions({ from = null, to = null, all = false, scope
       project: r.project_key,
       summary: r.summary,
       status: r.status,
+      statusCategory: r.status_category,
       priority: r.priority,
       assignee: r.assignee_name,
       issueType: r.issue_type || null,

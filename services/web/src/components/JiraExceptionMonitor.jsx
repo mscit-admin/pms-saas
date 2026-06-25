@@ -68,6 +68,8 @@ const DICT = {
     basketCount: (n) => `${n} في السلّة`,
     basketAddRow: 'أضِف هذه التذكرة للسلّة',
     basketRemoveRow: 'أزِل من السلّة',
+    showDone: 'إظهار المنجزة',
+    showDoneHint: 'تضمين التذاكر المنجزة (المغلقة) ضمن القائمة، إضافةً إلى المفتوحة.',
     fAssignee: 'المسؤول',
     fProject: 'المشروع',
     fPriority: 'الأهمية',
@@ -221,6 +223,8 @@ const DICT = {
     basketCount: (n) => `${n} in basket`,
     basketAddRow: 'Add this ticket to the basket',
     basketRemoveRow: 'Remove from basket',
+    showDone: 'Show done',
+    showDoneHint: 'Include done (closed) tickets in the list, in addition to open ones.',
     fAssignee: 'Assignee',
     fProject: 'Project',
     fPriority: 'Priority',
@@ -1006,12 +1010,13 @@ function Card({ title, children, extra, hint }) {
 // شاشة بنمط ERPNext: ترويسة (عنوان + تلميح + إجراءات) ثم المحتوى — تُفتح من القائمة الجانبية
 function Screen({ title, hint, extra, children, collapsible = false }) {
   const [collapsed, setCollapsed] = useState(false);
+  const isMobile = useIsMobile();
   const canCollapse = collapsible && !!title;
   return (
     <section style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
       {(title || extra) && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: collapsed ? 0 : 14, borderBottom: collapsed ? 'none' : `1px solid ${C.border}`, paddingBottom: collapsed ? 0 : 12 }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ minWidth: 0, flex: isMobile ? '1 1 100%' : 1 }}>
             <h2 style={{ margin: 0, fontSize: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
               {canCollapse && (
                 <button
@@ -1025,7 +1030,7 @@ function Screen({ title, hint, extra, children, collapsible = false }) {
             </h2>
             {hint && !collapsed && <p style={{ margin: '5px 0 0', color: C.muted, fontSize: 12.5, lineHeight: 1.5, maxWidth: 720 }}>{hint}</p>}
           </div>
-          {extra && !collapsed && <div className="no-print" style={{ flexShrink: 0 }}>{extra}</div>}
+          {extra && !collapsed && <div className="no-print" style={{ flexShrink: 0, ...(isMobile ? { flexBasis: '100%' } : {}) }}>{extra}</div>}
         </div>
       )}
       {!collapsed && children}
@@ -2071,6 +2076,7 @@ function OperationalTab({ screen = 'exceptions' }) {
   const [hierKey, setHierKey] = useState(null);
   const [hideSnoozed, setHideSnoozed] = useState(true);
   const [hideAcked, setHideAcked] = useState(false);
+  const [showDone, setShowDone] = useState(false); // إظهار المنجزة في شاشة كل التذاكر
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [data, setData] = useState(null);
@@ -2150,9 +2156,11 @@ function OperationalTab({ screen = 'exceptions' }) {
       const qs = new URLSearchParams();
       if (from) qs.set('from', from);
       if (to) qs.set('to', to);
+      const openQs = new URLSearchParams(qs);
+      if (showDone) openQs.set('includeDone', '1');
       const [exc, all, wl] = await Promise.all([
         fetchJson(`/api/exceptions?${qs.toString()}`),
-        fetchJson(`/api/tickets/open?${qs.toString()}`),
+        fetchJson(`/api/tickets/open?${openQs.toString()}`),
         fetchJson('/api/workload'),
       ]);
       setData(exc);
@@ -2163,7 +2171,7 @@ function OperationalTab({ screen = 'exceptions' }) {
     } finally {
       setLoading(false);
     }
-  }, [from, to]);
+  }, [from, to, showDone]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -2311,6 +2319,11 @@ function OperationalTab({ screen = 'exceptions' }) {
                 <input type="checkbox" checked={hideAcked} onChange={(e) => setHideAcked(e.target.checked)} /> {t.hideAcked}
               </label>
             </>
+          )}
+          {isAll && (
+            <label style={{ display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 13, color: C.muted }} title={t.showDoneHint}>
+              <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> {t.showDone}
+            </label>
           )}
           <button onClick={() => downloadCsv(filtered, t)} style={{ ...ghostBtn, marginInlineStart: 'auto' }}>⬇ {t.exportCsv}</button>
         </div>

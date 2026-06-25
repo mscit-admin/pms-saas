@@ -12,6 +12,7 @@ export const GET = handler(async (req) => {
   const url = new URL(req.url);
   const from = url.searchParams.get('from');
   const to = url.searchParams.get('to');
-  const items = await getExceptions({ from, to, all: true, scope });
+  const includeDone = ['1', 'true', 'yes'].includes((url.searchParams.get('includeDone') || '').toLowerCase());
+  const items = await getExceptions({ from, to, all: true, scope, includeDone });
   return ok({ total: items.length, items });
 });

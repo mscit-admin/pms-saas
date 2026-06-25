@@ -412,6 +412,7 @@ const ICON_PATHS = {
   search: 'M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.35-4.35',
   briefcase: 'M4 7h16a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2z M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2 M2 12h20',
   cart: 'M9 22a1 1 0 100-2 1 1 0 000 2z M20 22a1 1 0 100-2 1 1 0 000 2z M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6',
+  globe: 'M12 22a10 10 0 100-20 10 10 0 000 20z M2 12h20 M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z',
 };
 function Icon({ name, size = 16 }) {
   const d = ICON_PATHS[name];
@@ -578,6 +579,7 @@ export default function JiraExceptionMonitor() {
   const [drawer, setDrawer] = useState(false);       // درج القائمة (الجوال)
   const [collapsedCats, setCollapsedCats] = useState({}); // طي/فتح تصنيفات القائمة
   const [profileOpen, setProfileOpen] = useState(false);  // قائمة الملف الشخصي المنسدلة
+  const [tzOpen, setTzOpen] = useState(false);            // قائمة المنطقة الزمنية المنسدلة
   const [paletteOpen, setPaletteOpen] = useState(false);  // لوحة البحث (Ctrl/⌘+K)
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
@@ -927,6 +929,26 @@ export default function JiraExceptionMonitor() {
                   <Icon name="refresh" size={14} /> {!isMobile && t.syncNow}
                 </button>
               )}
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setTzOpen((v) => !v)} title={`${t.tzLabel} — ${effTz}`} style={{ ...ghostBtn, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="globe" size={15} /> {!isMobile && effTz}
+                </button>
+                {tzOpen && (
+                  <>
+                    <div onClick={() => setTzOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                    <div style={{ position: 'absolute', insetInlineEnd: 0, top: 'calc(100% + 6px)', zIndex: 50, minWidth: 240, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: '0 10px 28px rgba(0,0,0,.18)', padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, color: C.text }}>
+                        <Icon name="globe" size={15} /> {t.tzLabel}
+                      </span>
+                      <select value={tz} onChange={(e) => changeTimezone(e.target.value)} style={{ ...inputStyle, width: '100%', fontSize: 13 }}>
+                        <option value="auto">{t.tzAuto}</option>
+                        {TZ_LIST.map((z) => <option key={z} value={z}>{z}</option>)}
+                      </select>
+                      <span style={{ fontSize: 11.5, color: C.muted }}>{t.tzShownIn}: {effTz}{tz === 'auto' ? ` (${t.tzAuto})` : ''}</span>
+                    </div>
+                  </>
+                )}
+              </div>
               <button onClick={refresh} title={t.refresh} style={ghostBtn}>↻</button>
               <button onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')} title="theme" style={ghostBtn}>
                 {theme === 'dark' ? '☀︎' : '☾'}
@@ -964,20 +986,6 @@ export default function JiraExceptionMonitor() {
                         >
                           <Icon name="settings" size={15} /> {t.scrSecurity}
                         </button>
-                        <div style={{ padding: '10px 14px', borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 13.5, color: C.text }}>
-                            <Icon name="clock" size={15} /> {t.tzLabel}
-                          </span>
-                          <select
-                            value={tz}
-                            onChange={(e) => changeTimezone(e.target.value)}
-                            style={{ ...inputStyle, width: '100%', fontSize: 13 }}
-                          >
-                            <option value="auto">{t.tzAuto}</option>
-                            {TZ_LIST.map((z) => <option key={z} value={z}>{z}</option>)}
-                          </select>
-                          <span style={{ fontSize: 11.5, color: C.muted }}>{t.tzShownIn}: {effTz}{tz === 'auto' ? ` (${t.tzAuto})` : ''}</span>
-                        </div>
                         <button
                           onClick={logout}
                           style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'start', padding: '10px 14px', border: 0, borderTop: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 13.5, color: C.red }}

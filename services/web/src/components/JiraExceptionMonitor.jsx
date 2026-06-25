@@ -1701,7 +1701,7 @@ function ExceptionCard({ it, canManage, canOpen, onAction, onType }) {
         <F label={t.thDue}>{fmtDate(it.dueDate)}</F>
         <F label={t.thDays}>{fmt(it.daysInStatus)}</F>
         <F label={t.thCreator}>{it.reporter ? `${it.reporter} · ${fmtDateTime(it.createdAt)}` : (it.createdAt ? fmtDateTime(it.createdAt) : '—')}</F>
-        <F label={t.thLastActor}>{it.lastActor ? `${it.lastActor} · ${fmtDateTime(it.lastActorAt)}` : '—'}</F>
+        <F label={t.thLastActor}>{it.lastActor ? `${it.lastActor} · ${fmtDateTime(it.lastActorAt)}` : (it.lastActorAt ? fmtDateTime(it.lastActorAt) : '—')}</F>
       </div>
       <div>{it.reasons.map((r) => <Chip key={r} color={EXC_COLORS[r]}>{t.exc[r] || r}</Chip>)}</div>
       {canManage && (fu.acknowledged || fu.snoozed || fu.ownerName || fu.rootCause) && (
@@ -2201,7 +2201,7 @@ function OperationalTab({ screen = 'exceptions' }) {
                   <Td>
                     {it.lastActor ? (
                       <span>{it.lastActor}<span style={{ color: C.muted, fontSize: 12 }}> · {fmtDateTime(it.lastActorAt)}</span></span>
-                    ) : '—'}
+                    ) : (it.lastActorAt ? <span style={{ color: C.muted }}>{fmtDateTime(it.lastActorAt)}</span> : '—')}
                   </Td>
                   <Td>{fmtDate(it.dueDate)}</Td>
                   <Td align="center">{fmt(it.daysInStatus)}</Td>

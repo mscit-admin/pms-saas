@@ -72,8 +72,10 @@ async function persistIssue(issue, account = null) {
   const row = mapIssueToRow(issue, syncedAt);
   row.account_id = account?.id || null;
 
-  // نقطة البحث الجديدة قد لا تُرجع changelog — نجلبه من نقطته المخصّصة عند غيابه.
-  if (!issue.changelog || !Array.isArray(issue.changelog.histories)) {
+  // نقطة البحث الجديدة قد لا تُرجع changelog (أو تُرجعه فارغاً) — نجلبه من
+  // نقطته المخصّصة عند غيابه أو فراغه، كي يُحسب «آخر مَن عدّل» بشكل موثوق.
+  const cl = issue.changelog;
+  if (!cl || !Array.isArray(cl.histories) || cl.histories.length === 0) {
     issue.changelog = await fetchChangelog(issue.id, account);
   }
   // أعِد حساب آخر مَن عدّل بعد ضمان تحميل الـ changelog كاملاً.

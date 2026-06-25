@@ -56,6 +56,10 @@ input,select,textarea{background:var(--c-card);color:var(--c-text);}
 .pms-tip{position:relative;}
 .pms-tip>.pms-tip-box{position:absolute;top:135%;inset-inline-start:0;background:var(--c-text);color:var(--c-bg);font-size:12px;line-height:1.5;padding:7px 11px;border-radius:6px;max-width:260px;white-space:normal;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .15s;z-index:60;box-shadow:0 8px 22px rgba(0,0,0,.28);}
 .pms-tip:hover>.pms-tip-box{opacity:1;visibility:visible;}
+/* وميض أخضر على الحواف عند مرور الماوس — القائمة الجانبية وكل الأزرار */
+@keyframes pmsEdgeGlow{0%,100%{box-shadow:0 0 0 1px rgba(31,122,77,.6),0 0 6px rgba(31,122,77,.28);}50%{box-shadow:0 0 0 1px rgba(31,122,77,1),0 0 14px rgba(31,122,77,.6);}}
+button:not(:disabled){transition:box-shadow .15s ease,border-color .15s ease;}
+button:not(:disabled):hover{animation:pmsEdgeGlow 1.1s ease-in-out infinite;border-color:#1f7a4d;}
 @media print{
   .no-print{display:none !important;}
   :root,[data-theme="dark"]{--c-bg:#ffffff;--c-card:#ffffff;--c-border:#cccccc;--c-text:#000000;--c-muted:#444444;}

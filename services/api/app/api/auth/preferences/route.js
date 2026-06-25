@@ -4,7 +4,7 @@ import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-// حفظ تفضيلات المستخدم الحالي (اللغة/الثيم) على حسابه.
+// حفظ تفضيلات المستخدم الحالي (اللغة/الثيم/المنطقة الزمنية) على حسابه.
 export const POST = handler(async (req) => {
   const me = await requireUser();
   const body = await req.json().catch(() => ({}));
@@ -16,5 +16,12 @@ export const POST = handler(async (req) => {
     if (!['light', 'dark'].includes(body.theme)) return fail('ثيم غير مدعوم', 400);
     await query('UPDATE users SET theme = :theme WHERE id = :id', { theme: body.theme, id: me.id });
   }
-  return ok({ lang: body.lang, theme: body.theme });
+  if (body.timezone !== undefined) {
+    const tz = String(body.timezone);
+    let valid = tz === 'auto';
+    if (!valid) { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); valid = true; } catch { valid = false; } }
+    if (!valid || tz.length > 64) return fail('منطقة زمنية غير صالحة', 400);
+    await query('UPDATE users SET timezone = :tz WHERE id = :id', { tz, id: me.id });
+  }
+  return ok({ lang: body.lang, theme: body.theme, timezone: body.timezone });
 });

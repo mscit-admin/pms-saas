@@ -67,7 +67,7 @@ export async function getCurrentUser() {
   if (!payload?.sub) return null;
 
   const rows = await query(
-    `SELECT id, username, full_name, email, is_active, totp_enabled, lang, theme, avatar_mime
+    `SELECT id, username, full_name, email, is_active, totp_enabled, lang, theme, timezone, avatar_mime
      FROM users WHERE id = :id AND is_active = 1`,
     { id: payload.sub }
   );
@@ -95,6 +95,7 @@ export async function getCurrentUser() {
     avatar: !!user.avatar_mime,
     lang: user.lang || 'ar',
     theme: user.theme || 'light',
+    timezone: user.timezone || 'auto',
     roles: roles.map((r) => ({ id: r.id, name: r.name })),
     permissions: perms.map((p) => p.k),
   };

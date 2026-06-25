@@ -39,6 +39,7 @@ const DICT = {
     tabAdmin: 'الإدارة',
     account: 'حسابي',
     logout: 'خروج',
+    tzLabel: 'المنطقة الزمنية', tzAuto: 'تلقائي (حسب جهازك)', tzShownIn: 'الأوقات معروضة بتوقيت',
     refresh: 'تحديث', collapseAll: 'طي الكل', expandAll: 'فتح الكل',
     syncNow: 'مزامنة جيرا', syncStarted: 'بدأت المزامنة في الخلفية… حدّث بعد قليل', syncBusy: 'المزامنة قيد التشغيل بالفعل', syncFail: 'تعذّرت المزامنة',
     navDashboard: 'لوحة المعلومات', navOps: 'العمليات', navMgmt: 'التحليلات', navAdmin: 'الإدارة', navAccount: 'حسابي', projectTickets: 'تذاكر المشروع',
@@ -194,6 +195,7 @@ const DICT = {
     tabAdmin: 'Admin',
     account: 'Account',
     logout: 'Log out',
+    tzLabel: 'Time zone', tzAuto: 'Auto (your device)', tzShownIn: 'Times shown in',
     refresh: 'Refresh', collapseAll: 'Collapse all', expandAll: 'Expand all',
     syncNow: 'Sync Jira', syncStarted: 'Sync started in background… refresh shortly', syncBusy: 'A sync is already running', syncFail: 'Sync failed',
     navDashboard: 'Dashboard', navOps: 'Operations', navMgmt: 'Analytics', navAdmin: 'Administration', navAccount: 'My Account', projectTickets: 'Project tickets',
@@ -406,6 +408,20 @@ function Icon({ name, size = 16 }) {
   );
 }
 
+// قائمة المناطق الزمنية (IANA) — كل المناطق المدعومة في المتصفّح، مع احتياط لقائمة شائعة.
+const TZ_LIST = (() => {
+  try {
+    if (typeof Intl.supportedValuesOf === 'function') return Intl.supportedValuesOf('timeZone');
+  } catch { /* تجاهل */ }
+  return ['UTC', 'Asia/Riyadh', 'Asia/Dubai', 'Asia/Qatar', 'Asia/Kuwait', 'Asia/Baghdad', 'Asia/Amman',
+    'Asia/Jerusalem', 'Africa/Cairo', 'Africa/Casablanca', 'Asia/Beirut', 'Europe/Istanbul',
+    'Europe/London', 'Europe/Paris', 'America/New_York', 'America/Chicago', 'America/Los_Angeles'];
+})();
+// المنطقة الفعلية للجهاز (عند اختيار «تلقائي»)
+function deviceTz() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; }
+}
+
 // ------------------------------------------------------------------- لوحة البحث (Ctrl/⌘+K)
 const SEARCH_HIST_KEY = 'search_history_v1';
 function CommandPalette({ open, onClose, menu, onNavigate, jiraBaseUrl, canTickets, t }) {
@@ -537,6 +553,7 @@ function CommandPalette({ open, onClose, menu, onNavigate, jiraBaseUrl, canTicke
 export default function JiraExceptionMonitor() {
   const [lang, setLang] = useState('ar');
   const [theme, setTheme] = useState('light');
+  const [tz, setTz] = useState('auto'); // تفضيل المنطقة الزمنية: 'auto' = حسب الجهاز
   const [screen, setScreen] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [meta, setMeta] = useState(null);
@@ -558,6 +575,7 @@ export default function JiraExceptionMonitor() {
       setMe(d.user);
       if (d.user?.lang === 'ar' || d.user?.lang === 'en') setLang(d.user.lang);
       if (d.user?.theme === 'light' || d.user?.theme === 'dark') setTheme(d.user.theme);
+      if (d.user?.timezone) setTz(d.user.timezone);
     }).catch(() => {});
   }, []);
 
@@ -598,6 +616,12 @@ export default function JiraExceptionMonitor() {
     setTheme(th);
     fetch('/api/auth/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: th }) }).catch(() => {});
   };
+  // تغيير المنطقة الزمنية: فوري + حفظ على الحساب
+  const changeTimezone = (z) => {
+    setTz(z);
+    try { localStorage.setItem('tz', z); } catch { /* تجاهل */ }
+    fetch('/api/auth/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timezone: z }) }).catch(() => {});
+  };
 
   // استعادة التفضيلات المحفوظة محلياً
   useEffect(() => {
@@ -606,6 +630,8 @@ export default function JiraExceptionMonitor() {
     if (savedLang === 'ar' || savedLang === 'en') setLang(savedLang);
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme);
+    const savedTz = localStorage.getItem('tz');
+    if (savedTz) setTz(savedTz);
   }, []);
 
   useEffect(() => {
@@ -635,13 +661,17 @@ export default function JiraExceptionMonitor() {
   }, []);
 
   const t = DICT[lang];
+  // المنطقة الفعّالة: تفضيل المستخدم أو منطقة الجهاز عند «تلقائي»
+  const effTz = tz && tz !== 'auto' ? tz : deviceTz();
   const fmt = (n) => (n == null ? '—' : new Intl.NumberFormat('en-US').format(n));
+  // التاريخ‑فقط (استحقاق/تأجيل/أسبوع): يُعرض بـUTC كما هو مخزَّن كي لا ينزلق يوماً بين الدول
   const fmtDate = (d) =>
-    d ? new Date(d).toLocaleDateString(t.locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) : '—';
+    d ? new Date(d).toLocaleDateString(t.locale, { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC' }) : '—';
+  // اللحظات (إنشاء/آخر تعديل/مزامنة): تُعرض بتوقيت المستخدم
   const fmtDateTime = (d) =>
     d
       ? new Date(d).toLocaleString(t.locale, {
-          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+          year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: effTz,
         })
       : t.never;
   const refresh = () => setReloadKey((k) => k + 1);
@@ -918,6 +948,20 @@ export default function JiraExceptionMonitor() {
                         >
                           <Icon name="settings" size={15} /> {t.scrSecurity}
                         </button>
+                        <div style={{ padding: '10px 14px', borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 13.5, color: C.text }}>
+                            <Icon name="clock" size={15} /> {t.tzLabel}
+                          </span>
+                          <select
+                            value={tz}
+                            onChange={(e) => changeTimezone(e.target.value)}
+                            style={{ ...inputStyle, width: '100%', fontSize: 13 }}
+                          >
+                            <option value="auto">{t.tzAuto}</option>
+                            {TZ_LIST.map((z) => <option key={z} value={z}>{z}</option>)}
+                          </select>
+                          <span style={{ fontSize: 11.5, color: C.muted }}>{t.tzShownIn}: {effTz}{tz === 'auto' ? ` (${t.tzAuto})` : ''}</span>
+                        </div>
                         <button
                           onClick={logout}
                           style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'start', padding: '10px 14px', border: 0, borderTop: `1px solid ${C.border}`, background: 'transparent', cursor: 'pointer', fontSize: 13.5, color: C.red }}

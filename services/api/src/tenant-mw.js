@@ -27,12 +27,17 @@ export function invalidateOrgCache(slug) {
 export function tenantGate() {
   return async (req, res, next) => {
     try {
-      const slug = slugFromHost(req.headers.host);
+      let slug = slugFromHost(req.headers.host);
       if (!slug) {
-        // مستوى تحكّم (apex/www): لا مستأجر. المسارات التي تتطلّب مستأجراً
-        // ستفشل مغلقةً في db.js؛ ومسارات التحكّم (تسجيل/مشرف) لا تحتاجه.
-        req.tenantOrg = null;
-        return next();
+        // لا نطاق فرعي (IP عارٍ / apex). إن ضُبط DEFAULT_TENANT_SLUG نقع عليه —
+        // يفيد النشر بعنوان IP فقط أو خلف شبكة تحجب نطاقات wildcard مثل nip.io.
+        const def = process.env.DEFAULT_TENANT_SLUG;
+        if (!def) {
+          // مستوى تحكّم: لا مستأجر. المسارات التي تتطلّبه تفشل مغلقةً في db.js.
+          req.tenantOrg = null;
+          return next();
+        }
+        slug = def;
       }
       const org = await resolveOrg(slug);
       if (!org) {

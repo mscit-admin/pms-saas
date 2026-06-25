@@ -4,6 +4,7 @@ import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { registerRoutes } from './fs-router.js';
+import { tenantGate } from './tenant-mw.js';
 import { authGate } from './auth-mw.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -16,6 +17,9 @@ app.set('trust proxy', true);
 
 // نلتقط الجسم الخام كـ Buffer لكل الأنواع؛ المعالجات تفكّه عبر req.json()/req.formData()
 app.use(express.raw({ type: () => true, limit: '12mb' }));
+
+// تحديد المستأجر من النطاق الفرعي (قبل المصادقة: الجلسة تخصّ مستأجراً بعينه)
+app.use(tenantGate());
 
 // حارس الجلسة قبل المعالجات
 app.use(authGate());

@@ -1,7 +1,12 @@
 // خدمة العامل — مزامنة دورية (Polling) مع جيرا كل بضع دقائق.
 // عملية مستقلّة قابلة للتوسعة/إعادة التشغيل بمعزل عن خدمتَي الـ API والواجهة.
+//
+// تعدّد المستأجرين: تدور كل دورة عبر المنظمات النشطة، وتُشغّل المزامنة داخل
+// سياق كل مستأجر (runInTenant) كي تصيب قاعدة بياناته فقط. (تحسين Phase 5:
+// جدولة/حدود معدّل لكل مستأجر بدل التسلسل البسيط.)
 import 'dotenv/config';
 import { runSync } from '@pms/core/sync';
+import { listActiveOrgs, runInTenant } from '@pms/core/tenancy';
 
 const intervalMin = parseInt(process.env.SYNC_INTERVAL_MINUTES || '5', 10);
 const intervalMs = intervalMin * 60 * 1000;
@@ -16,10 +21,20 @@ async function tick() {
   running = true;
   const startedAt = new Date().toISOString();
   try {
-    const result = await runSync();
-    console.log(`[${startedAt}] ✓ مزامنة:`, result);
+    const orgs = await listActiveOrgs();
+    let ok = 0;
+    for (const org of orgs) {
+      try {
+        const result = await runInTenant(org, () => runSync());
+        ok += 1;
+        console.log(`[${startedAt}] ✓ مزامنة ${org.slug}:`, result);
+      } catch (err) {
+        console.error(`[${startedAt}] ✗ خطأ مزامنة ${org.slug}:`, err.message);
+      }
+    }
+    console.log(`[${startedAt}] انتهت الدورة: ${ok}/${orgs.length} منظمة`);
   } catch (err) {
-    console.error(`[${startedAt}] ✗ خطأ مزامنة:`, err.message);
+    console.error(`[${startedAt}] ✗ تعذّر جلب المنظمات:`, err.message);
   } finally {
     running = false;
   }

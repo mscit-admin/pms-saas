@@ -15,13 +15,35 @@ export const jiraConfig = {
   pageSize: int(process.env.JIRA_PAGE_SIZE, 100),
 };
 
+// بيانات الاتصال المشتركة بخادم MySQL (خادم واحد، عدة قواعد للمستأجرين).
+// تُستخدم لكل قاعدة مستأجر ما لم تُحدّد المنظمة بيانات اتصال خاصة (تشظية).
 export const dbConfig = {
   host: process.env.DB_HOST || '127.0.0.1',
   port: int(process.env.DB_PORT, 3306),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
+  // اسم قاعدة افتراضي للتطوير الأحادي فقط؛ في وضع الـ SaaS يُحدَّد لكل مستأجر.
   database: process.env.DB_NAME || 'jira_monitor',
   connectionLimit: int(process.env.DB_CONNECTION_LIMIT, 10),
+};
+
+// قاعدة التحكّم المركزية (Control Plane) — سجلّ المنظمات وتوجيه النطاقات.
+// منفصلة عن قواعد المستأجرين؛ تشترك في خادم MySQL نفسه افتراضياً.
+export const controlDbConfig = {
+  host: process.env.CONTROL_DB_HOST || dbConfig.host,
+  port: int(process.env.CONTROL_DB_PORT, dbConfig.port),
+  user: process.env.CONTROL_DB_USER || dbConfig.user,
+  password: process.env.CONTROL_DB_PASSWORD ?? dbConfig.password,
+  database: process.env.CONTROL_DB_NAME || 'pms_control',
+  connectionLimit: int(process.env.CONTROL_DB_CONNECTION_LIMIT, 5),
+};
+
+// النطاق الجذر للـ SaaS (app.com): منه نستخرج النطاق الفرعي للمستأجر.
+// مثال: acme.app.com ⇒ slug=acme حين APP_ROOT_DOMAIN=app.com
+export const tenancyConfig = {
+  rootDomain: (process.env.APP_ROOT_DOMAIN || 'localhost').replace(/^\.+|\.+$/g, ''),
+  // بادئة اسم قاعدة المستأجر: tenant_<slug>
+  dbPrefix: process.env.TENANT_DB_PREFIX || 'tenant_',
 };
 
 export const syncConfig = {

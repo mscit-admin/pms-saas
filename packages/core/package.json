@@ -9,7 +9,9 @@
     "./package.json": "./package.json"
   },
   "scripts": {
+    "db:migrate:control": "node scripts/migrate-control.js",
     "db:migrate": "node scripts/migrate.js",
+    "provision:tenant": "node scripts/provision-tenant.js",
     "seed:admin": "node scripts/seed-admin.js",
     "jira:sync": "node scripts/sync-once.js",
     "jira:backfill": "node scripts/backfill-trend.js",

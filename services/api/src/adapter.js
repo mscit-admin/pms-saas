@@ -3,7 +3,10 @@
 //   1) نبني Web Request من طلب Express (الترويسة/الجسم/المسار الكامل).
 //   2) ننفّذ المعالج داخل سياق كوكي (cookieContext) كي تعمل المصادقة.
 //   3) نحوّل Web Response الناتج إلى ردّ Express، مضيفين أي كوكيات مطلوبة.
+//   كذلك نلفّ المعالج في سياق المستأجر (tenantContext) المحلول من النطاق الفرعي،
+//   فتعمل استعلامات db.js على قاعدة المستأجر الصحيحة دون أي تغيير في المعالجات.
 import { cookieContext } from '@pms/core/cookies';
+import { tenantContext } from '@pms/core/tenancy';
 
 function parseCookies(header) {
   const out = {};
@@ -72,7 +75,12 @@ export function toExpress(handlerFn) {
     try {
       const request = buildRequest(req);
       const ctx = { reqCookies: parseCookies(req.headers.cookie), setCookies: [] };
-      const webRes = await cookieContext.run(ctx, () => handlerFn(request, { params: req.params }));
+      // المستأجر المحلول في tenant-mw (أو null على مستوى التحكّم).
+      const runHandler = () => handlerFn(request, { params: req.params });
+      const inCookies = () => cookieContext.run(ctx, runHandler);
+      const webRes = req.tenantOrg
+        ? await tenantContext.run({ org: req.tenantOrg }, inCookies)
+        : await inCookies();
       if (!webRes || typeof webRes.arrayBuffer !== 'function') {
         res.status(500).json({ ok: false, error: 'المعالج لم يُعِد ردّاً صالحاً' });
         return;

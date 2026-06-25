@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 
 // لوحة الإدارة: المستخدمون · الأدوار والصلاحيات · الإعدادات (المنفذ) · التحقق الثنائي.
 // تظهر فقط لمن يملك صلاحيات إدارية. ثنائية اللغة عبر prop: lang.
@@ -29,6 +29,10 @@ const T = {
     twofa: '2FA', actions: 'إجراءات', create: 'إنشاء', save: 'حفظ', del: 'حذف', edit: 'تعديل',
     resetonts2fa: 'إعادة ضبط 2FA', password: 'كلمة المرور', newUser: 'مستخدم جديد', newRole: 'دور جديد',
     roleName: 'اسم الدور', description: 'الوصف', permissions: 'الصلاحيات', system: 'نظام',
+    searchPerm: 'بحث عن صلاحية…', selAll: 'الكل', selNone: 'لا شيء', unsaved: 'تغييرات غير محفوظة',
+    saveChanges: 'حفظ التغييرات', cancel: 'إلغاء', duplicate: 'تكرار', viewList: 'قائمة', viewMatrix: 'مصفوفة',
+    readOnlySystem: 'دور نظام — للقراءة فقط', cloneFrom: 'انسخ الصلاحيات من', noneOpt: '— بلا —',
+    noPermsMatch: 'لا صلاحيات مطابقة', permsCount: (n, tot) => `${n} من ${tot} صلاحية`, selectRole: 'اختر دوراً لتحرير صلاحياته', addRole: 'إضافة دور',
     port: 'رقم المنفذ', portHint: 'سيُعاد تشغيل الخدمة تلقائياً ويُحدَّث nginx لتطبيق المنفذ. حدّث الصفحة بعد لحظات.', saved: 'تم الحفظ — جارٍ إعادة التشغيل', portManual: 'حُفظ المنفذ. إعادة التشغيل التلقائي غير مُفعّلة — أعد تشغيل الخدمة يدوياً.',
     appName: 'اسم التطبيق', appSubtitle: 'العنوان الفرعي', savedShort: 'تم الحفظ',
     depClearTitle: 'حالات إلغاء الاعتمادية', depClearHint: 'عند وصول التذكرة الحاجبة لإحدى هذه الحالات تُعتبر الاعتمادية ملغاة وتختفي من شاشة «اختناقات الاعتمادية». (حالة Done تُلغيها تلقائياً دائماً.)',
@@ -62,6 +66,10 @@ const T = {
     twofa: '2FA', actions: 'Actions', create: 'Create', save: 'Save', del: 'Delete', edit: 'Edit',
     resetonts2fa: 'Reset 2FA', password: 'Password', newUser: 'New user', newRole: 'New role',
     roleName: 'Role name', description: 'Description', permissions: 'Permissions', system: 'system',
+    searchPerm: 'Search permission…', selAll: 'All', selNone: 'None', unsaved: 'Unsaved changes',
+    saveChanges: 'Save changes', cancel: 'Cancel', duplicate: 'Duplicate', viewList: 'List', viewMatrix: 'Matrix',
+    readOnlySystem: 'System role — read-only', cloneFrom: 'Clone permissions from', noneOpt: '— none —',
+    noPermsMatch: 'No matching permissions', permsCount: (n, tot) => `${n} of ${tot} permissions`, selectRole: 'Select a role to edit its permissions', addRole: 'Add role',
     port: 'Port number', portHint: 'The service auto-restarts and nginx is updated to apply the port. Refresh the page in a moment.', saved: 'Saved — restarting', portManual: 'Port saved. Auto-restart not enabled — restart the service manually.',
     appName: 'App name', appSubtitle: 'Subtitle', savedShort: 'Saved',
     depClearTitle: 'Dependency-cleared statuses', depClearHint: 'When the blocking ticket reaches one of these statuses, the dependency is treated as cleared and hidden from the Dependency bottlenecks screen. (Done always clears it.)',
@@ -457,33 +465,95 @@ function MultiRole({ roles, value, onChange, t }) {
 }
 
 // ----------------------------------------------------------- Roles
+const sameSet = (a = [], b = []) => a.length === b.length && [...a].sort().join('|') === [...b].sort().join('|');
+
 function RolesSection({ t }) {
+  const lang = t === T.en ? 'en' : 'ar';
   const [roles, setRoles] = useState([]);
   const [perms, setPerms] = useState([]);
-  const [form, setForm] = useState({ name: '', description: '', permissions: [] });
+  const [groups, setGroups] = useState([]);
   const [err, setErr] = useState('');
-  const lang = t === T.en ? 'en' : 'ar';
+  const [view, setView] = useState('detail');     // 'detail' | 'matrix'
+  const [selId, setSelId] = useState(null);
+  const [draft, setDraft] = useState({});          // { [roleId]: string[] } نسخة العمل
+  const [orig, setOrig] = useState({});            // الأساس لكشف التغييرات
+  const [search, setSearch] = useState('');
+  const [collapsed, setCollapsed] = useState({});  // طي المجموعات
+  const [saving, setSaving] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({ name: '', description: '', cloneFrom: '' });
 
+  const applyRoles = (items) => {
+    setRoles(items);
+    const base = {};
+    items.forEach((role) => { base[role.id] = [...role.permissions]; });
+    setOrig(base);
+    setDraft(JSON.parse(JSON.stringify(base)));
+  };
   const load = useCallback(async () => {
     const [r, p] = await Promise.all([api('/api/roles'), api('/api/permissions')]);
-    setRoles(r.items);
+    applyRoles(r.items);
     setPerms(p.items);
+    setGroups(p.groups || []);
+    setSelId((cur) => (cur && r.items.some((x) => x.id === cur) ? cur : (r.items[0]?.id ?? null)));
   }, []);
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [load]);
 
   const permLabel = (p) => (lang === 'en' ? p.labelEn : p.labelAr);
+  const groupLabel = (g) => (lang === 'en' ? g.labelEn : g.labelAr);
+
+  // الصلاحيات مجمّعة + تصفية البحث
+  const q = search.trim().toLowerCase();
+  const matches = (p) => !q || permLabel(p).toLowerCase().includes(q) || p.key.toLowerCase().includes(q);
+  const orderedGroups = groups.length ? groups : [{ key: '_', labelAr: '', labelEn: '' }];
+  const groupedPerms = orderedGroups
+    .map((g) => ({ g, list: perms.filter((p) => (p.group || '_') === g.key && matches(p)) }))
+    .filter((x) => x.list.length > 0);
+
+  const dirtyRoles = roles.filter((r) => !sameSet(draft[r.id], orig[r.id]));
+  const isDirty = dirtyRoles.length > 0;
+
+  const toggle = (roleId, key, isSystem) => {
+    if (isSystem) return;
+    setDraft((d) => {
+      const set = new Set(d[roleId] || []);
+      if (set.has(key)) set.delete(key); else set.add(key);
+      return { ...d, [roleId]: [...set] };
+    });
+  };
+  const setMany = (roleId, keys, on, isSystem) => {
+    if (isSystem) return;
+    setDraft((d) => {
+      const set = new Set(d[roleId] || []);
+      keys.forEach((k) => (on ? set.add(k) : set.delete(k)));
+      return { ...d, [roleId]: [...set] };
+    });
+  };
+  async function saveAll() {
+    setErr(''); setSaving(true);
+    try {
+      for (const r of dirtyRoles) {
+        await api(`/api/roles/${r.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ permissions: draft[r.id] }) });
+      }
+      await load();
+    } catch (e) { setErr(e.message); } finally { setSaving(false); }
+  }
+  const cancelAll = () => setDraft(JSON.parse(JSON.stringify(orig)));
 
   async function create() {
     setErr('');
+    const name = form.name.trim();
+    if (!name) return;
     try {
-      await api('/api/roles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-      setForm({ name: '', description: '', permissions: [] });
-      await load();
+      const permissions = form.cloneFrom ? (orig[form.cloneFrom] || []) : [];
+      await api('/api/roles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description: form.description, permissions }) });
+      setForm({ name: '', description: '', cloneFrom: '' });
+      setShowCreate(false);
+      const r = await api('/api/roles');
+      applyRoles(r.items);
+      const created = r.items.find((x) => x.name === name);
+      if (created) setSelId(created.id);
     } catch (e) { setErr(e.message); }
-  }
-  async function savePerms(role, permissions) {
-    await api(`/api/roles/${role.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ permissions }) });
-    await load();
   }
   async function remove(role) {
     if (!confirm(t.confirmDel)) return;
@@ -491,55 +561,177 @@ function RolesSection({ t }) {
     catch (e) { setErr(e.message); }
   }
 
+  const sel = roles.find((r) => r.id === selId) || null;
+  const totalPerms = perms.length;
+  const tabBtn = (active) => ({ ...ghost, background: active ? C.blue : C.card, color: active ? '#fff' : C.text, borderColor: active ? C.blue : C.border });
+  const sysBadge = <span style={{ color: C.amber, fontSize: 11, marginInlineStart: 4 }}>({t.system})</span>;
+
   return (
     <>
-      <div style={box}>
-        <h3 style={{ marginTop: 0 }}>{t.newRole}</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
-          <input placeholder={t.roleName} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inp} />
-          <input placeholder={t.description} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inp, minWidth: 220 }} />
-          <button onClick={create} style={btn(C.green)}>{t.create}</button>
+      {/* شريط الأدوات: عرض + إضافة دور + شريط الحفظ */}
+      <div style={{ ...box, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        <strong style={{ fontSize: 15 }}>{t.permissions}</strong>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setView('detail')} style={tabBtn(view === 'detail')}>{t.viewList}</button>
+          <button onClick={() => setView('matrix')} style={tabBtn(view === 'matrix')}>{t.viewMatrix}</button>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {perms.map((p) => {
-            const on = form.permissions.includes(p.key);
-            return (
-              <button key={p.key} onClick={() => setForm({ ...form, permissions: on ? form.permissions.filter((x) => x !== p.key) : [...form.permissions, p.key] })} style={on ? btn(C.blue) : ghost}>
-                {permLabel(p)}
-              </button>
-            );
-          })}
-        </div>
-        {err && <div style={{ color: C.red, fontSize: 13, marginTop: 8 }}>{err}</div>}
+        <input placeholder={t.searchPerm} value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inp, minWidth: 200, flex: '1 1 200px' }} />
+        <button onClick={() => setShowCreate((v) => !v)} style={btn(C.green)}>+ {t.addRole}</button>
+        {isDirty && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginInlineStart: 'auto' }}>
+            <span style={{ color: C.amber, fontSize: 13 }}>● {t.unsaved} ({dirtyRoles.length})</span>
+            <button onClick={cancelAll} disabled={saving} style={ghost}>{t.cancel}</button>
+            <button onClick={saveAll} disabled={saving} style={btn(C.green)}>{saving ? '…' : t.saveChanges}</button>
+          </div>
+        )}
       </div>
 
-      {roles.map((role) => (
-        <div key={role.id} style={box}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <h3 style={{ margin: 0 }}>
-              {role.name} {role.isSystem && <span style={{ color: C.amber, fontSize: 12 }}>({t.system})</span>}
-              {role.description && <span style={{ color: C.muted, fontSize: 13, fontWeight: 400 }}> — {role.description}</span>}
-            </h3>
-            {!role.isSystem && <button onClick={() => remove(role)} style={btn(C.red)}>{t.del}</button>}
+      {showCreate && (
+        <div style={box}>
+          <h3 style={{ marginTop: 0 }}>{t.newRole}</h3>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input placeholder={t.roleName} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inp} />
+            <input placeholder={t.description} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ ...inp, minWidth: 200 }} />
+            <label style={{ fontSize: 13, color: C.muted, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              {t.cloneFrom}
+              <select value={form.cloneFrom} onChange={(e) => setForm({ ...form, cloneFrom: e.target.value })} style={inp}>
+                <option value="">{t.noneOpt}</option>
+                {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </label>
+            <button onClick={create} style={btn(C.green)}>{t.create}</button>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {perms.map((p) => {
-              const on = role.permissions.includes(p.key);
-              const disabled = role.isSystem; // دور النظام صلاحياته ثابتة
+        </div>
+      )}
+
+      {err && <div style={{ color: C.red, fontSize: 13, marginBottom: 10 }}>{err}</div>}
+
+      {view === 'matrix' ? (
+        <div style={{ ...box, overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'start', padding: '6px 8px', position: 'sticky', insetInlineStart: 0, background: C.card }}>{t.permissions}</th>
+                {roles.map((r) => (
+                  <th key={r.id} style={{ padding: '6px 8px', whiteSpace: 'nowrap', borderBottom: `2px solid ${C.border}` }}>
+                    {r.name}{r.isSystem && sysBadge}
+                    <div style={{ fontWeight: 400, color: C.muted, fontSize: 11 }}>{(draft[r.id] || []).length}/{totalPerms}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groupedPerms.length === 0 && <tr><td colSpan={roles.length + 1} style={{ padding: 12, color: C.muted }}>{t.noPermsMatch}</td></tr>}
+              {groupedPerms.map(({ g, list }) => (
+                <Fragment key={g.key}>
+                  <tr><td colSpan={roles.length + 1} style={{ background: `${C.blue}10`, fontWeight: 700, padding: '6px 8px' }}>{groupLabel(g)}</td></tr>
+                  {list.map((p) => (
+                    <tr key={p.key} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: '5px 8px', position: 'sticky', insetInlineStart: 0, background: C.card }}>{permLabel(p)}</td>
+                      {roles.map((r) => (
+                        <td key={r.id} style={{ textAlign: 'center', padding: '5px 8px' }}>
+                          <input
+                            type="checkbox"
+                            checked={(draft[r.id] || []).includes(p.key)}
+                            disabled={r.isSystem}
+                            onChange={() => toggle(r.id, p.key, r.isSystem)}
+                            style={{ cursor: r.isSystem ? 'not-allowed' : 'pointer' }}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {/* قائمة الأدوار */}
+          <div style={{ ...box, flex: '1 1 220px', maxWidth: 280, marginBottom: 0 }}>
+            {roles.map((r) => {
+              const active = r.id === selId;
+              const dirty = !sameSet(draft[r.id], orig[r.id]);
               return (
                 <button
-                  key={p.key}
-                  disabled={disabled}
-                  onClick={() => savePerms(role, on ? role.permissions.filter((x) => x !== p.key) : [...role.permissions, p.key])}
-                  style={{ ...(on ? btn(C.blue) : ghost), opacity: disabled ? 0.6 : 1, cursor: disabled ? 'default' : 'pointer' }}
+                  key={r.id}
+                  onClick={() => setSelId(r.id)}
+                  style={{ display: 'block', width: '100%', textAlign: 'start', marginBottom: 6, padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
+                    border: `1px solid ${active ? C.blue : C.border}`, background: active ? `${C.blue}12` : C.card, color: C.text }}
                 >
-                  {permLabel(p)}
+                  <div style={{ fontWeight: 600 }}>
+                    {r.name}{r.isSystem && sysBadge}
+                    {dirty && <span style={{ color: C.amber, marginInlineStart: 6 }}>●</span>}
+                  </div>
+                  <small style={{ color: C.muted }}>{t.permsCount((draft[r.id] || []).length, totalPerms)}</small>
                 </button>
               );
             })}
           </div>
+
+          {/* محرّر صلاحيات الدور المختار */}
+          <div style={{ ...box, flex: '3 1 420px', marginBottom: 0 }}>
+            {!sel ? (
+              <div style={{ color: C.muted, padding: 8 }}>{t.selectRole}</div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                  <h3 style={{ margin: 0 }}>
+                    {sel.name}{sel.isSystem && sysBadge}
+                    {sel.description && <span style={{ color: C.muted, fontSize: 13, fontWeight: 400 }}> — {sel.description}</span>}
+                  </h3>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => { setForm({ name: `${sel.name} (copy)`, description: sel.description || '', cloneFrom: String(sel.id) }); setShowCreate(true); }} style={ghost}>{t.duplicate}</button>
+                    {!sel.isSystem && <button onClick={() => remove(sel)} style={btn(C.red)}>{t.del}</button>}
+                  </div>
+                </div>
+                {sel.isSystem && <div style={{ color: C.amber, fontSize: 12.5, marginBottom: 10 }}>🔒 {t.readOnlySystem}</div>}
+
+                {groupedPerms.length === 0 && <div style={{ color: C.muted }}>{t.noPermsMatch}</div>}
+                {groupedPerms.map(({ g, list }) => {
+                  const keys = list.map((p) => p.key);
+                  const onCount = keys.filter((k) => (draft[sel.id] || []).includes(k)).length;
+                  const isCol = !!collapsed[g.key];
+                  return (
+                    <div key={g.key} style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, marginTop: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <button onClick={() => setCollapsed((c) => ({ ...c, [g.key]: !c[g.key] }))} style={{ ...ghost, padding: '2px 7px' }}>{isCol ? '▸' : '▾'}</button>
+                        <strong style={{ fontSize: 13.5 }}>{groupLabel(g)}</strong>
+                        <span style={{ color: C.muted, fontSize: 12 }}>{onCount}/{keys.length}</span>
+                        {!sel.isSystem && (
+                          <span style={{ display: 'inline-flex', gap: 6, marginInlineStart: 'auto' }}>
+                            <button onClick={() => setMany(sel.id, keys, true, sel.isSystem)} style={{ ...ghost, padding: '2px 8px', fontSize: 12 }}>{t.selAll}</button>
+                            <button onClick={() => setMany(sel.id, keys, false, sel.isSystem)} style={{ ...ghost, padding: '2px 8px', fontSize: 12 }}>{t.selNone}</button>
+                          </span>
+                        )}
+                      </div>
+                      {!isCol && (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {list.map((p) => {
+                            const on = (draft[sel.id] || []).includes(p.key);
+                            return (
+                              <button
+                                key={p.key}
+                                disabled={sel.isSystem}
+                                onClick={() => toggle(sel.id, p.key, sel.isSystem)}
+                                title={p.key}
+                                style={{ ...(on ? btn(C.blue) : ghost), opacity: sel.isSystem ? 0.6 : 1, cursor: sel.isSystem ? 'default' : 'pointer' }}
+                              >
+                                {permLabel(p)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
         </div>
-      ))}
+      )}
     </>
   );
 }

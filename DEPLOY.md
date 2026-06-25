@@ -145,11 +145,48 @@ journalctl -u jira-monitor-web -n 50         # سجلّ الويب
 
 ## 8) التحديث بعد commits جديدة
 
+> البنية الحالية **خدمات مصغّرة عبر Docker Compose** (web · api · worker · db).
+> ملفات systemd القديمة (`jira-monitor-web/poll`) لم تعد مُستخدَمة.
+
 ```bash
 cd /GHProjects/jira-monitor
 bash scripts/deploy.sh
 ```
-السكربت: يسحب الفرع، `npm ci`، `npm run build`، ثم يعيد تشغيل الخدمتين.
+السكربت: يسحب الفرع، يعيد بناء الصور، يشغّل `docker compose up -d --build`
+(تُجرى الهجرة تلقائياً عبر خدمة `migrate`)، ثم يشغّل `seed-admin` لإضافة أي صلاحيات جديدة.
+
+> أول مرّة فقط (تحويل من systemd إلى Docker)؟ راجع §8أ أدناه لنقل بياناتك القائمة.
+
+---
+
+## 8أ) التحويل لمرّة واحدة من systemd إلى Docker (مع الحفاظ على البيانات)
+
+```bash
+cd /GHProjects/jira-monitor
+
+# 1) أوقف خدمات systemd القديمة وحرّر المنفذ 4445
+sudo systemctl disable --now jira-monitor-web jira-monitor-poll || true
+
+# 2) خذ نسخة من قاعدة بياناتك الحالية (عدّل الاسم/المستخدم إن لزم)
+mysqldump -u jira_monitor -p jira_monitor > /root/jm-backup.sql
+
+# 3) جهّز ملف بيئة Docker (احتفظ بأسرارك، واجعل منفذ الويب 4445 ليطابق nginx)
+cp .env.docker.example .env
+nano .env     # DB_PASSWORD · SESSION_SECRET · SYNC_SECRET · WEBHOOK_SECRET · WEB_PORT=4445
+
+# 4) أقلِع الخدمات (تُنشئ قاعدة بيانات الحاوية وتُجري الهجرة)
+docker compose up -d --build
+
+# 5) استورد بياناتك القديمة داخل حاوية القاعدة، ثم أعد الهجرة لأي أعمدة جديدة
+docker compose exec -T db mysql -uroot -p"$DB_PASSWORD" jira_monitor < /root/jm-backup.sql
+docker compose run --rm api node /app/packages/core/scripts/migrate.js
+docker compose run --rm api node /app/packages/core/scripts/seed-admin.js
+
+# 6) صور الهوية (uploads) إن كانت لديك — انسخها إلى حجم الحاوية
+docker compose cp services/api/uploads/. api:/app/services/api/uploads/ 2>/dev/null || true
+```
+
+> nginx يبقى كما هو (يوجّه إلى 4445). فعّل `COOKIE_SECURE=true` في `.env` فقط بعد HTTPS.
 
 ---
 

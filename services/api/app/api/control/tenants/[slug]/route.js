@@ -1,12 +1,12 @@
 import { handler, ok, fail } from '@/lib/http';
-import { requireSuperAdmin } from '@/lib/control-auth';
+import { requireControlPermission } from '@/lib/control-auth';
 import { getOrgDetail, updateOrg, deleteOrg } from '@/lib/orgs';
 
 export const dynamic = 'force-dynamic';
 
 // تفصيل مستأجر + إحصاءاته الحيّة.
 export const GET = handler(async (req, { params }) => {
-  await requireSuperAdmin();
+  await requireControlPermission('manage_tenants');
   const org = await getOrgDetail(params.slug);
   if (!org) return fail('المستأجر غير موجود', 404);
   return ok({ org });
@@ -14,7 +14,7 @@ export const GET = handler(async (req, { params }) => {
 
 // تحديث: الحالة (active/suspended) · الخطة · الحصص · الوحدات.
 export const PATCH = handler(async (req, { params }) => {
-  await requireSuperAdmin();
+  await requireControlPermission('manage_tenants');
   const b = await req.json().catch(() => ({}));
   if (b.status && !['active', 'suspended'].includes(b.status)) {
     return fail('حالة غير صالحة', 400);
@@ -26,7 +26,7 @@ export const PATCH = handler(async (req, { params }) => {
 
 // حذف المستأجر وقاعدته (مدمّر). يتطلّب تأكيداً بالـ slug في الجسم.
 export const DELETE = handler(async (req, { params }) => {
-  await requireSuperAdmin();
+  await requireControlPermission('manage_tenants');
   const b = await req.json().catch(() => ({}));
   if (b.confirm !== params.slug) {
     return fail('للحذف أرسل { "confirm": "<slug>" } مطابقاً.', 400);

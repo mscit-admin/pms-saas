@@ -1,5 +1,5 @@
 import { handler, ok, fail } from '@/lib/http';
-import { requireSuperAdmin } from '@/lib/control-auth';
+import { requireControlPermission } from '@/lib/control-auth';
 import { findOrgBySlug, runInTenant } from '@/lib/tenancy';
 import { seedTenantAdmin } from '@/lib/provision';
 
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 // إنشاء/إعادة تعيين مستخدم أدمن داخل مستأجر (idempotent).
 export const POST = handler(async (req, { params }) => {
-  await requireSuperAdmin();
+  await requireControlPermission('manage_tenants');
   const b = await req.json().catch(() => ({}));
   if (!b.password) return fail('كلمة المرور مطلوبة', 400);
   const org = await findOrgBySlug(params.slug);

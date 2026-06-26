@@ -43,6 +43,31 @@ export async function listOrgs() {
   return rows.map(shape);
 }
 
+// إحصاءات لوحة المعلومات: عدّ المستأجرين والخطط + مجموع المستخدمين/المشاريع
+// عبر كل قاعدة مستأجر نشط (عدد المستأجرين صغير عادةً).
+export async function overviewStats() {
+  const orgs = await listOrgs();
+  const byStatus = {};
+  const byPlan = {};
+  for (const o of orgs) {
+    byStatus[o.status] = (byStatus[o.status] || 0) + 1;
+    byPlan[o.plan] = (byPlan[o.plan] || 0) + 1;
+  }
+  let users = 0;
+  let projects = 0;
+  for (const o of orgs.filter((x) => x.status === 'active')) {
+    try {
+      const r = await runInTenant({ slug: o.slug, dbName: o.dbName }, async () => {
+        const [u] = await query('SELECT COUNT(*) AS n FROM users');
+        const [p] = await query('SELECT COUNT(*) AS n FROM projects');
+        return { u: u.n, p: p.n };
+      });
+      users += r.u; projects += r.p;
+    } catch { /* قاعدة غير جاهزة */ }
+  }
+  return { total: orgs.length, byStatus, byPlan, users, projects };
+}
+
 // تفصيل منظمة + إحصاءات حيّة من قاعدتها (عدد المستخدمين/المشاريع).
 export async function getOrgDetail(slug) {
   const rows = await controlQuery(`SELECT ${SELECT_COLS} FROM organizations WHERE slug = :slug`, { slug });

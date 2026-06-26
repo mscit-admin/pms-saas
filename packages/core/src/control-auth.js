@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { controlQuery } from './control-db.js';
 import { getRequestCookie, queueResponseCookie } from './cookies.js';
+import { getAdminPermissions, CONTROL_PERMISSION_KEYS } from './control-admins.js';
 
 export const CONTROL_COOKIE = 'pms_control_session';
 const SESSION_HOURS = 8;
@@ -61,7 +62,8 @@ export async function getCurrentSuperAdmin() {
   );
   const a = rows[0];
   if (!a) return null;
-  return { id: a.id, username: a.username, fullName: a.full_name };
+  const permissions = await getAdminPermissions(a.id);
+  return { id: a.id, username: a.username, fullName: a.full_name, permissions };
 }
 
 export class ControlAuthError extends Error {
@@ -71,6 +73,15 @@ export class ControlAuthError extends Error {
 export async function requireSuperAdmin() {
   const admin = await getCurrentSuperAdmin();
   if (!admin) throw new ControlAuthError('يلزم تسجيل دخول المشرف الأعلى', 401);
+  return admin;
+}
+
+// يتطلّب صلاحية مشرف محدّدة (يرمي 403 إن غابت).
+export async function requireControlPermission(key) {
+  const admin = await requireSuperAdmin();
+  if (!admin.permissions.includes(key)) {
+    throw new ControlAuthError('ليست لديك صلاحية لهذا الإجراء', 403);
+  }
   return admin;
 }
 
@@ -86,7 +97,7 @@ export async function verifyControlLogin(username, password) {
   return { id: a.id, username: a.username };
 }
 
-// بذر/تحديث مشرف أعلى (idempotent) — يُستدعى من الإقلاع والسكربت.
+// بذر/تحديث مشرف أعلى «مالك» بكل الصلاحيات (idempotent) — من الإقلاع/السكربت.
 export async function seedControlAdmin({ username, password, fullName = 'Super Admin' }) {
   if (!username || !password) return false;
   const hash = await bcrypt.hash(password, 10);
@@ -96,5 +107,15 @@ export async function seedControlAdmin({ username, password, fullName = 'Super A
      ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), full_name = VALUES(full_name), is_active = 1`,
     { u: username, f: fullName, h: hash }
   );
+  const rows = await controlQuery('SELECT id FROM control_admins WHERE username = :u', { u: username });
+  const id = rows[0]?.id;
+  if (id) {
+    for (const k of CONTROL_PERMISSION_KEYS) {
+      await controlQuery(
+        'INSERT IGNORE INTO control_admin_permissions (admin_id, permission_key) VALUES (:id, :k)',
+        { id, k }
+      );
+    }
+  }
   return true;
 }

@@ -1,5 +1,5 @@
 import { handler, ok, fail } from '@/lib/http';
-import { requireSuperAdmin } from '@/lib/control-auth';
+import { requireControlPermission } from '@/lib/control-auth';
 import { listOrgs, updateOrg } from '@/lib/orgs';
 import { provisionTenant } from '@/lib/provision';
 import { isValidSlug, isSlugAvailable } from '@/lib/tenancy';
@@ -8,13 +8,13 @@ export const dynamic = 'force-dynamic';
 
 // سرد كل المستأجرين.
 export const GET = handler(async () => {
-  await requireSuperAdmin();
+  await requireControlPermission('manage_tenants');
   return ok({ items: await listOrgs() });
 });
 
 // إضافة مستأجر جديد: توفير قاعدة + أدمن، ثم تطبيق الخطة/الحصص/الوحدات.
 export const POST = handler(async (req) => {
-  await requireSuperAdmin();
+  await requireControlPermission('manage_tenants');
   const b = await req.json().catch(() => ({}));
   const slug = String(b.slug || '').toLowerCase().trim();
   if (!isValidSlug(slug)) return fail('النطاق الفرعي غير صالح (حروف صغيرة وأرقام وشَرطات).', 400);

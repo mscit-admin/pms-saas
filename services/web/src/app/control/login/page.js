@@ -67,8 +67,12 @@ export default function ControlLogin() {
     }
   }
 
+  const bgStyle = brand?.loginBackground
+    ? { backgroundImage: `linear-gradient(rgba(0,0,0,.45), rgba(0,0,0,.45)), url(/api/control/branding/asset/login_background?v=${brand.ts || ''})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : null;
+
   return (
-    <div dir={t.dir} style={{ ...THEME_VARS[theme], ...S.wrap }}>
+    <div dir={t.dir} style={{ ...THEME_VARS[theme], ...S.wrap, ...bgStyle }}>
       <div style={S.topBar}>
         <button style={S.iconBtn} onClick={toggleTheme} title="theme">{theme === 'dark' ? '☀' : '☾'}</button>
         <button style={S.langBtn} onClick={toggleLang}>{t.other}</button>

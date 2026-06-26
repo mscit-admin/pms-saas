@@ -2,7 +2,7 @@
 import { controlQuery } from './control-db.js';
 import { getControlSettings } from './control-settings.js';
 
-export const CONTROL_BRAND_TYPES = ['logo', 'favicon'];
+export const CONTROL_BRAND_TYPES = ['logo', 'favicon', 'login_background'];
 export const isControlBrandType = (t) => CONTROL_BRAND_TYPES.includes(t);
 
 export async function saveControlAsset(type, buffer, mime) {
@@ -34,6 +34,7 @@ export async function controlBrandManifest() {
   return {
     logo: !!have.logo,
     favicon: !!have.favicon,
+    loginBackground: !!have.login_background,
     platformName: s.platformName,
     accent: s.accent,
     ts: String(ts),

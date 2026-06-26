@@ -21,7 +21,7 @@ const T = {
     confirmDel: (s) => `للحذف النهائي اكتب الـ slug: ${s}`,
     tabs: { branding: 'الهوية البصرية', admins: 'المشرفون', perms: 'الصلاحيات' },
     platformName: 'اسم المنصّة', accent: 'اللون الأساسي', logoUrl: 'رابط الشعار', saved: 'تم الحفظ ✓',
-    logoLbl: 'الشعار', faviconLbl: 'الأيقونة (Favicon)', choose: 'اختر صورة…', remove: 'إزالة', uploading: 'جارٍ الرفع…', noImg: 'لا صورة',
+    logoLbl: 'الشعار', faviconLbl: 'الأيقونة (Favicon)', loginBgLbl: 'خلفية شاشة الدخول', choose: 'اختر صورة…', remove: 'إزالة', uploading: 'جارٍ الرفع…', noImg: 'لا صورة',
     addAdmin: '＋ إضافة مشرف', username: 'اسم المستخدم', password: 'كلمة المرور', fullName: 'الاسم الكامل',
     deactivate: 'تعطيل', adminActive: 'مفعّل', adminInactive: 'معطّل', savePerms: 'حفظ الصلاحيات',
     mUsers: 'المستخدمون', mRoles: 'الأدوار', addUser: '＋ مستخدم', addRole: '＋ دور',
@@ -42,7 +42,7 @@ const T = {
     confirmDel: (s) => `To permanently delete, type the slug: ${s}`,
     tabs: { branding: 'Branding', admins: 'Admins', perms: 'Permissions' },
     platformName: 'Platform name', accent: 'Accent color', logoUrl: 'Logo URL', saved: 'Saved ✓',
-    logoLbl: 'Logo', faviconLbl: 'Favicon', choose: 'Choose image…', remove: 'Remove', uploading: 'Uploading…', noImg: 'No image',
+    logoLbl: 'Logo', faviconLbl: 'Favicon', loginBgLbl: 'Login background', choose: 'Choose image…', remove: 'Remove', uploading: 'Uploading…', noImg: 'No image',
     addAdmin: '＋ Add admin', username: 'Username', password: 'Password', fullName: 'Full name',
     deactivate: 'Deactivate', adminActive: 'Active', adminInactive: 'Disabled', savePerms: 'Save permissions',
     mUsers: 'Users', mRoles: 'Roles', addUser: '＋ User', addRole: '＋ Role',
@@ -409,6 +409,7 @@ function BrandingTab({ t, onError, onBrandChange }) {
       <div style={S.brandImgs}>
         <ImageUpload t={t} label={t.logoLbl} type="logo" onError={onError} onChange={onBrandChange} />
         <ImageUpload t={t} label={t.faviconLbl} type="favicon" onError={onError} onChange={onBrandChange} />
+        <ImageUpload t={t} label={t.loginBgLbl} type="login_background" onError={onError} onChange={onBrandChange} />
       </div>
     </form>
   );

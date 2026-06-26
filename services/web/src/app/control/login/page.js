@@ -20,6 +20,7 @@ export default function ControlLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [brand, setBrand] = useState(null);
   const t = T[lang];
 
   useEffect(() => {
@@ -27,7 +28,17 @@ export default function ControlLogin() {
     if (sl === 'ar' || sl === 'en') setLang(sl);
     const th = localStorage.getItem('controlTheme');
     if (th === 'light' || th === 'dark') setTheme(th);
+    fetch('/api/control/branding/manifest')
+      .then((r) => r.json()).then((j) => { if (j.ok) setBrand(j.data); }).catch(() => {});
   }, []);
+
+  // أيقونة التبويب من هوية المنصّة
+  useEffect(() => {
+    if (!brand?.favicon) return;
+    let link = document.querySelector("link[rel='icon']");
+    if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+    link.href = `/api/control/branding/asset/favicon?v=${brand.ts || ''}`;
+  }, [brand]);
   function toggleLang() {
     const n = lang === 'ar' ? 'en' : 'ar';
     setLang(n); localStorage.setItem('controlLang', n);
@@ -63,7 +74,8 @@ export default function ControlLogin() {
         <button style={S.langBtn} onClick={toggleLang}>{t.other}</button>
       </div>
       <form onSubmit={submit} style={S.card}>
-        <h1 style={S.title}>{t.title}</h1>
+        {brand?.logo && <img src={`/api/control/branding/asset/logo?v=${brand.ts || ''}`} alt="logo" style={S.logo} />}
+        <h1 style={S.title}>{brand?.platformName || t.title}</h1>
         <p style={S.sub}>{t.sub}</p>
         <input style={S.input} placeholder={t.user} value={username}
           onChange={(e) => setUsername(e.target.value)} autoFocus />
@@ -82,6 +94,7 @@ const S = {
   iconBtn: { background: 'transparent', color: 'var(--c-text)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '6px 11px', fontSize: 14, cursor: 'pointer', lineHeight: 1 },
   langBtn: { background: 'transparent', color: 'var(--c-text)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer' },
   card: { width: 340, background: 'var(--c-panel)', border: '1px solid var(--c-border)', borderRadius: 14, padding: 28, display: 'flex', flexDirection: 'column', gap: 12, boxShadow: '0 10px 40px rgba(0,0,0,.25)' },
+  logo: { maxHeight: 48, maxWidth: 200, objectFit: 'contain', alignSelf: 'center', marginBottom: 4 },
   title: { color: 'var(--c-text)', margin: 0, fontSize: 20, textAlign: 'center' },
   sub: { color: 'var(--c-muted)', margin: '0 0 8px', fontSize: 13, textAlign: 'center' },
   input: { padding: '11px 13px', borderRadius: 9, border: '1px solid var(--c-border)', background: 'var(--c-input)', color: 'var(--c-text)', fontSize: 14, outline: 'none' },

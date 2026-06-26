@@ -21,6 +21,7 @@ const T = {
     confirmDel: (s) => `للحذف النهائي اكتب الـ slug: ${s}`,
     tabs: { branding: 'الهوية البصرية', admins: 'المشرفون', perms: 'الصلاحيات' },
     platformName: 'اسم المنصّة', accent: 'اللون الأساسي', logoUrl: 'رابط الشعار', saved: 'تم الحفظ ✓',
+    logoLbl: 'الشعار', faviconLbl: 'الأيقونة (Favicon)', choose: 'اختر صورة…', remove: 'إزالة', uploading: 'جارٍ الرفع…', noImg: 'لا صورة',
     addAdmin: '＋ إضافة مشرف', username: 'اسم المستخدم', password: 'كلمة المرور', fullName: 'الاسم الكامل',
     deactivate: 'تعطيل', adminActive: 'مفعّل', adminInactive: 'معطّل', savePerms: 'حفظ الصلاحيات',
     mUsers: 'المستخدمون', mRoles: 'الأدوار', addUser: '＋ مستخدم', addRole: '＋ دور',
@@ -41,6 +42,7 @@ const T = {
     confirmDel: (s) => `To permanently delete, type the slug: ${s}`,
     tabs: { branding: 'Branding', admins: 'Admins', perms: 'Permissions' },
     platformName: 'Platform name', accent: 'Accent color', logoUrl: 'Logo URL', saved: 'Saved ✓',
+    logoLbl: 'Logo', faviconLbl: 'Favicon', choose: 'Choose image…', remove: 'Remove', uploading: 'Uploading…', noImg: 'No image',
     addAdmin: '＋ Add admin', username: 'Username', password: 'Password', fullName: 'Full name',
     deactivate: 'Deactivate', adminActive: 'Active', adminInactive: 'Disabled', savePerms: 'Save permissions',
     mUsers: 'Users', mRoles: 'Roles', addUser: '＋ User', addRole: '＋ Role',
@@ -68,13 +70,27 @@ export default function ControlPanel() {
   const [featureKeys, setFeatureKeys] = useState([]);
   const [ctrlPerms, setCtrlPerms] = useState([]);
   const [view, setView] = useState('dashboard');
+  const [brand, setBrand] = useState(null);
   const [error, setError] = useState('');
   const t = T[lang];
+
+  const loadBrand = useCallback(async () => {
+    try { setBrand(await api('/branding/manifest', undefined, T.ar)); } catch { /* تجاهل */ }
+  }, []);
 
   useEffect(() => {
     const sl = localStorage.getItem('controlLang'); if (sl === 'ar' || sl === 'en') setLang(sl);
     const th = localStorage.getItem('controlTheme'); if (th === 'light' || th === 'dark') setTheme(th);
-  }, []);
+    loadBrand();
+  }, [loadBrand]);
+
+  // أيقونة التبويب (favicon) من هوية المنصّة
+  useEffect(() => {
+    if (!brand?.favicon) return;
+    let link = document.querySelector("link[rel='icon']");
+    if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+    link.href = `/api/control/branding/asset/favicon?v=${brand.ts || ''}`;
+  }, [brand]);
 
   useEffect(() => {
     (async () => {
@@ -105,9 +121,13 @@ export default function ControlPanel() {
   ].filter((i) => i.show);
 
   return (
-    <div dir={t.dir} style={{ ...THEME_VARS[theme], ...S.app }}>
+    <div dir={t.dir} style={{ ...THEME_VARS[theme], ...(brand?.accent ? { '--c-accent': brand.accent } : {}), ...S.app }}>
       <aside style={S.sidebar}>
-        <div style={S.logo}>PMS</div>
+        <div style={S.logo}>
+          {brand?.logo
+            ? <img src={`/api/control/branding/asset/logo?v=${brand.ts || ''}`} alt="logo" style={S.logoImg} />
+            : (brand?.platformName || 'PMS')}
+        </div>
         <nav style={S.nav}>
           {items.map((i) => (
             <button key={i.key} onClick={() => setView(i.key)}
@@ -137,7 +157,7 @@ export default function ControlPanel() {
           {view === 'none' && <div style={S.empty}>{t.noAccess}</div>}
           {view === 'dashboard' && <DashboardView t={t} onError={setError} />}
           {view === 'clients' && <ClientsView t={t} featureKeys={featureKeys} onError={setError} />}
-          {view === 'settings' && <SettingsView t={t} can={can} ctrlPerms={ctrlPerms} meId={me?.id} onError={setError} />}
+          {view === 'settings' && <SettingsView t={t} can={can} ctrlPerms={ctrlPerms} meId={me?.id} onError={setError} onBrandChange={loadBrand} />}
         </main>
       </div>
     </div>
@@ -355,7 +375,7 @@ function ManageTenant({ t, slug, onError }) {
 }
 
 // ============ الإعدادات ============
-function SettingsView({ t, can, ctrlPerms, meId, onError }) {
+function SettingsView({ t, can, ctrlPerms, meId, onError, onBrandChange }) {
   const tabs = [
     can('manage_branding') && { key: 'branding', label: t.tabs.branding },
     can('manage_admins') && { key: 'admins', label: t.tabs.admins },
@@ -365,29 +385,79 @@ function SettingsView({ t, can, ctrlPerms, meId, onError }) {
   return (
     <>
       <div style={S.tabBar}>{tabs.map((x) => <button key={x.key} style={{ ...S.tab, ...(tab === x.key ? S.tabOn : {}) }} onClick={() => setTab(x.key)}>{x.label}</button>)}</div>
-      {tab === 'branding' && <BrandingTab t={t} onError={onError} />}
+      {tab === 'branding' && <BrandingTab t={t} onError={onError} onBrandChange={onBrandChange} />}
       {(tab === 'admins' || tab === 'perms') && <AdminsTab t={t} ctrlPerms={ctrlPerms} meId={meId} permsMode={tab === 'perms'} onError={onError} />}
     </>
   );
 }
 
-function BrandingTab({ t, onError }) {
+function BrandingTab({ t, onError, onBrandChange }) {
   const [s, setS2] = useState(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => { api('/settings', undefined, t).then(setS2).catch((e) => onError(e.message)); }, []); // eslint-disable-line
   if (!s) return <div style={S.empty}>…</div>;
   async function save(e) {
     e.preventDefault(); onError(''); setSaved(false);
-    try { const d = await api('/settings', { method: 'PUT', body: JSON.stringify(s) }, t); setS2(d); setSaved(true); }
+    try { const d = await api('/settings', { method: 'PUT', body: JSON.stringify({ platformName: s.platformName, accent: s.accent }) }, t); setS2({ ...s, ...d }); setSaved(true); onBrandChange?.(); }
     catch (e2) { onError(e2.message); }
   }
   return (
     <form onSubmit={save} style={S.formCol}>
       <Field label={t.platformName}><input style={S.input} value={s.platformName} onChange={(e) => setS2({ ...s, platformName: e.target.value })} /></Field>
-      <Field label={t.accent}><input style={{ ...S.input, height: 40 }} type="color" value={s.accent || '#2f81f7'} onChange={(e) => setS2({ ...s, accent: e.target.value })} /></Field>
-      <Field label={t.logoUrl}><input style={S.input} value={s.logoUrl} onChange={(e) => setS2({ ...s, logoUrl: e.target.value })} placeholder="https://…/logo.png" /></Field>
+      <Field label={t.accent}><input style={{ ...S.input, height: 40, padding: 4 }} type="color" value={s.accent || '#2f81f7'} onChange={(e) => setS2({ ...s, accent: e.target.value })} /></Field>
       <div style={S.addActions}><button style={S.primaryBtn}>{t.save}</button>{saved && <span style={S.savedMsg}>{t.saved}</span>}</div>
+      <div style={S.brandImgs}>
+        <ImageUpload t={t} label={t.logoLbl} type="logo" onError={onError} onChange={onBrandChange} />
+        <ImageUpload t={t} label={t.faviconLbl} type="favicon" onError={onError} onChange={onBrandChange} />
+      </div>
     </form>
+  );
+}
+
+// رفع/معاينة/إزالة صورة (شعار أو أيقونة) عبر مسارات هوية المنصّة.
+function ImageUpload({ t, label, type, onError, onChange }) {
+  const [ver, setVer] = useState(() => Date.now());
+  const [exists, setExists] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const src = `/api/control/branding/asset/${type}?v=${ver}`;
+
+  async function upload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true); onError('');
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch(`/api/control/branding/${type}`, { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || t.err);
+      setExists(true); setVer(Date.now()); onChange?.();
+    } catch (e2) { onError(e2.message); } finally { setBusy(false); e.target.value = ''; }
+  }
+  async function remove() {
+    setBusy(true); onError('');
+    try {
+      const res = await fetch(`/api/control/branding/${type}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || t.err);
+      setExists(false); setVer(Date.now()); onChange?.();
+    } catch (e2) { onError(e2.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={S.imgCard}>
+      <div style={S.fieldLabel}>{label}</div>
+      <div style={S.imgPreview}>
+        {exists
+          ? <img src={src} alt={type} style={S.imgEl} onError={() => setExists(false)} />
+          : <span style={S.muted}>{t.noImg}</span>}
+      </div>
+      <div style={S.imgActions}>
+        <label style={S.uploadBtn}>{busy ? t.uploading : t.choose}
+          <input type="file" accept="image/*" onChange={upload} style={{ display: 'none' }} disabled={busy} />
+        </label>
+        <button type="button" style={S.ghostBtn} onClick={remove} disabled={busy}>{t.remove}</button>
+      </div>
+    </div>
   );
 }
 
@@ -454,6 +524,7 @@ const S = {
   app: { minHeight: '100vh', display: 'flex', background: 'var(--c-bg)', color: 'var(--c-text)', fontFamily: 'system-ui, sans-serif' },
   sidebar: { width: 210, flexShrink: 0, background: 'var(--c-side)', borderInlineEnd: '1px solid var(--c-border)', display: 'flex', flexDirection: 'column', padding: '16px 12px' },
   logo: { fontSize: 20, fontWeight: 800, color: 'var(--c-accent)', padding: '4px 10px 16px' },
+  logoImg: { maxHeight: 36, maxWidth: 150, objectFit: 'contain' },
   nav: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1 },
   navItem: { display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', color: 'var(--c-text)', border: 'none', borderRadius: 9, padding: '10px 12px', fontSize: 14, cursor: 'pointer', textAlign: 'start', width: '100%' },
   navActive: { background: 'var(--c-hover)', fontWeight: 700 },
@@ -499,6 +570,12 @@ const S = {
   iconBtn: { background: 'transparent', color: 'var(--c-text)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '7px 11px', fontSize: 14, cursor: 'pointer', lineHeight: 1, flex: 1 },
   dangerBtn: { background: 'transparent', color: '#ff8087', border: '1px solid #5a2730', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' },
   savedMsg: { color: '#3fb950', fontSize: 13 },
+  brandImgs: { display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6 },
+  imgCard: { background: 'var(--c-panel)', border: '1px solid var(--c-border)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, width: 200 },
+  imgPreview: { height: 80, display: 'grid', placeItems: 'center', background: 'var(--c-input)', border: '1px solid var(--c-border)', borderRadius: 8 },
+  imgEl: { maxHeight: 64, maxWidth: 170, objectFit: 'contain' },
+  imgActions: { display: 'flex', gap: 8, alignItems: 'center' },
+  uploadBtn: { background: 'var(--c-accent)', color: '#fff', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'center', flex: 1 },
   tabBar: { display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid var(--c-border)' },
   tab: { background: 'transparent', color: 'var(--c-muted)', border: 'none', borderBottom: '2px solid transparent', padding: '8px 14px', fontSize: 14, cursor: 'pointer' },
   tabOn: { color: 'var(--c-text)', borderBottomColor: 'var(--c-accent)', fontWeight: 700 },

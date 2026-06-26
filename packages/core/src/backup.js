@@ -46,12 +46,18 @@ function demux(buf) {
   return { stdout: Buffer.concat(out), stderr: Buffer.concat(errs).toString() };
 }
 
+// اختيار دقيق لحاوية قاعدة بيانات المنصّة (المضيف قد يشغّل حاويات أخرى).
 async function findDbContainerId() {
   const list = await sockJson('GET', '/containers/json');
-  const c = list.find((x) => {
-    const n = (x.Names[0] || '');
-    return n.includes('pms-saas-db') || /(^|[-/])db([-_]|$)/.test(n);
-  });
+  const byName = (sub) => list.find((x) => (x.Names || []).some((n) => n.includes(sub)));
+  const want = process.env.DB_CONTAINER; // تجاوز اختياري (اسم أو معرّف)
+  let c = null;
+  if (want) c = byName(want) || list.find((x) => x.Id.startsWith(want));
+  // اسم حاوية compose القياسي: <project>-db-1 (المشروع pms-saas)
+  c = c || byName('pms-saas-db');
+  // احتياط عبر وسوم compose: الخدمة db ضمن مشروع يحوي "pms"
+  c = c || list.find((x) => x.Labels?.['com.docker.compose.service'] === 'db'
+    && /pms/i.test(x.Labels?.['com.docker.compose.project'] || ''));
   return c?.Id || null;
 }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 
-// لوحة المشرف الأعلى (ثنائية اللغة) — إضافة/إدارة المستأجرين: الحالة، الخطة، الحصص، الوحدات، الأدمن.
+// لوحة المشرف الأعلى — ثنائية اللغة (عربي/إنجليزي) + وضع فاتح/داكن.
 const PLANS = ['trial', 'basic', 'pro', 'enterprise'];
 
 // قاموس الترجمة عربي/إنجليزي
@@ -20,7 +20,7 @@ const T = {
     save: 'حفظ', suspend: 'تعليق', activate: 'تفعيل', resetAdmin: 'كلمة مرور الأدمن', del: 'حذف',
     newPwFor: (s) => `كلمة مرور جديدة لأدمن «${s}»:`, pwUpdated: 'تم تحديث كلمة مرور الأدمن.',
     confirmDel: (s) => `للحذف النهائي اكتب الـ slug: ${s}`,
-    invalidResp: 'استجابة غير صالحة', err: 'خطأ', needSuper: 'المشرف',
+    invalidResp: 'استجابة غير صالحة', err: 'خطأ',
   },
   en: {
     dir: 'ltr', other: 'العربية',
@@ -35,7 +35,21 @@ const T = {
     save: 'Save', suspend: 'Suspend', activate: 'Activate', resetAdmin: 'Admin password', del: 'Delete',
     newPwFor: (s) => `New password for "${s}" admin:`, pwUpdated: 'Admin password updated.',
     confirmDel: (s) => `To permanently delete, type the slug: ${s}`,
-    invalidResp: 'Invalid response', err: 'Error', needSuper: 'admin',
+    invalidResp: 'Invalid response', err: 'Error',
+  },
+};
+
+// متغيّرات الألوان حسب الوضع (تتوارثها كل العناصر عبر CSS custom properties)
+const THEME_VARS = {
+  dark: {
+    '--c-bg': '#0f141b', '--c-panel': '#1a212b', '--c-border': '#2b3543',
+    '--c-text': '#e8eef5', '--c-muted': '#8da2b8', '--c-input': '#0f141b',
+    '--c-accent': '#2f81f7', '--c-slug': '#7cc4ff',
+  },
+  light: {
+    '--c-bg': '#f4f6f9', '--c-panel': '#ffffff', '--c-border': '#d8dee6',
+    '--c-text': '#1b2430', '--c-muted': '#5c6b7a', '--c-input': '#ffffff',
+    '--c-accent': '#2f81f7', '--c-slug': '#1769d6',
   },
 };
 
@@ -51,6 +65,7 @@ async function api(path, opts, t) {
 
 export default function ControlPanel() {
   const [lang, setLang] = useState('ar');
+  const [theme, setTheme] = useState('dark');
   const [me, setMe] = useState(null);
   const [featureKeys, setFeatureKeys] = useState([]);
   const [tenants, setTenants] = useState([]);
@@ -61,10 +76,16 @@ export default function ControlPanel() {
   useEffect(() => {
     const sl = localStorage.getItem('controlLang');
     if (sl === 'ar' || sl === 'en') setLang(sl);
+    const th = localStorage.getItem('controlTheme');
+    if (th === 'light' || th === 'dark') setTheme(th);
   }, []);
   function toggleLang() {
     const n = lang === 'ar' ? 'en' : 'ar';
     setLang(n); localStorage.setItem('controlLang', n);
+  }
+  function toggleTheme() {
+    const n = theme === 'dark' ? 'light' : 'dark';
+    setTheme(n); localStorage.setItem('controlTheme', n);
   }
 
   const reload = useCallback(async () => {
@@ -91,10 +112,11 @@ export default function ControlPanel() {
   }
 
   return (
-    <div dir={t.dir} style={S.page}>
+    <div dir={t.dir} style={{ ...THEME_VARS[theme], ...S.page }}>
       <header style={S.header}>
         <div style={S.brand}>{t.brand}</div>
         <div style={S.headerRight}>
+          <button style={S.iconBtn} onClick={toggleTheme} title="theme">{theme === 'dark' ? '☀' : '☾'}</button>
           <button style={S.ghostBtn} onClick={toggleLang}>{t.other}</button>
           {me && <span style={S.who}>{me.username}</span>}
           <button style={S.ghostBtn} onClick={logout}>{t.signout}</button>
@@ -248,37 +270,39 @@ function Field({ label, children }) {
   return <label style={S.field}><span style={S.fieldLabel}>{label}</span>{children}</label>;
 }
 
+// الأنماط تستعمل متغيّرات CSS (var(--c-*)) فتتبدّل مع الوضع تلقائياً.
 const S = {
-  page: { minHeight: '100vh', background: '#0f141b', color: '#e8eef5', fontFamily: 'system-ui, sans-serif' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 22px', borderBottom: '1px solid #2b3543', background: '#1a212b' },
+  page: { minHeight: '100vh', background: 'var(--c-bg)', color: 'var(--c-text)', fontFamily: 'system-ui, sans-serif', transition: 'background .2s, color .2s' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 22px', borderBottom: '1px solid var(--c-border)', background: 'var(--c-panel)' },
   brand: { fontSize: 17, fontWeight: 700 },
-  headerRight: { display: 'flex', gap: 12, alignItems: 'center' },
-  who: { color: '#8da2b8', fontSize: 13 },
+  headerRight: { display: 'flex', gap: 10, alignItems: 'center' },
+  who: { color: 'var(--c-muted)', fontSize: 13 },
   main: { maxWidth: 1100, margin: '0 auto', padding: '22px' },
   errorBar: { background: '#7a2230', color: '#fff', padding: '10px 22px', cursor: 'pointer', fontSize: 14 },
-  h2: { fontSize: 16, margin: '22px 0 12px', color: '#cdd9e6' },
+  h2: { fontSize: 16, margin: '22px 0 12px', color: 'var(--c-text)' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: 14 },
-  empty: { color: '#8da2b8', padding: 20 },
-  addBtn: { background: '#2f81f7', color: '#fff', border: 'none', borderRadius: 9, padding: '11px 18px', fontSize: 15, fontWeight: 600, cursor: 'pointer' },
-  addCard: { background: '#1a212b', border: '1px solid #2b3543', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 12 },
+  empty: { color: 'var(--c-muted)', padding: 20 },
+  addBtn: { background: 'var(--c-accent)', color: '#fff', border: 'none', borderRadius: 9, padding: '11px 18px', fontSize: 15, fontWeight: 600, cursor: 'pointer' },
+  addCard: { background: 'var(--c-panel)', border: '1px solid var(--c-border)', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 12 },
   addRow: { display: 'flex', gap: 12, flexWrap: 'wrap' },
   addActions: { display: 'flex', gap: 10, marginTop: 4 },
-  card: { background: '#1a212b', border: '1px solid #2b3543', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 },
+  card: { background: 'var(--c-panel)', border: '1px solid var(--c-border)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 },
   cardHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
-  slug: { fontSize: 16, fontWeight: 700, color: '#7cc4ff' },
-  name: { fontSize: 13, color: '#8da2b8' },
+  slug: { fontSize: 16, fontWeight: 700, color: 'var(--c-slug)' },
+  name: { fontSize: 13, color: 'var(--c-muted)' },
   badge: { fontSize: 11, color: '#fff', borderRadius: 20, padding: '2px 9px', marginInlineStart: 8 },
-  meta: { fontSize: 12, color: '#6b7e92' },
+  meta: { fontSize: 12, color: 'var(--c-muted)' },
   row: { display: 'flex', gap: 10, flexWrap: 'wrap' },
   field: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 120 },
-  fieldLabel: { fontSize: 11, color: '#8da2b8' },
-  input: { padding: '9px 11px', borderRadius: 8, border: '1px solid #2b3543', background: '#0f141b', color: '#e8eef5', fontSize: 14, outline: 'none', width: '100%' },
-  inputSm: { padding: '7px 9px', borderRadius: 7, border: '1px solid #2b3543', background: '#0f141b', color: '#e8eef5', fontSize: 13, outline: 'none', width: '100%' },
+  fieldLabel: { fontSize: 11, color: 'var(--c-muted)' },
+  input: { padding: '9px 11px', borderRadius: 8, border: '1px solid var(--c-border)', background: 'var(--c-input)', color: 'var(--c-text)', fontSize: 14, outline: 'none', width: '100%' },
+  inputSm: { padding: '7px 9px', borderRadius: 7, border: '1px solid var(--c-border)', background: 'var(--c-input)', color: 'var(--c-text)', fontSize: 13, outline: 'none', width: '100%' },
   featRow: { display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' },
-  featLabel: { fontSize: 12, color: '#8da2b8' },
-  check: { fontSize: 12, color: '#cdd9e6', display: 'flex', gap: 4, alignItems: 'center' },
+  featLabel: { fontSize: 12, color: 'var(--c-muted)' },
+  check: { fontSize: 12, color: 'var(--c-text)', display: 'flex', gap: 4, alignItems: 'center' },
   cardActions: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 },
-  primaryBtn: { background: '#2f81f7', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
-  ghostBtn: { background: 'transparent', color: '#cdd9e6', border: '1px solid #2b3543', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' },
+  primaryBtn: { background: 'var(--c-accent)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  ghostBtn: { background: 'transparent', color: 'var(--c-text)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' },
+  iconBtn: { background: 'transparent', color: 'var(--c-text)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '7px 11px', fontSize: 14, cursor: 'pointer', lineHeight: 1 },
   dangerBtn: { background: 'transparent', color: '#ff8087', border: '1px solid #5a2730', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' },
 };

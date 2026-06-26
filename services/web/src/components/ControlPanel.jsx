@@ -360,13 +360,13 @@ function ManageTenant({ t, slug, onError }) {
     if (!window.confirm(t.confirmUser(u.username))) return;
     onError('');
     try { await api(`/tenants/${slug}/users/${u.id}`, { method: 'DELETE' }, t); await loadUsers(); }
-    catch (e) { onError(e.message); }
+    catch (e) { onError(e.message); alert(e.message); }
   }
   async function delRole(r) {
     if (!window.confirm(t.confirmRole(r.name))) return;
     onError('');
     try { await api(`/tenants/${slug}/roles/${r.id}`, { method: 'DELETE' }, t); await loadRoles(); }
-    catch (e) { onError(e.message); }
+    catch (e) { onError(e.message); alert(e.message); }
   }
 
   return (

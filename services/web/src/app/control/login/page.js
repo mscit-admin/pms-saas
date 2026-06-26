@@ -93,7 +93,7 @@ export default function ControlLogin() {
 }
 
 const S = {
-  wrap: { minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--c-bg)', fontFamily: 'system-ui, sans-serif', position: 'relative', transition: 'background .2s' },
+  wrap: { minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--c-bg)', fontFamily: 'inherit', position: 'relative', transition: 'background .2s' },
   topBar: { position: 'absolute', top: 18, insetInlineEnd: 18, display: 'flex', gap: 8 },
   iconBtn: { background: 'transparent', color: 'var(--c-text)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '6px 11px', fontSize: 14, cursor: 'pointer', lineHeight: 1 },
   langBtn: { background: 'transparent', color: 'var(--c-text)', border: '1px solid var(--c-border)', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer' },

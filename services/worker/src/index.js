@@ -8,7 +8,7 @@ import 'dotenv/config';
 import { runSync } from '@pms/core/sync';
 import { listActiveOrgs, runInTenant } from '@pms/core/tenancy';
 import { getBackupConfig, setBackupLastRun, intervalMs as backupInterval } from '@pms/core/backup-config';
-import { backupAllTenants } from '@pms/core/backup';
+import { backupAllTenants, backupSystem } from '@pms/core/backup';
 
 const intervalMin = parseInt(process.env.SYNC_INTERVAL_MINUTES || '5', 10);
 const intervalMs = intervalMin * 60 * 1000;
@@ -59,7 +59,8 @@ async function backupTick() {
   const at = new Date().toISOString();
   try {
     await setBackupLastRun(at);                 // احجز الدورة لتفادي التكرار
-    const res = await backupAllTenants({ dir: cfg.dir, retention: cfg.retention, log: (m) => console.log('[backup]', m) });
+    const opts = { dir: cfg.dir, retention: cfg.retention, log: (m) => console.log('[backup]', m) };
+    const res = cfg.includeControl ? await backupSystem(opts) : await backupAllTenants(opts);
     const okN = res.filter((r) => r.ok).length;
     console.log(`[${at}] نسخ احتياطي تلقائي: ${okN}/${res.length} عميل → ${cfg.dir}`);
   } catch (err) {

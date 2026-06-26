@@ -13,6 +13,7 @@ const FIELDS = {
   storage: { key: 'backup_storage', def: 'internal', type: 'str' },
   dir: { key: 'backup_dir', def: '/backups', type: 'str' },
   retention: { key: 'backup_retention', def: 8, type: 'int' },
+  includeControl: { key: 'backup_includeControl', def: false, type: 'bool' },
   lastRunAt: { key: 'backup_lastRunAt', def: '', type: 'str' },
 };
 

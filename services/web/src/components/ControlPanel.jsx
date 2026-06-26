@@ -43,6 +43,8 @@ const T = {
       save: 'حفظ الإعدادات', runNow: 'تشغيل الآن', running: 'جارٍ النسخ…', lastRun: 'آخر تشغيل', never: 'لم يُشغَّل بعد',
       stored: 'النسخ المخزّنة', download: 'تنزيل', noBackups: 'لا نسخ بعد', done: 'اكتمل النسخ',
       extHint: 'لمسار خارجي: اربط المسار في docker-compose ثم اكتبه هنا.', every: (d) => `كل ~${d} يوم تقريباً`,
+      includeControl: 'تضمين قاعدة النظام (التحكّم) في الجدولة',
+      scope: 'نطاق التشغيل', scopeAll: 'كل العملاء', scopeSystem: 'النظام بالكامل', scopeTenant: 'عميل محدّد', selectCustomer: 'اختر عميلاً…',
     },
     confirmUser: (u) => `حذف المستخدم «${u}»؟`, confirmRole: (r) => `حذف الدور «${r}»؟`,
     newPwFor: (s) => `كلمة مرور جديدة لأدمن «${s}»:`, pwUpdated: 'تم تحديث كلمة مرور الأدمن.',
@@ -83,6 +85,8 @@ const T = {
       save: 'Save settings', runNow: 'Run now', running: 'Backing up…', lastRun: 'Last run', never: 'Never run',
       stored: 'Stored backups', download: 'Download', noBackups: 'No backups yet', done: 'Backup complete',
       extHint: 'For an external path: bind-mount it in docker-compose, then type it here.', every: (d) => `every ~${d} day(s)`,
+      includeControl: 'Include system DB (control) in schedule',
+      scope: 'Run scope', scopeAll: 'All customers', scopeSystem: 'Full system', scopeTenant: 'Specific customer', selectCustomer: 'Select a customer…',
     },
     confirmUser: (u) => `Delete user "${u}"?`, confirmRole: (r) => `Delete role "${r}"?`,
     newPwFor: (s) => `New password for "${s}" admin:`, pwUpdated: 'Admin password updated.',
@@ -687,12 +691,15 @@ function SettingsView({ t, can, ctrlPerms, meId, onError, onBrandChange }) {
 function BackupsTab({ t, onError }) {
   const [c, setC] = useState(null);
   const [items, setItems] = useState([]);
+  const [tenants, setTenants] = useState([]);
+  const [scope, setScope] = useState('all');
+  const [selSlug, setSelSlug] = useState('');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const load = useCallback(async () => {
     try { const d = await api('/backups', undefined, t); setC(d.config); setItems(d.items || []); } catch (e) { onError(e.message); }
   }, [t, onError]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); api('/tenants', undefined, t).then((d) => setTenants(d.items || [])).catch(() => {}); }, [load]); // eslint-disable-line
   if (!c) return <div style={S.empty}>…</div>;
   async function save(e) {
     e.preventDefault(); setSaved(false); onError('');
@@ -700,8 +707,9 @@ function BackupsTab({ t, onError }) {
     catch (e2) { onError(e2.message); }
   }
   async function runNow() {
+    if (scope === 'tenant' && !selSlug) { onError(t.bk.selectCustomer); return; }
     setBusy(true); onError(''); notify(t.bk.running);
-    try { await api('/backups/run', { method: 'POST' }, t); notify(t.bk.done); await load(); }
+    try { await api('/backups/run', { method: 'POST', body: JSON.stringify({ scope, slug: selSlug }) }, t); notify(t.bk.done); await load(); }
     catch (e) { onError(e.message); notify(e.message); } finally { setBusy(false); }
   }
   const days = Math.round((30 / Math.min(30, Math.max(1, c.cyclesPerMonth || 1))) * 10) / 10;
@@ -726,13 +734,34 @@ function BackupsTab({ t, onError }) {
             <div style={S.muted}>{t.bk.extHint}</div>
           </>
         )}
+        <label style={S.check}><input type="checkbox" style={S.cbox} checked={!!c.includeControl} onChange={(e) => setC({ ...c, includeControl: e.target.checked })} /> {t.bk.includeControl}</label>
         <div style={S.btnRow}>
           <button style={S.primaryBtn}>{t.bk.save}</button>
           {saved && <span style={S.savedMsg}>{t.set.saved}</span>}
-          <button type="button" style={S.secBtn} disabled={busy} onClick={runNow}>{busy ? t.bk.running : t.bk.runNow}</button>
         </div>
         <div style={S.muted}>{t.bk.lastRun}: {c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : t.bk.never}</div>
       </form>
+
+      <div style={S.runBox}>
+        <div style={S.grid2}>
+          <Field label={t.bk.scope}>
+            <select style={S.inputLg} value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="all">{t.bk.scopeAll}</option>
+              <option value="system">{t.bk.scopeSystem}</option>
+              <option value="tenant">{t.bk.scopeTenant}</option>
+            </select>
+          </Field>
+          {scope === 'tenant' && (
+            <Field label={t.bk.scopeTenant}>
+              <select style={S.inputLg} value={selSlug} onChange={(e) => setSelSlug(e.target.value)}>
+                <option value="">{t.bk.selectCustomer}</option>
+                {tenants.map((tn) => <option key={tn.slug} value={tn.slug}>{tn.name} ({tn.slug})</option>)}
+              </select>
+            </Field>
+          )}
+        </div>
+        <button type="button" style={{ ...S.primaryBtn, marginTop: 12 }} disabled={busy} onClick={runNow}>{busy ? t.bk.running : t.bk.runNow}</button>
+      </div>
       <div>
         <div style={S.cardTitle}>{t.bk.stored} ({items.length})</div>
         <div style={S.colGapSm}>
@@ -960,6 +989,7 @@ const S = {
   dropImg: { maxHeight: 64, maxWidth: '90%', objectFit: 'contain' },
   savedMsg: { color: 'var(--pill-text)', fontSize: 13 },
   linkBtn: { background: 'var(--surface-2)', color: 'var(--accent)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' },
+  runBox: { border: '1px solid var(--border)', borderRadius: 10, padding: 16, background: 'var(--surface-2)' },
   adminFormCard: { border: '1px solid var(--border)', borderRadius: 10, padding: 20, background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 18, ...cardSh },
   permWrap: { display: 'flex', flexWrap: 'wrap', gap: 18 },
   adminGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 },

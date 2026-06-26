@@ -14,5 +14,6 @@ export const PUT = handler(async (req) => {
   if (b.storage !== undefined) patch.storage = b.storage === 'external' ? 'external' : 'internal';
   if (b.dir !== undefined) patch.dir = String(b.dir || '/backups');
   if (b.retention !== undefined) patch.retention = Number(b.retention);
+  if (b.includeControl !== undefined) patch.includeControl = !!b.includeControl;
   return ok(await setBackupConfig(patch));
 });

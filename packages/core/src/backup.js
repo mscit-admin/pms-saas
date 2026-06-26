@@ -5,8 +5,8 @@ import http from 'node:http';
 import zlib from 'node:zlib';
 import { mkdir, writeFile, readdir, unlink, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { dbConfig } from './config.js';
-import { listActiveOrgs } from './tenancy.js';
+import { dbConfig, controlDbConfig } from './config.js';
+import { listActiveOrgs, findOrgBySlug } from './tenancy.js';
 
 const SOCK = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
 
@@ -64,15 +64,15 @@ async function findDbContainerId() {
   return c?.Id || null;
 }
 
-// يرجع Buffer مضغوط (gzip) يحوي تفريغ SQL كامل لقاعدة المستأجر.
-export async function dumpTenantDatabase(org) {
-  if (!/^[a-z0-9_]+$/.test(org.dbName)) throw new Error('اسم قاعدة غير آمن');
+// يرجع Buffer مضغوط (gzip) يحوي تفريغ SQL كامل لأي قاعدة بالاسم.
+export async function dumpDatabase(dbName) {
+  if (!/^[a-z0-9_]+$/.test(dbName)) throw new Error('اسم قاعدة غير آمن');
   const dbId = await findDbContainerId();
   if (!dbId) throw new Error('حاوية قاعدة البيانات غير متاحة (تأكّد من تركيب docker.sock).');
 
   // نشغّل عبر sh مع مسار صريح (exec المباشر قد لا يضمّ /usr/bin)، ومع بديل
   // mariadb-dump إن لم يوجد mysqldump. اسم القاعدة مُتحقَّق منه ([a-z0-9_]).
-  const args = `-uroot --single-transaction --quick --routines --events --default-character-set=utf8mb4 --no-tablespaces ${org.dbName}`;
+  const args = `-uroot --single-transaction --quick --routines --events --default-character-set=utf8mb4 --no-tablespaces ${dbName}`;
   const script = `export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"; `
     + `if command -v mysqldump >/dev/null 2>&1; then exec mysqldump ${args}; `
     + `else exec mariadb-dump ${args}; fi`;
@@ -87,6 +87,9 @@ export async function dumpTenantDatabase(org) {
   if (!stdout.length) throw new Error(stderr.trim() || 'تفريغ فارغ');
   return zlib.gzipSync(stdout);
 }
+
+// توافق سابق: تفريغ قاعدة مستأجر.
+export function dumpTenantDatabase(org) { return dumpDatabase(org.dbName); }
 
 // ============ النسخ الاحتياطي إلى التخزين (للجدولة التلقائية) ============
 const SAFE = /^[a-z0-9_-]+$/;
@@ -130,6 +133,42 @@ export async function backupAllTenants({ dir, retention = 8, log = () => {} }) {
     }
   }
   return results;
+}
+
+// نسخ قاعدة التحكّم (النظام) إلى <dir>/_system/.
+export async function backupControlToDir(dir) {
+  const dbName = controlDbConfig.database;
+  const gz = await dumpDatabase(dbName);
+  const tdir = join(dir, '_system');
+  await mkdir(tdir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = `${dbName}-${stamp}.sql.gz`;
+  await writeFile(join(tdir, file), gz);
+  return { slug: '_system', ok: true, file, size: gz.length };
+}
+
+// نسخ عميل محدّد بالـ slug (حتى لو كان معلّقاً).
+export async function backupTenantBySlug(slug, dir, retention = 8) {
+  const org = await findOrgBySlug(slug);
+  if (!org) throw new Error('المستأجر غير موجود');
+  const r = await backupTenantToDir(org, dir);
+  await applyRetention(dir, org.slug, retention);
+  return [{ slug: org.slug, ok: true, ...r }];
+}
+
+// نسخ النظام بالكامل: كل العملاء + قاعدة التحكّم.
+export async function backupSystem({ dir, retention = 8, log = () => {} }) {
+  const res = await backupAllTenants({ dir, retention, log });
+  try {
+    const c = await backupControlToDir(dir);
+    await applyRetention(dir, '_system', retention);
+    res.push(c);
+    log('✓ نسخة النظام (قاعدة التحكّم)');
+  } catch (e) {
+    res.push({ slug: '_system', ok: false, error: e.message });
+    log(`✗ نسخة النظام: ${e.message}`);
+  }
+  return res;
 }
 
 // سرد النسخ المخزّنة (لكل العملاء) — الأحدث أولاً.

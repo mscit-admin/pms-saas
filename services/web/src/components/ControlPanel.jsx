@@ -37,6 +37,13 @@ const T = {
       supUsername: 'اسم المستخدم', supFullName: 'الاسم الكامل', supPassword: 'كلمة المرور', addSup: 'إضافة مشرف',
       superAdmin: 'مشرف أعلى', disable: 'تعطيل', enable: 'تفعيل', savePerms: 'حفظ الصلاحيات',
     },
+    bk: {
+      tab: 'النسخ الاحتياطي', enabled: 'تفعيل النسخ التلقائي', cycles: 'دورات النسخ شهرياً', retention: 'عدد النسخ المحفوظة لكل عميل',
+      storage: 'مكان التخزين', internal: 'وحدة تخزين داخلية', external: 'مسار خارجي', dir: 'مجلّد الوجهة',
+      save: 'حفظ الإعدادات', runNow: 'تشغيل الآن', running: 'جارٍ النسخ…', lastRun: 'آخر تشغيل', never: 'لم يُشغَّل بعد',
+      stored: 'النسخ المخزّنة', download: 'تنزيل', noBackups: 'لا نسخ بعد', done: 'اكتمل النسخ',
+      extHint: 'لمسار خارجي: اربط المسار في docker-compose ثم اكتبه هنا.', every: (d) => `كل ~${d} يوم تقريباً`,
+    },
     confirmUser: (u) => `حذف المستخدم «${u}»؟`, confirmRole: (r) => `حذف الدور «${r}»؟`,
     newPwFor: (s) => `كلمة مرور جديدة لأدمن «${s}»:`, pwUpdated: 'تم تحديث كلمة مرور الأدمن.',
     confirmDel: (s) => `للحذف النهائي اكتب الـ slug: ${s}`, confirmDelClient: (n) => `حذف العميل «${n}» وقاعدة بياناته نهائياً؟ لا يمكن التراجع.`,
@@ -69,6 +76,13 @@ const T = {
       logo: 'Logo', favicon: 'Favicon', loginBg: 'Login Background', choose: 'Choose', remove: 'Remove', noImg: 'No image', uploading: 'Uploading…',
       supUsername: 'Username', supFullName: 'Full Name', supPassword: 'Password', addSup: 'Add Supervisor',
       superAdmin: 'Super Admin', disable: 'Disable', enable: 'Enable', savePerms: 'Save Permissions',
+    },
+    bk: {
+      tab: 'Backups', enabled: 'Enable automatic backups', cycles: 'Backup cycles per month', retention: 'Backups kept per customer',
+      storage: 'Storage location', internal: 'Internal volume', external: 'External path', dir: 'Destination folder',
+      save: 'Save settings', runNow: 'Run now', running: 'Backing up…', lastRun: 'Last run', never: 'Never run',
+      stored: 'Stored backups', download: 'Download', noBackups: 'No backups yet', done: 'Backup complete',
+      extHint: 'For an external path: bind-mount it in docker-compose, then type it here.', every: (d) => `every ~${d} day(s)`,
     },
     confirmUser: (u) => `Delete user "${u}"?`, confirmRole: (r) => `Delete role "${r}"?`,
     newPwFor: (s) => `New password for "${s}" admin:`, pwUpdated: 'Admin password updated.',
@@ -656,6 +670,7 @@ function SettingsView({ t, can, ctrlPerms, meId, onError, onBrandChange }) {
     can('manage_branding') && { key: 'identity', label: t.set.tabIdentity },
     can('manage_admins') && { key: 'supervisors', label: t.set.tabSupervisors },
     can('manage_admins') && { key: 'permissions', label: t.set.tabPermissions },
+    can('manage_tenants') && { key: 'backups', label: t.bk.tab },
   ].filter(Boolean);
   const [tab, setTab] = useState(tabs[0]?.key || 'identity');
   return (
@@ -664,7 +679,72 @@ function SettingsView({ t, can, ctrlPerms, meId, onError, onBrandChange }) {
       <div style={S.tabBar}>{tabs.map((x) => <button key={x.key} style={{ ...S.tab, ...(tab === x.key ? S.tabOn : {}) }} onClick={() => setTab(x.key)}>{x.label}</button>)}</div>
       {tab === 'identity' && <BrandingTab t={t} onError={onError} onBrandChange={onBrandChange} />}
       {(tab === 'supervisors' || tab === 'permissions') && <AdminsTab t={t} ctrlPerms={ctrlPerms} meId={meId} permsMode={tab === 'permissions'} onError={onError} />}
+      {tab === 'backups' && <BackupsTab t={t} onError={onError} />}
     </>
+  );
+}
+
+function BackupsTab({ t, onError }) {
+  const [c, setC] = useState(null);
+  const [items, setItems] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const load = useCallback(async () => {
+    try { const d = await api('/backups', undefined, t); setC(d.config); setItems(d.items || []); } catch (e) { onError(e.message); }
+  }, [t, onError]);
+  useEffect(() => { load(); }, [load]);
+  if (!c) return <div style={S.empty}>…</div>;
+  async function save(e) {
+    e.preventDefault(); setSaved(false); onError('');
+    try { const d = await api('/backups/config', { method: 'PUT', body: JSON.stringify(c) }, t); setC(d); setSaved(true); }
+    catch (e2) { onError(e2.message); }
+  }
+  async function runNow() {
+    setBusy(true); onError(''); notify(t.bk.running);
+    try { await api('/backups/run', { method: 'POST' }, t); notify(t.bk.done); await load(); }
+    catch (e) { onError(e.message); notify(e.message); } finally { setBusy(false); }
+  }
+  const days = Math.round((30 / Math.min(30, Math.max(1, c.cyclesPerMonth || 1))) * 10) / 10;
+  return (
+    <div style={S.identityCol}>
+      <form onSubmit={save} style={S.colGapLg}>
+        <label style={S.check}><input type="checkbox" style={S.cbox} checked={!!c.enabled} onChange={(e) => setC({ ...c, enabled: e.target.checked })} /> {t.bk.enabled}</label>
+        <div style={S.grid2}>
+          <Field label={t.bk.cycles}><input style={S.inputLg} type="number" min="1" max="30" value={c.cyclesPerMonth} onChange={(e) => setC({ ...c, cyclesPerMonth: Number(e.target.value) })} /></Field>
+          <Field label={t.bk.retention}><input style={S.inputLg} type="number" min="1" value={c.retention} onChange={(e) => setC({ ...c, retention: Number(e.target.value) })} /></Field>
+        </div>
+        <div style={S.muted}>{t.bk.every(days)}</div>
+        <Field label={t.bk.storage}>
+          <select style={S.inputLg} value={c.storage} onChange={(e) => setC({ ...c, storage: e.target.value, dir: e.target.value === 'internal' ? '/backups' : c.dir })}>
+            <option value="internal">{t.bk.internal}</option>
+            <option value="external">{t.bk.external}</option>
+          </select>
+        </Field>
+        {c.storage === 'external' && (
+          <>
+            <Field label={t.bk.dir}><input style={S.inputLg} value={c.dir} onChange={(e) => setC({ ...c, dir: e.target.value })} placeholder="/mnt/backups" /></Field>
+            <div style={S.muted}>{t.bk.extHint}</div>
+          </>
+        )}
+        <div style={S.btnRow}>
+          <button style={S.primaryBtn}>{t.bk.save}</button>
+          {saved && <span style={S.savedMsg}>{t.set.saved}</span>}
+          <button type="button" style={S.secBtn} disabled={busy} onClick={runNow}>{busy ? t.bk.running : t.bk.runNow}</button>
+        </div>
+        <div style={S.muted}>{t.bk.lastRun}: {c.lastRunAt ? new Date(c.lastRunAt).toLocaleString() : t.bk.never}</div>
+      </form>
+      <div>
+        <div style={S.cardTitle}>{t.bk.stored} ({items.length})</div>
+        <div style={S.colGapSm}>
+          {items.length ? items.map((it, i) => (
+            <div key={i} style={S.rowItem}>
+              <span style={{ fontSize: 12.5 }}><strong>{it.slug}</strong> <span style={S.muted}>{it.file} · {fmtBytes(it.size)}</span></span>
+              <a href={`/api/control/backups/download?slug=${encodeURIComponent(it.slug)}&file=${encodeURIComponent(it.file)}`} style={S.linkBtn}>{t.bk.download}</a>
+            </div>
+          )) : <div style={S.muted}>{t.bk.noBackups}</div>}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -879,6 +959,7 @@ const S = {
   dropzone: { border: '1px dashed var(--border-2)', borderRadius: 8, height: 84, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '11px 0', background: 'var(--inset)' },
   dropImg: { maxHeight: 64, maxWidth: '90%', objectFit: 'contain' },
   savedMsg: { color: 'var(--pill-text)', fontSize: 13 },
+  linkBtn: { background: 'var(--surface-2)', color: 'var(--accent)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' },
   adminFormCard: { border: '1px solid var(--border)', borderRadius: 10, padding: 20, background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 18, ...cardSh },
   permWrap: { display: 'flex', flexWrap: 'wrap', gap: 18 },
   adminGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 },

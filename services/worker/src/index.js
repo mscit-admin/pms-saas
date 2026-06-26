@@ -7,6 +7,8 @@
 import 'dotenv/config';
 import { runSync } from '@pms/core/sync';
 import { listActiveOrgs, runInTenant } from '@pms/core/tenancy';
+import { getBackupConfig, setBackupLastRun, intervalMs as backupInterval } from '@pms/core/backup-config';
+import { backupAllTenants } from '@pms/core/backup';
 
 const intervalMin = parseInt(process.env.SYNC_INTERVAL_MINUTES || '5', 10);
 const intervalMs = intervalMin * 60 * 1000;
@@ -43,6 +45,32 @@ async function tick() {
 console.log(`[worker] بدء المزامنة الدورية كل ${intervalMin} دقيقة`);
 await tick();
 setInterval(tick, intervalMs);
+
+// ---- النسخ الاحتياطي التلقائي (يُفحص الاستحقاق كل ساعة) ----
+let backupRunning = false;
+async function backupTick() {
+  if (backupRunning) return;
+  let cfg;
+  try { cfg = await getBackupConfig(); } catch { return; }
+  if (!cfg.enabled) return;
+  const last = cfg.lastRunAt ? Date.parse(cfg.lastRunAt) : 0;
+  if (Number.isFinite(last) && (Date.now() - last) < backupInterval(cfg.cyclesPerMonth)) return;
+  backupRunning = true;
+  const at = new Date().toISOString();
+  try {
+    await setBackupLastRun(at);                 // احجز الدورة لتفادي التكرار
+    const res = await backupAllTenants({ dir: cfg.dir, retention: cfg.retention, log: (m) => console.log('[backup]', m) });
+    const okN = res.filter((r) => r.ok).length;
+    console.log(`[${at}] نسخ احتياطي تلقائي: ${okN}/${res.length} عميل → ${cfg.dir}`);
+  } catch (err) {
+    console.error(`[${at}] ✗ نسخ احتياطي:`, err.message);
+  } finally {
+    backupRunning = false;
+  }
+}
+console.log('[worker] مجدول النسخ الاحتياطي فعّال (فحص كل ساعة)');
+await backupTick();
+setInterval(backupTick, 60 * 60 * 1000);
 
 // إنهاء نظيف
 for (const sig of ['SIGTERM', 'SIGINT']) {

@@ -48,6 +48,9 @@ services:
     volumes:
       - uploads:/app/services/api/uploads
       - ./cert-queue:/app/cert-queue
+      # قراءة إحصاءات حاويات Docker لبطاقة «موارد المنصّة» (للقراءة فقط).
+      # أمان: يمنح وصولاً للمضيف — احذف هذا السطر إن لم ترغب بعرض الموارد.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       db:
         condition: service_healthy

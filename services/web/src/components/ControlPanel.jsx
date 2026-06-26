@@ -13,7 +13,13 @@ const T = {
     dir: 'rtl', langBtn: 'English', search: 'ابحث أو اكتب أمراً (Ctrl + G)',
     workspaces: 'مساحات العمل', logout: 'تسجيل الخروج', crumbHome: 'الرئيسية',
     nav: { dashboard: 'لوحة المعلومات', customers: 'العملاء', settings: 'الإعدادات' },
-    dash: { title: 'لوحة المعلومات', byPlan: 'حسب الخطة', tenants: 'إجمالي العملاء', active: 'مفعّل', suspended: 'معلّق', users: 'إجمالي المستخدمين', projects: 'إجمالي المشاريع' },
+    dash: {
+      title: 'لوحة المعلومات', byPlan: 'حسب الخطة', tenants: 'إجمالي العملاء', active: 'مفعّل', suspended: 'معلّق', users: 'إجمالي المستخدمين', projects: 'إجمالي المشاريع',
+      insights: 'رؤى العميل', selectCustomer: 'اختر عميلاً…', totalSize: 'حجم القاعدة', dataSize: 'البيانات', indexSize: 'الفهارس', tablesLbl: 'الجداول', rowsApprox: 'الصفوف (تقديري)', perf: 'مستوى الأداء',
+      levelGood: 'جيّد', levelModerate: 'متوسّط', levelHeavy: 'مرتفع', topTables: 'أكبر الجداول',
+      platformRes: 'موارد المنصّة', sharedNote: 'مشتركة بين كل العملاء', cpu: 'المعالج', mem: 'الذاكرة',
+      mysqlPerf: 'أداء MySQL', connections: 'اتصالات', running: 'نشطة', qps: 'استعلام/ث', uptimeLbl: 'التشغيل', bufferPool: 'Buffer Pool', slowQ: 'استعلامات بطيئة', dockerOff: 'إحصاءات Docker غير متاحة (ركّب docker.sock).',
+    },
     cust: {
       title: 'العملاء', add: 'إضافة عميل', db: 'قاعدة:', active: 'مفعّل', suspended: 'معلّق',
       plan: 'الخطة', maxUsers: 'أقصى مستخدمين', maxProjects: 'أقصى مشاريع', save: 'حفظ', suspend: 'تعليق',
@@ -37,7 +43,13 @@ const T = {
     dir: 'ltr', langBtn: 'العربية', search: 'Search or type a command (Ctrl + G)',
     workspaces: 'Workspaces', logout: 'Log out', crumbHome: 'Home',
     nav: { dashboard: 'Dashboard', customers: 'Customers', settings: 'Settings' },
-    dash: { title: 'Dashboard', byPlan: 'By Plan', tenants: 'Total Customers', active: 'Active', suspended: 'Suspended', users: 'Total Users', projects: 'Total Projects' },
+    dash: {
+      title: 'Dashboard', byPlan: 'By Plan', tenants: 'Total Customers', active: 'Active', suspended: 'Suspended', users: 'Total Users', projects: 'Total Projects',
+      insights: 'Customer Insights', selectCustomer: 'Select a customer…', totalSize: 'DB Size', dataSize: 'Data', indexSize: 'Indexes', tablesLbl: 'Tables', rowsApprox: 'Rows (approx)', perf: 'Performance',
+      levelGood: 'Good', levelModerate: 'Moderate', levelHeavy: 'Heavy', topTables: 'Largest tables',
+      platformRes: 'Platform Resources', sharedNote: 'shared across all customers', cpu: 'CPU', mem: 'Memory',
+      mysqlPerf: 'MySQL performance', connections: 'Connections', running: 'Running', qps: 'Queries/s', uptimeLbl: 'Uptime', bufferPool: 'Buffer Pool', slowQ: 'Slow queries', dockerOff: 'Docker stats unavailable (mount docker.sock).',
+    },
     cust: {
       title: 'Customers', add: 'Add Customer', db: 'DB:', active: 'Active', suspended: 'Suspended',
       plan: 'Plan', maxUsers: 'Max Users', maxProjects: 'Max Projects', save: 'Save', suspend: 'Suspend',
@@ -88,6 +100,20 @@ async function api(path, opts, t) {
   if (!json.ok) throw new Error(json.error || t.err);
   return json.data;
 }
+
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return `${n} B`;
+  const u = ['KB', 'MB', 'GB', 'TB']; let i = -1;
+  do { n /= 1024; i += 1; } while (n >= 1024 && i < u.length - 1);
+  return `${n.toFixed(n >= 100 ? 0 : 1)} ${u[i]}`;
+}
+function fmtUptime(sec) {
+  sec = Number(sec) || 0;
+  const d = Math.floor(sec / 86400); const h = Math.floor((sec % 86400) / 3600); const m = Math.floor((sec % 3600) / 60);
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+const LEVEL_COLOR = { good: 'var(--pill-text)', moderate: '#d9822b', heavy: 'var(--danger)' };
 
 export default function ControlPanel() {
   const [lang, setLang] = useState('ar');
@@ -197,7 +223,19 @@ export default function ControlPanel() {
 // ================= Dashboard =================
 function DashboardView({ t, onError }) {
   const [s, setS] = useState(null);
-  useEffect(() => { api('/stats', undefined, t).then(setS).catch((e) => onError(e.message)); }, []); // eslint-disable-line
+  const [tenants, setTenants] = useState([]);
+  const [sel, setSel] = useState('');
+  const [metrics, setMetrics] = useState(null);
+  const [sys, setSys] = useState(null);
+  useEffect(() => {
+    api('/stats', undefined, t).then(setS).catch((e) => onError(e.message));
+    api('/tenants', undefined, t).then((d) => setTenants(d.items || [])).catch(() => {});
+    api('/system', undefined, t).then(setSys).catch(() => {});
+  }, []); // eslint-disable-line
+  function pick(slug) {
+    setSel(slug); setMetrics(null);
+    if (slug) api(`/tenants/${slug}/metrics`, undefined, t).then(setMetrics).catch((e) => onError(e.message));
+  }
   if (!s) return <div style={S.empty}>…</div>;
   const cards = [
     { label: t.dash.projects, value: s.projects },
@@ -216,7 +254,76 @@ function DashboardView({ t, onError }) {
           <div key={c.label} style={S.statCard}><div style={S.statLbl}>{c.label}</div><div style={S.statVal}>{c.value}</div></div>
         ))}
       </div>
-      <div style={S.planCard}>
+
+      <div style={S.dashRow}>
+        {/* ===== Customer Insights ===== */}
+        {tenants.length > 0 && (
+          <div style={S.insightCard}>
+            <div style={S.cardTitle}>{t.dash.insights}</div>
+            <select style={{ ...S.inputLg, marginBottom: 14 }} value={sel} onChange={(e) => pick(e.target.value)}>
+              <option value="">{t.dash.selectCustomer}</option>
+              {tenants.map((tn) => <option key={tn.slug} value={tn.slug}>{tn.name} ({tn.slug})</option>)}
+            </select>
+            {sel && !metrics && <div style={S.muted}>…</div>}
+            {metrics && (
+              <>
+                <div style={S.miniGrid}>
+                  <Mini label={t.dash.totalSize} value={fmtBytes(metrics.totalBytes)} />
+                  <Mini label={t.dash.tablesLbl} value={metrics.tables} />
+                  <Mini label={t.dash.rowsApprox} value={Number(metrics.rows).toLocaleString()} />
+                  <Mini label={t.dash.dataSize} value={fmtBytes(metrics.dataBytes)} />
+                  <Mini label={t.dash.indexSize} value={fmtBytes(metrics.indexBytes)} />
+                  <Mini label={t.dash.perf} value={<span style={{ ...S.levelBadge, color: LEVEL_COLOR[metrics.level], borderColor: LEVEL_COLOR[metrics.level] }}>{t.dash[metrics.level === 'good' ? 'levelGood' : metrics.level === 'moderate' ? 'levelModerate' : 'levelHeavy']}</span>} />
+                </div>
+                {metrics.top?.length > 0 && (
+                  <>
+                    <div style={{ ...S.fieldLabel, marginTop: 14 }}>{t.dash.topTables}</div>
+                    <div style={S.colGapSm}>
+                      {metrics.top.map((tb) => (
+                        <div key={tb.name} style={S.rowItem}>
+                          <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{tb.name}</span>
+                          <span style={S.muted}>{fmtBytes(tb.size)} · {Number(tb.rows).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ===== Platform Resources ===== */}
+        <div style={S.insightCard}>
+          <div style={S.cardTitle}>{t.dash.platformRes} <span style={S.muted}>· {t.dash.sharedNote}</span></div>
+          {sys?.docker?.available ? (
+            <div style={S.colGapSm}>
+              {sys.docker.containers.map((c) => (
+                <div key={c.name} style={{ marginBottom: 6 }}>
+                  <div style={S.resHead}><span>{c.name}</span><span style={S.muted}>{c.cpu.toFixed(1)}% · {fmtBytes(c.mem)}{c.memLimit ? ` / ${fmtBytes(c.memLimit)}` : ''}</span></div>
+                  <div style={S.resTrack}><div style={{ width: `${Math.min(100, c.cpu)}%`, height: '100%', background: 'var(--accent)', borderRadius: 4 }} /></div>
+                </div>
+              ))}
+            </div>
+          ) : <div style={S.muted}>{t.dash.dockerOff}</div>}
+
+          {sys?.mysql && (
+            <>
+              <div style={{ ...S.cardTitle, marginTop: 16 }}>{t.dash.mysqlPerf}</div>
+              <div style={S.miniGrid}>
+                <Mini label={t.dash.connections} value={sys.mysql.threadsConnected} />
+                <Mini label={t.dash.running} value={sys.mysql.threadsRunning} />
+                <Mini label={t.dash.qps} value={sys.mysql.qps.toFixed(1)} />
+                <Mini label={t.dash.bufferPool} value={`${sys.mysql.bufferPoolUsedPct.toFixed(0)}%`} />
+                <Mini label={t.dash.slowQ} value={sys.mysql.slowQueries} />
+                <Mini label={t.dash.uptimeLbl} value={fmtUptime(sys.mysql.uptime)} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div style={{ ...S.planCard, marginTop: 18 }}>
         <div style={S.cardTitle}>{t.dash.byPlan}</div>
         <div style={S.barTrack}>
           {plans.map(([p, n]) => <div key={p} style={{ width: `${(n / totalPlan) * 100}%`, background: PLAN_COLORS[p] || '#a9d2f7' }} />)}
@@ -229,6 +336,10 @@ function DashboardView({ t, onError }) {
       </div>
     </>
   );
+}
+
+function Mini({ label, value }) {
+  return <div style={S.mini}><div style={S.miniLbl}>{label}</div><div style={S.miniVal}>{value}</div></div>;
 }
 
 // ================= Customers =================
@@ -599,6 +710,15 @@ const S = {
   statCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9, padding: '17px 18px', ...cardSh },
   statLbl: { fontSize: 12, color: 'var(--muted)', marginBottom: 10, fontWeight: 500 },
   statVal: { fontSize: 28, fontWeight: 600, color: 'var(--text)', lineHeight: 1, letterSpacing: '-.5px' },
+  dashRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginBottom: 18 },
+  insightCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9, padding: 18, ...cardSh },
+  miniGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(95px, 1fr))', gap: 10 },
+  mini: { background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 11px' },
+  miniLbl: { fontSize: 10.5, color: 'var(--muted)', marginBottom: 4 },
+  miniVal: { fontSize: 15, fontWeight: 600, color: 'var(--text)' },
+  levelBadge: { fontSize: 12, fontWeight: 700, border: '1px solid', borderRadius: 6, padding: '1px 8px', display: 'inline-block' },
+  resHead: { display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-2)', marginBottom: 4 },
+  resTrack: { height: 7, borderRadius: 4, background: 'var(--surface-2)', overflow: 'hidden' },
   planCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 9, padding: 20, maxWidth: 540, ...cardSh },
   cardTitle: { fontSize: 13, fontWeight: 600, marginBottom: 16, color: 'var(--text)' },
   barTrack: { height: 9, borderRadius: 5, overflow: 'hidden', display: 'flex', background: 'var(--surface-2)' },

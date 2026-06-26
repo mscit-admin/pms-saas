@@ -793,7 +793,7 @@ export default function JiraExceptionMonitor() {
 
   return (
     <LangCtx.Provider value={{ lang, t, fmt, fmtDate, fmtDateTime, jiraBaseUrl: meta?.jiraBaseUrl || null, perms, pageSize, cardSignal }}>
-      <div style={{ minHeight: '100vh', background: C.bg, color: C.text, display: 'flex', ...backgroundStyle(appBgShow ? appBackground : null, appBgDim) }}>
+      <div style={{ height: '100vh', overflow: 'hidden', background: C.bg, color: C.text, display: 'flex', ...backgroundStyle(appBgShow ? appBackground : null, appBgDim) }}>
         {/* خلفية معتمة للدرج على الجوال */}
         {isMobile && drawer && (
           <div onClick={() => setDrawer(false)} className="no-print" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 40 }} />
@@ -886,7 +886,7 @@ export default function JiraExceptionMonitor() {
         )}
 
         {/* العمود الرئيسي */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <header
             className="no-print"
             style={{
@@ -1006,7 +1006,7 @@ export default function JiraExceptionMonitor() {
             </div>
           )}
 
-          <main style={{ padding: isMobile ? 12 : 20, flex: 1 }}>
+          <main style={{ padding: isMobile ? 12 : 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {renderScreen()}
           </main>
         </div>

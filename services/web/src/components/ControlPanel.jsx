@@ -552,10 +552,13 @@ function ManageTenant({ t, slug, onError }) {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [catalog, setCatalog] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [uf, setUf] = useState({ username: '', email: '', password: '', roleIds: [] });
   const [rf, setRf] = useState({ name: '', permissions: [] });
+  const lk = t.dir === 'rtl' ? 'labelAr' : 'labelEn';
   const loadUsers = useCallback(async () => { try { const d = await api(`/tenants/${slug}/users`, undefined, t); setUsers(d.items || []); } catch (e) { onError(e.message); } }, [slug, t, onError]);
-  const loadRoles = useCallback(async () => { try { const d = await api(`/tenants/${slug}/roles`, undefined, t); setRoles(d.items || []); setCatalog(d.catalog || []); } catch (e) { onError(e.message); } }, [slug, t, onError]);
+  const loadRoles = useCallback(async () => { try { const d = await api(`/tenants/${slug}/roles`, undefined, t); setRoles(d.items || []); setCatalog(d.catalog || []); setGroups(d.groups || []); } catch (e) { onError(e.message); } }, [slug, t, onError]);
+  const togglePerm = (key, on) => setRf((s) => ({ ...s, permissions: on ? [...s.permissions, key] : s.permissions.filter((k) => k !== key) }));
   useEffect(() => { loadUsers(); loadRoles(); }, [loadUsers, loadRoles]);
   async function addUser(e) { e.preventDefault(); onError(''); try { await api(`/tenants/${slug}/users`, { method: 'POST', body: JSON.stringify({ ...uf, roleIds: uf.roleIds.map(Number) }) }, t); setUf({ username: '', email: '', password: '', roleIds: [] }); await loadUsers(); } catch (e2) { onError(e2.message); notify(e2.message); } }
   async function addRole(e) { e.preventDefault(); onError(''); try { await api(`/tenants/${slug}/roles`, { method: 'POST', body: JSON.stringify(rf) }, t); setRf({ name: '', permissions: [] }); await loadRoles(); } catch (e2) { onError(e2.message); notify(e2.message); } }
@@ -595,12 +598,27 @@ function ManageTenant({ t, slug, onError }) {
             <button style={S.primaryBtnSm}><span style={S.btnIcon}>{I.plus}</span>{t.cust.addRole}</button>
           </div>
           <div style={S.permScroll}>
-            {catalog.map((p) => (
-              <label key={p.key} style={S.permRow}>
-                <span style={{ fontFamily: 'ui-monospace, monospace' }}>{p.key}</span>
-                <input type="checkbox" style={S.cbox} checked={rf.permissions.includes(p.key)} onChange={(e) => setRf((s) => ({ ...s, permissions: e.target.checked ? [...s.permissions, p.key] : s.permissions.filter((k) => k !== p.key) }))} />
-              </label>
-            ))}
+            {(groups.length ? groups : [{ key: '_', labelAr: '', labelEn: '' }]).map((g) => {
+              const items = catalog.filter((p) => (g.key === '_' ? true : p.group === g.key));
+              if (!items.length) return null;
+              const allOn = items.every((p) => rf.permissions.includes(p.key));
+              return (
+                <div key={g.key} style={S.permGroup}>
+                  {g.key !== '_' && (
+                    <div style={S.permGroupHead}>
+                      <span>{g[lk]}</span>
+                      <button type="button" style={S.permAll} onClick={() => items.forEach((p) => togglePerm(p.key, !allOn))}>{allOn ? '—' : '✓'}</button>
+                    </div>
+                  )}
+                  {items.map((p) => (
+                    <label key={p.key} style={S.permRow} title={p.key}>
+                      <span style={S.permLabel}>{p[lk] || p.key}</span>
+                      <input type="checkbox" style={S.cbox} checked={rf.permissions.includes(p.key)} onChange={(e) => togglePerm(p.key, e.target.checked)} />
+                    </label>
+                  ))}
+                </div>
+              );
+            })}
           </div>
           <div style={S.colGapSm}>
             {roles.length ? roles.map((r) => (
@@ -830,8 +848,12 @@ const S = {
   colGapLg: { display: 'flex', flexDirection: 'column', gap: 20 },
   rowItem: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', border: '1px solid var(--divider)', borderRadius: 7 },
   muted: { color: 'var(--muted-2)', fontSize: 11 },
-  permScroll: { maxHeight: 230, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 1, border: '1px solid var(--divider)', borderRadius: 7, padding: 4 },
-  permRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 12, color: 'var(--text-2)' },
+  permScroll: { maxHeight: 260, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 2, border: '1px solid var(--divider)', borderRadius: 8, padding: 6 },
+  permGroup: { display: 'flex', flexDirection: 'column' },
+  permGroupHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10.5, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '.5px', padding: '8px 8px 4px', position: 'sticky', top: 0, background: 'var(--surface)' },
+  permAll: { background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-2)', fontSize: 11, width: 22, height: 20, cursor: 'pointer', lineHeight: 1 },
+  permRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 9px', borderRadius: 6, cursor: 'pointer', fontSize: 12.5, color: 'var(--text-2)' },
+  permLabel: { color: 'var(--text)' },
   tabBar: { display: 'flex', gap: 24, borderBottom: '1px solid var(--border)', marginBottom: 24 },
   tab: { background: 'none', border: 'none', borderBottom: '2px solid transparent', padding: '0 0 12px', fontSize: 13.5, cursor: 'pointer', color: 'var(--muted)' },
   tabOn: { color: 'var(--accent)', borderBottomColor: 'var(--accent)', fontWeight: 600 },

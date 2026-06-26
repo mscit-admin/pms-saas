@@ -2,7 +2,7 @@ import { handler, ok, fail } from '@/lib/http';
 import { requireControlPermission } from '@/lib/control-auth';
 import { findOrgBySlug, runInTenant } from '@/lib/tenancy';
 import { listRoles, createRole } from '@/lib/users';
-import { PERMISSIONS } from '@/lib/permissions';
+import { PERMISSIONS, PERMISSION_GROUPS } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ export const GET = handler(async (req, { params }) => {
   const org = await findOrgBySlug(params.slug);
   if (!org) return fail('المستأجر غير موجود', 404);
   const items = await runInTenant(org, () => listRoles());
-  return ok({ items, catalog: PERMISSIONS });
+  return ok({ items, catalog: PERMISSIONS, groups: PERMISSION_GROUPS });
 });
 
 export const POST = handler(async (req, { params }) => {

@@ -43,8 +43,11 @@ services:
       DB_HOST: db
       DB_PORT: "3306"
       API_PORT: "3001"
+      # طابور إصدار شهادات TLS للعملاء الجدد (يقرأه deploy/cert-worker.sh على المضيف)
+      CERT_QUEUE_FILE: /app/cert-queue/pending.txt
     volumes:
       - uploads:/app/services/api/uploads
+      - ./cert-queue:/app/cert-queue
     depends_on:
       db:
         condition: service_healthy

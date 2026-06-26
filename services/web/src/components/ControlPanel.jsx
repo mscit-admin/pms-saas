@@ -16,6 +16,8 @@ const T = {
     maxUsersShort: 'أقصى مستخدمين', maxProjectsShort: 'أقصى مشاريع', features: 'الوحدات:',
     create: 'إنشاء', cancel: 'إلغاء', save: 'حفظ', suspend: 'تعليق', activate: 'تفعيل',
     resetAdmin: 'كلمة مرور الأدمن', del: 'حذف', manage: 'إدارة',
+    addTitle: 'إضافة عميل جديد', secBasic: 'الأساسي', secPlan: 'الخطة والحصص', secFeatures: 'الوحدات',
+    confirmUser: (u) => `حذف المستخدم «${u}»؟`, confirmRole: (r) => `حذف الدور «${r}»؟`, removeTitle: 'حذف',
     activeLbl: 'مفعّل', suspendedLbl: 'معلّق', db: 'قاعدة', usersLbl: 'مستخدمون', projectsLbl: 'مشاريع',
     newPwFor: (s) => `كلمة مرور جديدة لأدمن «${s}»:`, pwUpdated: 'تم تحديث كلمة مرور الأدمن.',
     confirmDel: (s) => `للحذف النهائي اكتب الـ slug: ${s}`,
@@ -37,6 +39,8 @@ const T = {
     maxUsersShort: 'Max users', maxProjectsShort: 'Max projects', features: 'Features:',
     create: 'Create', cancel: 'Cancel', save: 'Save', suspend: 'Suspend', activate: 'Activate',
     resetAdmin: 'Admin password', del: 'Delete', manage: 'Manage',
+    addTitle: 'Add new client', secBasic: 'Basics', secPlan: 'Plan & quotas', secFeatures: 'Features',
+    confirmUser: (u) => `Delete user "${u}"?`, confirmRole: (r) => `Delete role "${r}"?`, removeTitle: 'Remove',
     activeLbl: 'Active', suspendedLbl: 'Suspended', db: 'DB', usersLbl: 'Users', projectsLbl: 'Projects',
     newPwFor: (s) => `New password for "${s}" admin:`, pwUpdated: 'Admin password updated.',
     confirmDel: (s) => `To permanently delete, type the slug: ${s}`,
@@ -231,28 +235,48 @@ function AddTenant({ t, featureKeys, busy, setBusy, onDone, onError }) {
       setFeatures({}); setOpen(false); await onDone();
     } catch (e2) { onError(e2.message); } finally { setBusy(false); }
   }
-  if (!open) return <button style={S.addBtn} onClick={() => setOpen(true)}>{t.add}</button>;
   return (
-    <form onSubmit={submit} style={S.addCard}>
-      <div style={S.addRow}>
-        <Field label={t.orgName}><input style={S.input} value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Acme Inc" /></Field>
-        <Field label={t.slug}><input style={S.input} value={f.slug} onChange={(e) => set('slug', e.target.value.toLowerCase())} placeholder="acme" required /></Field>
-        <Field label={t.adminPass}><input style={S.input} value={f.adminPassword} onChange={(e) => set('adminPassword', e.target.value)} placeholder="••••••" required /></Field>
-      </div>
-      <div style={S.addRow}>
-        <Field label={t.plan}><select style={S.input} value={f.plan} onChange={(e) => set('plan', e.target.value)}>{PLANS.map((p) => <option key={p} value={p}>{p}</option>)}</select></Field>
-        <Field label={t.maxUsers}><input style={S.input} type="number" min="1" value={f.maxUsers} onChange={(e) => set('maxUsers', e.target.value)} /></Field>
-        <Field label={t.maxProjects}><input style={S.input} type="number" min="1" value={f.maxProjects} onChange={(e) => set('maxProjects', e.target.value)} /></Field>
-      </div>
-      <div style={S.featRow}>
-        <span style={S.featLabel}>{t.features}</span>
-        {featureKeys.map((k) => <label key={k} style={S.check}><input type="checkbox" checked={features[k] !== false} onChange={(e) => setFeatures((s) => ({ ...s, [k]: e.target.checked }))} /> {k}</label>)}
-      </div>
-      <div style={S.addActions}>
-        <button style={S.primaryBtn} disabled={busy}>{busy ? '…' : t.create}</button>
-        <button type="button" style={S.ghostBtn} onClick={() => setOpen(false)}>{t.cancel}</button>
-      </div>
-    </form>
+    <>
+      <button style={S.addBtn} onClick={() => setOpen(true)}>{t.add}</button>
+      {open && (
+        <div style={S.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <form onSubmit={submit} style={S.modal}>
+            <div style={S.modalHead}>
+              <strong>{t.addTitle}</strong>
+              <button type="button" style={S.xBtn} onClick={() => setOpen(false)}>✕</button>
+            </div>
+            <div style={S.modalBody}>
+              <div style={S.section}>
+                <div style={S.sectionTitle}>{t.secBasic}</div>
+                <div style={S.formGrid}>
+                  <Field label={t.orgName}><input style={S.input} value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Acme Inc" /></Field>
+                  <Field label={t.slug}><input style={S.input} value={f.slug} onChange={(e) => set('slug', e.target.value.toLowerCase())} placeholder="acme" required /></Field>
+                  <Field label={t.adminPass}><input style={S.input} value={f.adminPassword} onChange={(e) => set('adminPassword', e.target.value)} placeholder="••••••" required /></Field>
+                </div>
+              </div>
+              <div style={S.section}>
+                <div style={S.sectionTitle}>{t.secPlan}</div>
+                <div style={S.formGrid}>
+                  <Field label={t.plan}><select style={S.input} value={f.plan} onChange={(e) => set('plan', e.target.value)}>{PLANS.map((p) => <option key={p} value={p}>{p}</option>)}</select></Field>
+                  <Field label={t.maxUsers}><input style={S.input} type="number" min="1" value={f.maxUsers} onChange={(e) => set('maxUsers', e.target.value)} placeholder="∞" /></Field>
+                  <Field label={t.maxProjects}><input style={S.input} type="number" min="1" value={f.maxProjects} onChange={(e) => set('maxProjects', e.target.value)} placeholder="∞" /></Field>
+                </div>
+              </div>
+              <div style={S.section}>
+                <div style={S.sectionTitle}>{t.secFeatures}</div>
+                <div style={S.featRow}>
+                  {featureKeys.map((k) => <label key={k} style={S.check}><input type="checkbox" checked={features[k] !== false} onChange={(e) => setFeatures((s) => ({ ...s, [k]: e.target.checked }))} /> {k}</label>)}
+                </div>
+              </div>
+            </div>
+            <div style={S.modalFoot}>
+              <button style={S.primaryBtn} disabled={busy}>{busy ? '…' : t.create}</button>
+              <button type="button" style={S.ghostBtn} onClick={() => setOpen(false)}>{t.cancel}</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -332,6 +356,18 @@ function ManageTenant({ t, slug, onError }) {
     try { await api(`/tenants/${slug}/roles`, { method: 'POST', body: JSON.stringify(rf) }, t); setRf({ name: '', permissions: [] }); await loadRoles(); }
     catch (e2) { onError(e2.message); }
   }
+  async function delUser(u) {
+    if (!window.confirm(t.confirmUser(u.username))) return;
+    onError('');
+    try { await api(`/tenants/${slug}/users/${u.id}`, { method: 'DELETE' }, t); await loadUsers(); }
+    catch (e) { onError(e.message); }
+  }
+  async function delRole(r) {
+    if (!window.confirm(t.confirmRole(r.name))) return;
+    onError('');
+    try { await api(`/tenants/${slug}/roles/${r.id}`, { method: 'DELETE' }, t); await loadRoles(); }
+    catch (e) { onError(e.message); }
+  }
 
   return (
     <div style={S.manageBox}>
@@ -350,7 +386,12 @@ function ManageTenant({ t, slug, onError }) {
             </select>
             <button style={S.primaryBtn}>{t.addUser}</button>
           </form>
-          <div style={S.list}>{users.length ? users.map((u) => <div key={u.id} style={S.listItem}>{u.username} <span style={S.muted}>{(u.roles || []).map((r) => r.name).join(', ')}</span></div>) : <div style={S.muted}>{t.noUsers}</div>}</div>
+          <div style={S.list}>{users.length ? users.map((u) => (
+            <div key={u.id} style={S.listItem}>
+              <span>{u.username} <span style={S.muted}>{(u.roles || []).map((r) => r.name).join(', ')}</span></span>
+              <button type="button" style={S.xSmall} title={t.removeTitle} onClick={() => delUser(u)}>✕</button>
+            </div>
+          )) : <div style={S.muted}>{t.noUsers}</div>}</div>
         </>
       )}
       {tab === 'roles' && (
@@ -367,7 +408,12 @@ function ManageTenant({ t, slug, onError }) {
               </label>
             ))}
           </div>
-          <div style={S.list}>{roles.length ? roles.map((r) => <div key={r.id} style={S.listItem}>{r.name} <span style={S.muted}>{r.description || ''}</span></div>) : <div style={S.muted}>{t.noRoles}</div>}</div>
+          <div style={S.list}>{roles.length ? roles.map((r) => (
+            <div key={r.id} style={S.listItem}>
+              <span>{r.name} <span style={S.muted}>{r.description || ''}</span></span>
+              <button type="button" style={S.xSmall} title={t.removeTitle} onClick={() => delRole(r)}>✕</button>
+            </div>
+          )) : <div style={S.muted}>{t.noRoles}</div>}</div>
         </>
       )}
     </div>
@@ -587,6 +633,16 @@ const S = {
   subTabOn: { color: 'var(--c-text)', borderColor: 'var(--c-accent)', fontWeight: 700 },
   inlineForm: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' },
   list: { display: 'flex', flexDirection: 'column', gap: 4 },
-  listItem: { fontSize: 13, padding: '5px 0', borderBottom: '1px solid var(--c-border)' },
+  listItem: { fontSize: 13, padding: '5px 2px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   muted: { color: 'var(--c-muted)', fontSize: 12 },
+  xSmall: { background: 'transparent', color: '#ff8087', border: '1px solid #5a2730', borderRadius: 6, padding: '2px 8px', fontSize: 12, cursor: 'pointer', lineHeight: 1 },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'grid', placeItems: 'center', zIndex: 50, padding: 16 },
+  modal: { width: 560, maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', background: 'var(--c-panel)', border: '1px solid var(--c-border)', borderRadius: 14, boxShadow: '0 20px 60px rgba(0,0,0,.5)' },
+  modalHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--c-border)', fontSize: 16 },
+  xBtn: { background: 'transparent', color: 'var(--c-muted)', border: 'none', fontSize: 18, cursor: 'pointer', lineHeight: 1 },
+  modalBody: { padding: 20, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 18 },
+  section: { display: 'flex', flexDirection: 'column', gap: 10 },
+  sectionTitle: { fontSize: 12, fontWeight: 700, color: 'var(--c-accent)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 },
+  modalFoot: { display: 'flex', gap: 10, padding: '14px 20px', borderTop: '1px solid var(--c-border)' },
 };

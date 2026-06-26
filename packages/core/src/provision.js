@@ -13,6 +13,7 @@ import {
 import { hashPassword } from './auth.js';
 import { PERMISSION_KEYS } from './permissions.js';
 import { withTransaction } from './db.js';
+import { enqueueCertForSlug } from './certs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCHEMA_DIR = join(__dirname, '..', 'db');
@@ -120,6 +121,10 @@ export async function provisionTenant({
 
   log('» بذر مستخدم الأدمن…');
   await runInTenant(org, () => seedTenantAdmin({ username: adminUsername, password: adminPassword }));
+
+  // اطلب شهادة TLS لنطاق العميل الفرعي (يُصدرها سكربت المضيف).
+  const host = await enqueueCertForSlug(slug);
+  if (host) log(`» طُلبت شهادة TLS لـ ${host}`);
 
   log(`✓ جاهز: ${slug} → ${dbName}`);
   return org;

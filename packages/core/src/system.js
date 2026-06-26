@@ -28,11 +28,16 @@ function cpuPercent(s) {
   return 0;
 }
 
-// إحصاءات حاويات منظومة PMS (CPU% + الذاكرة). available=false إن لم يتوفّر المقبس.
+// موارد Docker الرئيسية: ملخّص المضيف (أنوية/ذاكرة/قرص/حاويات) + لكل حاوية.
+// available=false إن لم يتوفّر المقبس.
 export async function dockerStats() {
-  let containers;
-  try { containers = await dockerGet('/containers/json'); }
+  let containers; let info;
+  try { [containers, info] = await Promise.all([dockerGet('/containers/json'), dockerGet('/info')]); }
   catch { return { available: false }; }
+
+  let df = null;
+  try { df = await dockerGet('/system/df'); } catch { /* اختياري */ }
+
   const ours = containers.filter((c) => {
     const n = (c.Names[0] || '');
     return n.includes('pms-saas') || /(^|[-/])(db|api|worker|web|bootstrap)([-_]|$)/.test(n);
@@ -53,7 +58,29 @@ export async function dockerStats() {
     } catch { /* تخطّي حاوية */ }
   }
   out.sort((a, b) => a.name.localeCompare(b.name));
-  return { available: true, containers: out };
+
+  const totalCpu = out.reduce((a, c) => a + c.cpu, 0);
+  const totalMem = out.reduce((a, c) => a + c.mem, 0);
+
+  let disk = null;
+  if (df) {
+    const vol = (df.Volumes || []).reduce((a, x) => a + (x.UsageData?.Size > 0 ? x.UsageData.Size : 0), 0);
+    const cont = (df.Containers || []).reduce((a, x) => a + (x.SizeRw || 0), 0);
+    disk = (df.LayersSize || 0) + vol + cont;
+  }
+
+  const host = {
+    cpus: info.NCPU || 0,
+    memTotal: info.MemTotal || 0,
+    containers: info.Containers || 0,
+    running: info.ContainersRunning || 0,
+    images: info.Images || 0,
+    version: info.ServerVersion || '',
+    os: info.OperatingSystem || '',
+    disk,
+  };
+
+  return { available: true, host, containers: out, totalCpu, totalMem };
 }
 
 // أداء خادم MySQL (لكل القواعد — خادم واحد): اتصالات، QPS، buffer pool، استعلامات بطيئة.

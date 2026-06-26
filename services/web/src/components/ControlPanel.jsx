@@ -19,6 +19,7 @@ const T = {
       levelGood: 'جيّد', levelModerate: 'متوسّط', levelHeavy: 'مرتفع', topTables: 'أكبر الجداول',
       platformRes: 'موارد المنصّة', sharedNote: 'مشتركة بين كل العملاء', cpu: 'المعالج', mem: 'الذاكرة',
       mysqlPerf: 'أداء MySQL', connections: 'اتصالات', running: 'نشطة', qps: 'استعلام/ث', uptimeLbl: 'التشغيل', bufferPool: 'Buffer Pool', slowQ: 'استعلامات بطيئة', dockerOff: 'إحصاءات Docker غير متاحة (ركّب docker.sock).',
+      dockerHost: 'مضيف Docker', cores: 'الأنوية', totalCpu: 'إجمالي المعالج', ramTotal: 'إجمالي الذاكرة', ramUsedC: 'ذاكرة الحاويات', disk: 'القرص', containersLbl: 'الحاويات', images: 'الصور', version: 'الإصدار',
     },
     cust: {
       title: 'العملاء', add: 'إضافة عميل', db: 'قاعدة:', active: 'مفعّل', suspended: 'معلّق',
@@ -49,6 +50,7 @@ const T = {
       levelGood: 'Good', levelModerate: 'Moderate', levelHeavy: 'Heavy', topTables: 'Largest tables',
       platformRes: 'Platform Resources', sharedNote: 'shared across all customers', cpu: 'CPU', mem: 'Memory',
       mysqlPerf: 'MySQL performance', connections: 'Connections', running: 'Running', qps: 'Queries/s', uptimeLbl: 'Uptime', bufferPool: 'Buffer Pool', slowQ: 'Slow queries', dockerOff: 'Docker stats unavailable (mount docker.sock).',
+      dockerHost: 'Docker Host', cores: 'Cores', totalCpu: 'Total CPU', ramTotal: 'Total RAM', ramUsedC: 'Containers RAM', disk: 'Disk', containersLbl: 'Containers', images: 'Images', version: 'Version',
     },
     cust: {
       title: 'Customers', add: 'Add Customer', db: 'DB:', active: 'Active', suspended: 'Suspended',
@@ -297,14 +299,26 @@ function DashboardView({ t, onError }) {
         <div style={S.insightCard}>
           <div style={S.cardTitle}>{t.dash.platformRes} <span style={S.muted}>· {t.dash.sharedNote}</span></div>
           {sys?.docker?.available ? (
-            <div style={S.colGapSm}>
-              {sys.docker.containers.map((c) => (
-                <div key={c.name} style={{ marginBottom: 6 }}>
-                  <div style={S.resHead}><span>{c.name}</span><span style={S.muted}>{c.cpu.toFixed(1)}% · {fmtBytes(c.mem)}{c.memLimit ? ` / ${fmtBytes(c.memLimit)}` : ''}</span></div>
-                  <div style={S.resTrack}><div style={{ width: `${Math.min(100, c.cpu)}%`, height: '100%', background: 'var(--accent)', borderRadius: 4 }} /></div>
-                </div>
-              ))}
-            </div>
+            <>
+              <div style={S.miniGrid}>
+                <Mini label={t.dash.cores} value={sys.docker.host.cpus} />
+                <Mini label={t.dash.totalCpu} value={`${sys.docker.totalCpu.toFixed(1)}%`} />
+                <Mini label={t.dash.ramTotal} value={fmtBytes(sys.docker.host.memTotal)} />
+                <Mini label={t.dash.ramUsedC} value={fmtBytes(sys.docker.totalMem)} />
+                <Mini label={t.dash.disk} value={sys.docker.host.disk != null ? fmtBytes(sys.docker.host.disk) : '—'} />
+                <Mini label={t.dash.containersLbl} value={`${sys.docker.host.running}/${sys.docker.host.containers}`} />
+                <Mini label={t.dash.images} value={sys.docker.host.images} />
+                <Mini label={t.dash.version} value={sys.docker.host.version} />
+              </div>
+              <div style={{ ...S.colGapSm, marginTop: 12 }}>
+                {sys.docker.containers.map((c) => (
+                  <div key={c.name} style={{ marginBottom: 6 }}>
+                    <div style={S.resHead}><span>{c.name}</span><span style={S.muted}>{c.cpu.toFixed(1)}% · {fmtBytes(c.mem)}{c.memLimit ? ` / ${fmtBytes(c.memLimit)}` : ''}</span></div>
+                    <div style={S.resTrack}><div style={{ width: `${Math.min(100, c.cpu)}%`, height: '100%', background: 'var(--accent)', borderRadius: 4 }} /></div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : <div style={S.muted}>{t.dash.dockerOff}</div>}
 
           {sys?.mysql && (

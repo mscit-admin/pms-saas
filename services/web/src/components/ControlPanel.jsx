@@ -39,7 +39,7 @@ const T = {
     confirmUser: (u) => `حذف المستخدم «${u}»؟`, confirmRole: (r) => `حذف الدور «${r}»؟`,
     newPwFor: (s) => `كلمة مرور جديدة لأدمن «${s}»:`, pwUpdated: 'تم تحديث كلمة مرور الأدمن.',
     confirmDel: (s) => `للحذف النهائي اكتب الـ slug: ${s}`, confirmDelClient: (n) => `حذف العميل «${n}» وقاعدة بياناته نهائياً؟ لا يمكن التراجع.`,
-    invalidResp: 'استجابة غير صالحة', err: 'خطأ', noAccess: 'لا توجد لديك صلاحية لأي قسم.',
+    invalidResp: 'استجابة غير صالحة', err: 'خطأ', noAccess: 'لا توجد لديك صلاحية لأي قسم.', okBtn: 'موافق', cancelBtn: 'إلغاء',
   },
   en: {
     dir: 'ltr', langBtn: 'العربية', search: 'Search or type a command (Ctrl + G)',
@@ -71,7 +71,7 @@ const T = {
     confirmUser: (u) => `Delete user "${u}"?`, confirmRole: (r) => `Delete role "${r}"?`,
     newPwFor: (s) => `New password for "${s}" admin:`, pwUpdated: 'Admin password updated.',
     confirmDel: (s) => `To permanently delete, type the slug: ${s}`, confirmDelClient: (n) => `Permanently delete customer "${n}" and its database? This cannot be undone.`,
-    invalidResp: 'Invalid response', err: 'Error', noAccess: 'You have no access to any section.',
+    invalidResp: 'Invalid response', err: 'Error', noAccess: 'You have no access to any section.', okBtn: 'OK', cancelBtn: 'Cancel',
   },
 };
 
@@ -118,6 +118,56 @@ function fmtUptime(sec) {
   return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 const LEVEL_COLOR = { good: 'var(--pill-text)', moderate: '#d9822b', heavy: 'var(--danger)' };
+
+// ===== حوارات داخل التطبيق (بديل window.confirm/prompt/alert الذي يكتمه Firefox) =====
+let _dialog = null;
+function confirmDialog(message, t) {
+  if (_dialog) return _dialog({ type: 'confirm', message, ok: t.okBtn, cancel: t.cancelBtn });
+  return Promise.resolve(window.confirm(message));
+}
+function promptDialog(message, t, password = false) {
+  if (_dialog) return _dialog({ type: 'prompt', message, password, ok: t.okBtn, cancel: t.cancelBtn });
+  return Promise.resolve(window.prompt(message));
+}
+function notify(message) {
+  if (_dialog) return _dialog({ type: 'notify', message });
+  return Promise.resolve();
+}
+
+function DialogHost() {
+  const [d, setD] = useState(null);
+  const [val, setVal] = useState('');
+  const [toast, setToast] = useState('');
+  useEffect(() => {
+    _dialog = (opts) => {
+      if (opts.type === 'notify') { setToast(opts.message); setTimeout(() => setToast(''), 3500); return Promise.resolve(); }
+      return new Promise((resolve) => { setVal(''); setD({ ...opts, resolve }); });
+    };
+    return () => { _dialog = null; };
+  }, []);
+  const finish = (v) => { const r = d?.resolve; setD(null); if (r) r(v); };
+  return (
+    <>
+      {toast && <div style={S.toast} onClick={() => setToast('')}>{toast}</div>}
+      {d && (
+        <div style={S.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) finish(d.type === 'prompt' ? null : false); }}>
+          <div style={S.confirmBox}>
+            <div style={S.confirmMsg}>{d.message}</div>
+            {d.type === 'prompt' && (
+              <input autoFocus type={d.password ? 'password' : 'text'} style={{ ...S.input, marginTop: 12 }}
+                value={val} onChange={(e) => setVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') finish(val || null); }} />
+            )}
+            <div style={S.confirmBtns}>
+              <button style={S.primaryBtn} onClick={() => finish(d.type === 'prompt' ? (val || null) : true)}>{d.ok || 'OK'}</button>
+              <button style={S.secBtn} onClick={() => finish(d.type === 'prompt' ? null : false)}>{d.cancel || 'Cancel'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function ControlPanel() {
   const [lang, setLang] = useState('ar');
@@ -177,6 +227,7 @@ export default function ControlPanel() {
 
   return (
     <div dir={t.dir} style={{ ...THEME[theme], ...(brand?.accent ? { '--accent': brand.accent } : {}), ...S.app }}>
+      <DialogHost />
       {/* ===== Navbar ===== */}
       <nav style={S.navbar}>
         <div style={S.brandBox}>
@@ -447,16 +498,16 @@ function TenantCard({ t, tenant, featureKeys, onChanged, onError }) {
   const saveLimits = () => patch({ plan: tn.plan, maxUsers: tn.maxUsers === '' || tn.maxUsers == null ? null : Number(tn.maxUsers), maxProjects: tn.maxProjects === '' || tn.maxProjects == null ? null : Number(tn.maxProjects), features: tn.features });
   const toggleStatus = () => patch({ status: tn.status === 'active' ? 'suspended' : 'active' });
   async function resetAdmin() {
-    const pw = window.prompt(t.newPwFor(tn.slug)); if (!pw) return;
+    const pw = await promptDialog(t.newPwFor(tn.slug), t, true); if (!pw) return;
     setSaving(true); onError('');
-    try { await api(`/tenants/${tn.slug}/admin`, { method: 'POST', body: JSON.stringify({ password: pw }) }, t); alert(t.pwUpdated); }
-    catch (e) { onError(e.message); alert(e.message); } finally { setSaving(false); }
+    try { await api(`/tenants/${tn.slug}/admin`, { method: 'POST', body: JSON.stringify({ password: pw }) }, t); notify(t.pwUpdated); }
+    catch (e) { onError(e.message); notify(e.message); } finally { setSaving(false); }
   }
   async function remove() {
-    if (!window.confirm(t.confirmDelClient(tn.name))) return;
+    if (!(await confirmDialog(t.confirmDelClient(tn.name), t))) return;
     setSaving(true); onError('');
     try { await api(`/tenants/${tn.slug}`, { method: 'DELETE', body: JSON.stringify({ confirm: tn.slug }) }, t); await onChanged(); }
-    catch (e) { onError(e.message); alert(e.message); } finally { setSaving(false); }
+    catch (e) { onError(e.message); notify(e.message); } finally { setSaving(false); }
   }
   const active = tn.status === 'active';
   return (
@@ -506,10 +557,10 @@ function ManageTenant({ t, slug, onError }) {
   const loadUsers = useCallback(async () => { try { const d = await api(`/tenants/${slug}/users`, undefined, t); setUsers(d.items || []); } catch (e) { onError(e.message); } }, [slug, t, onError]);
   const loadRoles = useCallback(async () => { try { const d = await api(`/tenants/${slug}/roles`, undefined, t); setRoles(d.items || []); setCatalog(d.catalog || []); } catch (e) { onError(e.message); } }, [slug, t, onError]);
   useEffect(() => { loadUsers(); loadRoles(); }, [loadUsers, loadRoles]);
-  async function addUser(e) { e.preventDefault(); onError(''); try { await api(`/tenants/${slug}/users`, { method: 'POST', body: JSON.stringify({ ...uf, roleIds: uf.roleIds.map(Number) }) }, t); setUf({ username: '', email: '', password: '', roleIds: [] }); await loadUsers(); } catch (e2) { onError(e2.message); alert(e2.message); } }
-  async function addRole(e) { e.preventDefault(); onError(''); try { await api(`/tenants/${slug}/roles`, { method: 'POST', body: JSON.stringify(rf) }, t); setRf({ name: '', permissions: [] }); await loadRoles(); } catch (e2) { onError(e2.message); alert(e2.message); } }
-  async function delUser(u) { if (!window.confirm(t.confirmUser(u.username))) return; onError(''); try { await api(`/tenants/${slug}/users/${u.id}`, { method: 'DELETE' }, t); await loadUsers(); } catch (e) { onError(e.message); alert(e.message); } }
-  async function delRole(r) { if (!window.confirm(t.confirmRole(r.name))) return; onError(''); try { await api(`/tenants/${slug}/roles/${r.id}`, { method: 'DELETE' }, t); await loadRoles(); } catch (e) { onError(e.message); alert(e.message); } }
+  async function addUser(e) { e.preventDefault(); onError(''); try { await api(`/tenants/${slug}/users`, { method: 'POST', body: JSON.stringify({ ...uf, roleIds: uf.roleIds.map(Number) }) }, t); setUf({ username: '', email: '', password: '', roleIds: [] }); await loadUsers(); } catch (e2) { onError(e2.message); notify(e2.message); } }
+  async function addRole(e) { e.preventDefault(); onError(''); try { await api(`/tenants/${slug}/roles`, { method: 'POST', body: JSON.stringify(rf) }, t); setRf({ name: '', permissions: [] }); await loadRoles(); } catch (e2) { onError(e2.message); notify(e2.message); } }
+  async function delUser(u) { if (!(await confirmDialog(t.confirmUser(u.username), t))) return; onError(''); try { await api(`/tenants/${slug}/users/${u.id}`, { method: 'DELETE' }, t); await loadUsers(); } catch (e) { onError(e.message); notify(e.message); } }
+  async function delRole(r) { if (!(await confirmDialog(t.confirmRole(r.name), t))) return; onError(''); try { await api(`/tenants/${slug}/roles/${r.id}`, { method: 'DELETE' }, t); await loadRoles(); } catch (e) { onError(e.message); notify(e.message); } }
 
   return (
     <div style={S.manageBox}>
@@ -621,7 +672,7 @@ function ImageUpload({ t, label, type, wide, onError, onChange }) {
     const file = e.target.files?.[0]; if (!file) return;
     setBusy(true); onError('');
     try { const fd = new FormData(); fd.append('file', file); const res = await fetch(`/api/control/branding/${type}`, { method: 'POST', body: fd }); const j = await res.json(); if (!j.ok) throw new Error(j.error || t.err); setExists(true); setVer(Date.now()); onChange?.(); }
-    catch (e2) { onError(e2.message); alert(e2.message); } finally { setBusy(false); e.target.value = ''; }
+    catch (e2) { onError(e2.message); notify(e2.message); } finally { setBusy(false); e.target.value = ''; }
   }
   async function remove() {
     setBusy(true); onError('');
@@ -647,10 +698,10 @@ function AdminsTab({ t, ctrlPerms, meId, permsMode, onError }) {
   const [nf, setNf] = useState({ username: '', fullName: '', password: '', permissions: [] });
   const reload = useCallback(async () => { try { const d = await api('/admins', undefined, t); setAdmins(d.items || []); } catch (e) { onError(e.message); } }, [t, onError]);
   useEffect(() => { reload(); }, [reload]);
-  async function add(e) { e.preventDefault(); onError(''); try { await api('/admins', { method: 'POST', body: JSON.stringify(nf) }, t); setNf({ username: '', fullName: '', password: '', permissions: [] }); await reload(); } catch (e2) { onError(e2.message); alert(e2.message); } }
+  async function add(e) { e.preventDefault(); onError(''); try { await api('/admins', { method: 'POST', body: JSON.stringify(nf) }, t); setNf({ username: '', fullName: '', password: '', permissions: [] }); await reload(); } catch (e2) { onError(e2.message); notify(e2.message); } }
   async function savePerms(a) { try { await api(`/admins/${a.id}`, { method: 'PATCH', body: JSON.stringify({ permissions: a.permissions }) }, t); await reload(); } catch (e) { onError(e.message); } }
   async function toggleActive(a) { try { await api(`/admins/${a.id}`, { method: 'PATCH', body: JSON.stringify({ isActive: !a.isActive }) }, t); await reload(); } catch (e) { onError(e.message); } }
-  async function del(a) { if (!window.confirm(`${t.cust.del}: ${a.username}?`)) return; try { await api(`/admins/${a.id}`, { method: 'DELETE' }, t); await reload(); } catch (e) { onError(e.message); alert(e.message); } }
+  async function del(a) { if (!(await confirmDialog(`${t.cust.del}: ${a.username}?`, t))) return; try { await api(`/admins/${a.id}`, { method: 'DELETE' }, t); await reload(); } catch (e) { onError(e.message); notify(e.message); } }
   const lk = t.dir === 'rtl' ? 'ar' : 'en';
   return (
     <div style={S.colGapLg}>
@@ -806,4 +857,8 @@ const S = {
   sectionTitle: { fontSize: 11, fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '.6px' },
   formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 },
   modalFoot: { display: 'flex', gap: 10, padding: '14px 20px', borderTop: '1px solid var(--border)' },
+  confirmBox: { width: 400, maxWidth: '100%', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 22, boxShadow: '0 20px 60px rgba(0,0,0,.3)' },
+  confirmMsg: { fontSize: 14, color: 'var(--text)', lineHeight: 1.6 },
+  confirmBtns: { display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' },
+  toast: { position: 'fixed', top: 16, insetInlineStart: '50%', transform: 'translateX(-50%)', zIndex: 60, background: 'var(--text)', color: 'var(--bg)', padding: '10px 18px', borderRadius: 8, fontSize: 13, boxShadow: '0 8px 30px rgba(0,0,0,.35)', cursor: 'pointer', maxWidth: '90%' },
 };

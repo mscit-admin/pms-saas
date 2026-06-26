@@ -28,6 +28,7 @@ const T = {
       username: 'اسم المستخدم', email: 'البريد', password: 'كلمة المرور', addUser: 'مستخدم', roleName: 'اسم الدور', addRole: 'دور',
       orgName: 'اسم المنظمة', slug: 'النطاق الفرعي (slug)', features: 'الوحدات', create: 'إنشاء', cancel: 'إلغاء', addTitle: 'إضافة عميل جديد',
       secBasic: 'الأساسي', secPlan: 'الخطة والحصص', noUsers: 'لا مستخدمين', noRoles: 'لا أدوار', roleOpt: 'الأدوار',
+      backup: 'نسخة احتياطية', preparing: 'جارٍ تحضير النسخة…',
     },
     set: {
       title: 'الإعدادات', tabIdentity: 'الهوية البصرية', tabSupervisors: 'المشرفون', tabPermissions: 'الصلاحيات',
@@ -60,6 +61,7 @@ const T = {
       username: 'Username', email: 'Email', password: 'Password', addUser: 'User', roleName: 'Role name', addRole: 'Role',
       orgName: 'Organization name', slug: 'Subdomain (slug)', features: 'Features', create: 'Create', cancel: 'Cancel', addTitle: 'Add new customer',
       secBasic: 'Basics', secPlan: 'Plan & quotas', noUsers: 'No users', noRoles: 'No roles', roleOpt: 'Roles',
+      backup: 'Backup', preparing: 'Preparing backup…',
     },
     set: {
       title: 'Settings', tabIdentity: 'Visual Identity', tabSupervisors: 'Supervisors', tabPermissions: 'Permissions',
@@ -509,6 +511,19 @@ function TenantCard({ t, tenant, featureKeys, onChanged, onError }) {
     try { await api(`/tenants/${tn.slug}`, { method: 'DELETE', body: JSON.stringify({ confirm: tn.slug }) }, t); await onChanged(); }
     catch (e) { onError(e.message); notify(e.message); } finally { setSaving(false); }
   }
+  async function backup() {
+    setSaving(true); onError(''); notify(t.cust.preparing);
+    try {
+      const res = await fetch(`/api/control/tenants/${tn.slug}/backup`);
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || t.err); }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename="(.+)"/);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = m ? m[1] : `${tn.slug}.sql.gz`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    } catch (e) { onError(e.message); notify(e.message); } finally { setSaving(false); }
+  }
   const active = tn.status === 'active';
   return (
     <div style={S.card}>
@@ -538,6 +553,7 @@ function TenantCard({ t, tenant, featureKeys, onChanged, onError }) {
             <button style={S.secBtn} disabled={saving} onClick={toggleStatus}>{active ? t.cust.suspend : t.cust.active}</button>
             <button style={S.secBtn} disabled={saving} onClick={() => setManaging((m) => !m)}>{t.cust.manage}</button>
             <button style={S.secBtn} disabled={saving} onClick={resetAdmin}>{t.cust.adminPw}</button>
+            <button style={S.secBtn} disabled={saving} onClick={backup}>{t.cust.backup}</button>
             <button style={S.dangerBtn} disabled={saving} onClick={remove}>{t.cust.del}</button>
           </div>
           {managing && <ManageTenant t={t} slug={tn.slug} onError={onError} />}

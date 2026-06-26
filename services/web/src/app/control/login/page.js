@@ -9,13 +9,13 @@ const T = {
 };
 
 const THEME_VARS = {
-  dark: { '--c-bg': '#0f141b', '--c-panel': '#1a212b', '--c-border': '#2b3543', '--c-text': '#e8eef5', '--c-muted': '#8da2b8', '--c-input': '#0f141b', '--c-accent': '#2f81f7' },
-  light: { '--c-bg': '#f4f6f9', '--c-panel': '#ffffff', '--c-border': '#d8dee6', '--c-text': '#1b2430', '--c-muted': '#5c6b7a', '--c-input': '#ffffff', '--c-accent': '#2f81f7' },
+  dark: { '--c-bg': '#15181d', '--c-panel': '#1f242b', '--c-border': '#2e343d', '--c-text': '#e9ebee', '--c-muted': '#9097a0', '--c-input': '#23282f', '--c-accent': '#2490EF' },
+  light: { '--c-bg': '#f4f5f6', '--c-panel': '#ffffff', '--c-border': '#e6e9ec', '--c-text': '#1c2024', '--c-muted': '#7a8189', '--c-input': '#ffffff', '--c-accent': '#2490EF' },
 };
 
 export default function ControlLogin() {
   const [lang, setLang] = useState('ar');
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState('light');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

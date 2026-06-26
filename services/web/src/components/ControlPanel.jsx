@@ -38,7 +38,8 @@ const T = {
     },
     confirmUser: (u) => `حذف المستخدم «${u}»؟`, confirmRole: (r) => `حذف الدور «${r}»؟`,
     newPwFor: (s) => `كلمة مرور جديدة لأدمن «${s}»:`, pwUpdated: 'تم تحديث كلمة مرور الأدمن.',
-    confirmDel: (s) => `للحذف النهائي اكتب الـ slug: ${s}`, invalidResp: 'استجابة غير صالحة', err: 'خطأ', noAccess: 'لا توجد لديك صلاحية لأي قسم.',
+    confirmDel: (s) => `للحذف النهائي اكتب الـ slug: ${s}`, confirmDelClient: (n) => `حذف العميل «${n}» وقاعدة بياناته نهائياً؟ لا يمكن التراجع.`,
+    invalidResp: 'استجابة غير صالحة', err: 'خطأ', noAccess: 'لا توجد لديك صلاحية لأي قسم.',
   },
   en: {
     dir: 'ltr', langBtn: 'العربية', search: 'Search or type a command (Ctrl + G)',
@@ -69,7 +70,8 @@ const T = {
     },
     confirmUser: (u) => `Delete user "${u}"?`, confirmRole: (r) => `Delete role "${r}"?`,
     newPwFor: (s) => `New password for "${s}" admin:`, pwUpdated: 'Admin password updated.',
-    confirmDel: (s) => `To permanently delete, type the slug: ${s}`, invalidResp: 'Invalid response', err: 'Error', noAccess: 'You have no access to any section.',
+    confirmDel: (s) => `To permanently delete, type the slug: ${s}`, confirmDelClient: (n) => `Permanently delete customer "${n}" and its database? This cannot be undone.`,
+    invalidResp: 'Invalid response', err: 'Error', noAccess: 'You have no access to any section.',
   },
 };
 
@@ -451,7 +453,7 @@ function TenantCard({ t, tenant, featureKeys, onChanged, onError }) {
     catch (e) { onError(e.message); alert(e.message); } finally { setSaving(false); }
   }
   async function remove() {
-    const c = window.prompt(t.confirmDel(tn.slug)); if (c !== tn.slug) return;
+    if (!window.confirm(t.confirmDelClient(tn.name))) return;
     setSaving(true); onError('');
     try { await api(`/tenants/${tn.slug}`, { method: 'DELETE', body: JSON.stringify({ confirm: tn.slug }) }, t); await onChanged(); }
     catch (e) { onError(e.message); alert(e.message); } finally { setSaving(false); }

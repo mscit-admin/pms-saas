@@ -2,6 +2,8 @@ import { handler, ok } from '@/lib/http';
 import { requirePermission } from '@/lib/auth';
 import { listUsers, createUser } from '@/lib/users';
 import { logAudit, clientIp } from '@/lib/audit';
+import { getCurrentOrg } from '@/lib/tenancy';
+import { assertUserQuota } from '@/lib/orgs';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +14,9 @@ export const GET = handler(async () => {
 
 export const POST = handler(async (req) => {
   const me = await requirePermission('manage_users');
+  // فرض حصّة المستخدمين للمنظمة (إن ضُبط حدّ من لوحة المشرف).
+  const org = getCurrentOrg();
+  if (org) await assertUserQuota(org.slug);
   const body = await req.json().catch(() => ({}));
   const result = await createUser({
     username: body.username,

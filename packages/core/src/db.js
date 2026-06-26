@@ -1,17 +1,24 @@
 import mysql from 'mysql2/promise';
 import { dbConfig } from './config.js';
+import { requireCurrentOrg } from './tenancy.js';
 
-// تجمّع اتصالات واحد يُعاد استخدامه عبر الطلبات (مهم في بيئة Next.js / hot reload).
-let pool;
+// نموذج تعدّد المستأجرين: قاعدة بيانات لكل مستأجر.
+// لا يوجد تجمّع اتصالات وحيد عالمي بعد الآن — بل تجمّع لكل قاعدة مستأجر،
+// يُحلّ من سياق المستأجر الجاري (tenancy.js). أي استعلام بلا سياق يفشل مغلقاً.
+const pools = new Map(); // dbName → Pool
 
-export function getPool() {
+function poolFor(org) {
+  const dbName = org.dbName;
+  let pool = pools.get(dbName);
   if (!pool) {
     pool = mysql.createPool({
-      host: dbConfig.host,
-      port: dbConfig.port,
-      user: dbConfig.user,
-      password: dbConfig.password,
-      database: dbConfig.database,
+      // بيانات اتصال خاصة بالمنظمة (تشظية) أو المشتركة من البيئة.
+      host: org.dbHost || dbConfig.host,
+      port: org.dbPort || dbConfig.port,
+      user: org.dbUser || dbConfig.user,
+      // كلمة مرور المستأجر تُفكّ تشفيرها في طبقة التوفير (Phase 4)؛ افتراضياً المشتركة.
+      password: org.dbPassword || dbConfig.password,
+      database: dbName,
       connectionLimit: dbConfig.connectionLimit,
       waitForConnections: true,
       timezone: 'Z',           // نخزّن ونقرأ بتوقيت UTC
@@ -19,11 +26,26 @@ export function getPool() {
       namedPlaceholders: true,
       charset: 'utf8mb4',
     });
+    pools.set(dbName, pool);
   }
   return pool;
 }
 
-// استعلام مختصر يرجع الصفوف فقط
+// تجمّع اتصالات المستأجر الجاري (من السياق). يرمي إن لم يوجد سياق.
+export function getPool() {
+  return poolFor(requireCurrentOrg());
+}
+
+// إغلاق وإزالة تجمّع مستأجر (عند التعليق/الحذف أو إخلاء الذاكرة).
+export async function closeTenantPool(dbName) {
+  const pool = pools.get(dbName);
+  if (pool) {
+    pools.delete(dbName);
+    await pool.end();
+  }
+}
+
+// استعلام مختصر يرجع الصفوف فقط — على قاعدة المستأجر الجاري.
 export async function query(sql, params = {}) {
   const [rows] = await getPool().execute(sql, params);
   return rows;

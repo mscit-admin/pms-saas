@@ -11,6 +11,8 @@ const PUBLIC = [
   '/api/webhook',
   '/api/health',
   '/api/branding',
+  // مستوى التحكّم: له مصادقته الخاصّة (المشرف الأعلى)، فيُستثنى من حارس جلسة المستأجر.
+  '/api/control',
 ];
 
 function secretKey() {

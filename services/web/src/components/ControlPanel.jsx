@@ -767,7 +767,7 @@ function Field({ label, children }) { return <label style={S.field}><span style=
 
 const cardSh = { boxShadow: '0 1px 2px var(--shadow)' };
 const S = {
-  app: { minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13 },
+  app: { height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 13 },
   navbar: { display: 'flex', alignItems: 'center', gap: 14, height: 50, padding: '0 18px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 },
   brandBox: { display: 'flex', alignItems: 'center', gap: 9, minWidth: 160 },
   logoSq: { width: 27, height: 27, borderRadius: 7, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 2px rgba(36,144,239,.4)' },

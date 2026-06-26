@@ -61,13 +61,15 @@ export async function dumpTenantDatabase(org) {
   const dbId = await findDbContainerId();
   if (!dbId) throw new Error('حاوية قاعدة البيانات غير متاحة (تأكّد من تركيب docker.sock).');
 
-  const cmd = [
-    'mysqldump', '-uroot', '--single-transaction', '--quick', '--routines', '--events',
-    '--default-character-set=utf8mb4', '--no-tablespaces', org.dbName,
-  ];
+  // نشغّل عبر sh مع مسار صريح (exec المباشر قد لا يضمّ /usr/bin)، ومع بديل
+  // mariadb-dump إن لم يوجد mysqldump. اسم القاعدة مُتحقَّق منه ([a-z0-9_]).
+  const args = `-uroot --single-transaction --quick --routines --events --default-character-set=utf8mb4 --no-tablespaces ${org.dbName}`;
+  const script = `export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"; `
+    + `if command -v mysqldump >/dev/null 2>&1; then exec mysqldump ${args}; `
+    + `else exec mariadb-dump ${args}; fi`;
   const exec = await sockJson('POST', `/containers/${dbId}/exec`, {
     AttachStdout: true, AttachStderr: true, Tty: false,
-    Env: [`MYSQL_PWD=${dbConfig.password}`], Cmd: cmd,
+    Env: [`MYSQL_PWD=${dbConfig.password}`], Cmd: ['sh', '-c', script],
   });
   const { buffer } = await sockRequest('POST', `/exec/${exec.Id}/start`, { Detach: false, Tty: false });
   const { stdout, stderr } = demux(buffer);

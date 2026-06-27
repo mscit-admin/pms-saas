@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { handler, fail } from '@/lib/http';
+import { handler, ok, fail } from '@/lib/http';
 import { requireControlPermission } from '@/lib/control-auth';
 import { getBackupConfig } from '@/lib/backup-config';
-import { backupFilePath } from '@/lib/backup';
+import { backupFilePath, deleteStoredBackup } from '@/lib/backup';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,4 +25,18 @@ export const GET = handler(async (req) => {
       'Cache-Control': 'no-store',
     },
   });
+});
+
+// حذف نسخة مخزّنة.
+export const DELETE = handler(async (req) => {
+  await requireControlPermission('manage_tenants');
+  const url = new URL(req.url);
+  const slug = url.searchParams.get('slug') || '';
+  const file = url.searchParams.get('file') || '';
+  const cfg = await getBackupConfig();
+  const path = backupFilePath(cfg.dir, slug, file);
+  if (!path) return fail('طلب غير صالح', 400);
+  try { await deleteStoredBackup(cfg.dir, slug, file); }
+  catch { return fail('تعذّر حذف الملف', 404); }
+  return ok({ deleted: file });
 });

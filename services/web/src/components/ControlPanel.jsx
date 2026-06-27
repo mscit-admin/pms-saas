@@ -45,6 +45,7 @@ const T = {
       extHint: 'لمسار خارجي: اربط المسار في docker-compose ثم اكتبه هنا.', every: (d) => `كل ~${d} يوم تقريباً`,
       includeControl: 'تضمين قاعدة النظام (التحكّم) في الجدولة',
       scope: 'نطاق التشغيل', scopeAll: 'كل العملاء', scopeSystem: 'النظام بالكامل', scopeTenant: 'عميل محدّد', selectCustomer: 'اختر عميلاً…',
+      confirmDel: (f) => `حذف النسخة «${f}»؟`,
     },
     confirmUser: (u) => `حذف المستخدم «${u}»؟`, confirmRole: (r) => `حذف الدور «${r}»؟`,
     newPwFor: (s) => `كلمة مرور جديدة لأدمن «${s}»:`, pwUpdated: 'تم تحديث كلمة مرور الأدمن.',
@@ -87,6 +88,7 @@ const T = {
       extHint: 'For an external path: bind-mount it in docker-compose, then type it here.', every: (d) => `every ~${d} day(s)`,
       includeControl: 'Include system DB (control) in schedule',
       scope: 'Run scope', scopeAll: 'All customers', scopeSystem: 'Full system', scopeTenant: 'Specific customer', selectCustomer: 'Select a customer…',
+      confirmDel: (f) => `Delete backup "${f}"?`,
     },
     confirmUser: (u) => `Delete user "${u}"?`, confirmRole: (r) => `Delete role "${r}"?`,
     newPwFor: (s) => `New password for "${s}" admin:`, pwUpdated: 'Admin password updated.',
@@ -712,6 +714,12 @@ function BackupsTab({ t, onError }) {
     try { await api('/backups/run', { method: 'POST', body: JSON.stringify({ scope, slug: selSlug }) }, t); notify(t.bk.done); await load(); }
     catch (e) { onError(e.message); notify(e.message); } finally { setBusy(false); }
   }
+  async function delBackup(it) {
+    if (!(await confirmDialog(t.bk.confirmDel(it.file), t))) return;
+    onError('');
+    try { await api(`/backups/download?slug=${encodeURIComponent(it.slug)}&file=${encodeURIComponent(it.file)}`, { method: 'DELETE' }, t); await load(); }
+    catch (e) { onError(e.message); notify(e.message); }
+  }
   const days = Math.round((30 / Math.min(30, Math.max(1, c.cyclesPerMonth || 1))) * 10) / 10;
   return (
     <div style={S.identityCol}>
@@ -768,7 +776,10 @@ function BackupsTab({ t, onError }) {
           {items.length ? items.map((it, i) => (
             <div key={i} style={S.rowItem}>
               <span style={{ fontSize: 12.5 }}><strong>{it.slug}</strong> <span style={S.muted}>{it.file} · {fmtBytes(it.size)}</span></span>
-              <a href={`/api/control/backups/download?slug=${encodeURIComponent(it.slug)}&file=${encodeURIComponent(it.file)}`} style={S.linkBtn}>{t.bk.download}</a>
+              <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <a href={`/api/control/backups/download?slug=${encodeURIComponent(it.slug)}&file=${encodeURIComponent(it.file)}`} style={S.linkBtn}>{t.bk.download}</a>
+                <button type="button" style={S.xSmall} onClick={() => delBackup(it)}>✕</button>
+              </span>
             </div>
           )) : <div style={S.muted}>{t.bk.noBackups}</div>}
         </div>

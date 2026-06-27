@@ -195,3 +195,11 @@ export function backupFilePath(dir, slug, file) {
   if (!SAFE.test(slug) || !SAFE_FILE.test(file)) return null;
   return join(dir, slug, file);
 }
+
+// حذف نسخة مخزّنة (بتحقّق صارم من المسار).
+export async function deleteStoredBackup(dir, slug, file) {
+  const path = backupFilePath(dir, slug, file);
+  if (!path) throw new Error('طلب غير صالح');
+  await unlink(path);
+  return true;
+}
